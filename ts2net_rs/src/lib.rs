@@ -193,7 +193,7 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
         for d in 0..M {
             p[d] = row[d];
         }
-        tree.add(&p, i as u64).unwrap();
+        tree.add(&p, i as u64);
     }
     let mut idx = Array2::<usize>::zeros((n, k));
     let mut dst = Array2::<f64>::zeros((n, k));
@@ -224,7 +224,7 @@ fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
         for d in 0..M {
             p[d] = row[d];
         }
-        tree.add(&p, i as u64).unwrap();
+        tree.add(&p, i as u64);
     }
     let r2 = eps * eps;
     let mut out: Vec<Vec<usize>> = Vec::with_capacity(n);
