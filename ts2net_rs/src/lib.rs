@@ -202,7 +202,7 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
         for d in 0..M {
             q[d] = row[d];
         }
-        let res = tree.nearest::<SquaredEuclidean>(&q, k + 1);
+        let res = tree.nearest_n::<SquaredEuclidean>(&q, k + 1);
         let mut t = 0;
         for neighbor in res.iter() {
             let j_usize = neighbor.item as usize;
