@@ -277,7 +277,7 @@ def _sampled_combinations(nodes, r, max_samples=None, seed=3363):
 
 
 def directed_3node_motifs(
-    G: nx.DiGraph, max_samples: int | None = None, seed: int = 3363
+    G: nx.DiGraph, max_samples: Optional[int] = None, seed: int = 3363
 ) -> dict:
     if not G.is_directed():
         raise ValueError("Graph must be directed.")
@@ -310,7 +310,7 @@ def _deg_seq(sub: nx.Graph) -> list[int]:
 
 
 def undirected_4node_motifs(
-    G: nx.Graph, max_samples: int | None = None, seed: int = 3363
+    G: nx.Graph, max_samples: Optional[int] = None, seed: int = 3363
 ) -> dict:
     if G.is_directed():
         raise ValueError("Graph must be undirected.")
@@ -343,7 +343,7 @@ def undirected_4node_motifs(
 def motif_counts(
     G: Union[nx.Graph, nx.DiGraph],
     motif_type: str = '3node',
-    max_samples: int | None = None,
+    max_samples: Optional[int] = None,
     seed: int = 3363,
 ) -> Dict[str, int]:
     """
@@ -375,8 +375,8 @@ def motif_counts(
 
 def graph_summary(
     G: Union[nx.Graph, nx.DiGraph],
-    motifs: str | None = None,
-    motif_samples: int | None = None,
+    motifs: Optional[str] = None,
+    motif_samples: Optional[int] = None,
     seed: int = 3363,
 ) -> dict:
     """

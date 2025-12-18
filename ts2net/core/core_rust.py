@@ -1,4 +1,5 @@
 # core_rust.py - Rust bindings for performance-critical functions
+from typing import Optional, Union, Tuple
 import numpy as np
 from ts2net_rs import (
     rn_adj_epsilon as _rn_adj_eps_rs,
@@ -24,7 +25,7 @@ def rn_adj_epsilon(
 
 
 def event_sync(
-    e1: np.ndarray, e2: np.ndarray, adaptive: bool = True, tau_max: float | None = None
+    e1: np.ndarray, e2: np.ndarray, adaptive: bool = True, tau_max: Optional[float] = None
 ):
     e1 = np.asarray(e1, np.uint64)
     e2 = np.asarray(e2, np.uint64)
@@ -93,7 +94,7 @@ def corr_perm(
     )
 
 
-def moran_i(y: np.ndarray, W: np.ndarray) -> tuple[float, float]:
+def moran_i(y: np.ndarray, W: np.ndarray) -> Tuple[float, float]:
     I, z = _moran_rs(np.asarray(y, float), np.asarray(W, float))
     return float(I), float(z)
 
@@ -164,7 +165,7 @@ def nvg_graph(x: np.ndarray, sparse: bool = False):
     return G, A
 
 
-def cdist_dtw(X: np.ndarray, band: int | None = None) -> np.ndarray:
+def cdist_dtw(X: np.ndarray, band: Optional[int] = None) -> np.ndarray:
     X = np.asarray(X, float)
     return np.array(_cdist_dtw_rs(X, band))
 
