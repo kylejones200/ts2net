@@ -183,7 +183,7 @@ fn cdist_dtw(
 }
 
 // ---- KD-tree (kiddo) for k-NN and radius queries ----
-use kiddo::{distance::squared_euclidean, KdTree};
+use kiddo::KdTree;
 
 fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Array2<f64>) {
     let n = pts.len_of(Axis(0));
@@ -202,13 +202,13 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
         for d in 0..M {
             q[d] = row[d];
         }
-        let res = tree.nearest(&q, k + 1, &squared_euclidean).unwrap();
+        let res = tree.nearest(&q, k + 1);
         let mut t = 0;
-        for (dist, &j) in res.iter() {
-            let j_usize = j as usize;
+        for neighbor in res.iter() {
+            let j_usize = neighbor.item as usize;
             if j_usize != i && t < k {
                 idx[[i, t]] = j_usize;
-                dst[[i, t]] = dist.sqrt();
+                dst[[i, t]] = neighbor.distance.sqrt();
                 t += 1;
             }
         }
@@ -233,9 +233,9 @@ fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
         for d in 0..M {
             q[d] = row[d];
         }
-        let res = tree.within_unsorted(&q, r2, &squared_euclidean).unwrap();
-        let v: Vec<usize> = res.iter().filter_map(|(_, &j)| {
-            let j_usize = j as usize;
+        let res = tree.within_unsorted(&q, r2);
+        let v: Vec<usize> = res.iter().filter_map(|neighbor| {
+            let j_usize = neighbor.item as usize;
             if j_usize != i { Some(j_usize) } else { None }
         }).collect();
         out.push(v);
@@ -723,7 +723,7 @@ fn mean_shortest_path(
 
 #[pyfunction]
 fn surrogate_phase(
-    py: Python<'_>,
+    _py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     seed: u64,
 ) -> PyResult<Py<PyArray1<f64>>> {
@@ -758,12 +758,12 @@ fn surrogate_phase(
     }
     ifft.process(&mut spec);
     let out: Vec<f64> = spec.iter().map(|c| c.re / (n as f64)).collect();
-    Ok(PyArray1::from_vec(py, out).to_owned())
+    Python::with_gil(|py| Ok(PyArray1::from_vec(py, out).to_owned()))
 }
 
 #[pyfunction]
 fn iaaft(
-    py: Python<'_>,
+    _py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     iters: usize,
     seed: u64,
@@ -812,7 +812,7 @@ fn iaaft(
         }
         y = out;
     }
-    Ok(PyArray1::from_vec(py, y).to_owned())
+    Python::with_gil(|py| Ok(PyArray1::from_vec(py, y).to_owned()))
 }
 
 //
