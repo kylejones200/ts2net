@@ -8,17 +8,11 @@ from numpy.typing import NDArray
 from typing import Optional, Tuple, Union
 from .core.graph import Graph
 
-# Import existing implementations from core/
-import sys
-import os
-core_path = os.path.join(os.path.dirname(__file__), '..')
-if core_path not in sys.path:
-    sys.path.insert(0, core_path)
-
-from core.visibility.hvg import HVG as _HVG_Old
-from core.visibility.nvg import NVG as _NVG_Old
-from core.recurrence import RecurrenceNetwork as _RN_Old
-from core.transition import TransitionNetwork as _TN_Old
+# Import existing implementations from ts2net.core
+from .core.visibility import HVG as _HVG_Old
+from .core.visibility import NVG as _NVG_Old
+from .core.recurrence import RecurrenceNetwork as _RN_Old
+from .core.transition import TransitionNetwork as _TN_Old
 
 
 class HVG:
