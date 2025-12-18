@@ -23,18 +23,14 @@ jobs:
           pip install -U pip maturin
           maturin build --release -o dist
           pip install dist/*.whl
-          # Verify installation
-          echo "=== Verifying ts2net installation ==="
-          pip list | grep ts2net
-          pip show ts2net
-          # Install optional dependencies without -e (editable mode)
+          # Install optional dependencies
           pip install numba tslearn pynndescent pyreadr || true
           pip install pytest pytest-cov PyYAML
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
         run: |
-          pytest --import-mode=importlib -q
+          pytest -q
   parity:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04

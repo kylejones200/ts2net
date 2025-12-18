@@ -32,26 +32,16 @@ jobs:
           
       - name: Build and install package
         run: |
-          which python
-          python --version
           # Build wheel for current Python version
           maturin build --release -o dist
-          ls -la dist/
           # Install the wheel
           pip install dist/*.whl
-          # Verify installation
-          echo "=== Verifying ts2net installation ==="
-          pip list | grep ts2net
-          pip show ts2net
-          python -c "import sys; print('Python path:', sys.path)"
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
       - name: Run tests
         run: |
-          # Move to tests directory to ensure we don't import from local source
-          # but we need to keep the config files in the root reachable or move them
-          pytest --import-mode=importlib tests/ --cov=ts2net --cov-report=xml --cov-report=term
+          pytest tests/ --cov=ts2net --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
