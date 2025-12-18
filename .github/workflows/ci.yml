@@ -23,8 +23,9 @@ jobs:
           pip install -U pip maturin
           maturin build --release -o dist
           pip install dist/*.whl
-          pip install -e .[speed,dtw,approx,rdata] || true
-          pip install pytest pytest-cov
+          # Install optional dependencies without -e (editable mode)
+          pip install numba tslearn pynndescent pyreadr || true
+          pip install pytest pytest-cov PyYAML
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
@@ -51,7 +52,8 @@ jobs:
           pip install -U pip maturin
           maturin build --release -o dist
           pip install dist/*.whl
-          pip install -e .[rdata] || true
+          # Install optional dependencies without -e (editable mode)
+          pip install pyreadr || true
           pip install pytest pytest-cov pyyaml
       - name: Parity
         env:
