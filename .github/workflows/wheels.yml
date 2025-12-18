@@ -17,16 +17,13 @@ jobs:
       - name: Build wheels
         run: |
           pip install -U pip maturin
-          maturin build --release -m ts2net-rs/Cargo.toml --compatibility manylinux_2_28
+          maturin build --release -o dist
           pip install build
-          python -m build
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}-py${{ matrix.py }}
-          path: |
-            target/wheels/*.whl
-            dist/*.tar.gz
+          path: dist/*
   publish:
     needs: build
     runs-on: ubuntu-22.04

@@ -32,11 +32,12 @@ jobs:
           
       - name: Build and install package
         run: |
-          maturin develop --release
+          maturin build --release --out dist
+          pip install dist/*.whl
 
       - name: Install dev dependencies
         run: |
-          pip install -e ".[dev]"
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
       - name: Run tests
         run: |
