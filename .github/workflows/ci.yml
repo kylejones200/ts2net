@@ -21,8 +21,7 @@ jobs:
       - name: Install
         run: |
           pip install -U pip maturin
-          maturin build --release -o dist
-          pip install dist/*.whl
+          pip install -v .
           # Install optional dependencies
           pip install numba tslearn pynndescent pyreadr || true
           pip install pytest pytest-cov PyYAML
@@ -51,9 +50,8 @@ jobs:
       - name: Build ext and py deps
         run: |
           pip install -U pip maturin
-          maturin build --release -o dist
-          pip install dist/*.whl
-          # Install optional dependencies without -e (editable mode)
+          pip install -v .
+          # Install optional dependencies
           pip install pyreadr || true
           pip install pytest pytest-cov pyyaml
       - name: Parity

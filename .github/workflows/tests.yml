@@ -32,10 +32,8 @@ jobs:
           
       - name: Build and install package
         run: |
-          # Build wheel for current Python version
-          maturin build --release -o dist
-          # Install the wheel
-          pip install dist/*.whl
+          # Use pip install . which will use maturin to build and install everything
+          pip install -v .
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 

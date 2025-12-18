@@ -9,6 +9,9 @@ include pyproject.toml
 include setup.cfg
 include pytest.ini
 
+# Include Python source code
+recursive-include src/ts2net *.py
+
 # Include Rust source code for building
 recursive-include ts2net_rs *.rs *.toml
 
