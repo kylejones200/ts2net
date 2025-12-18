@@ -7,6 +7,7 @@ generation, recurrence analysis, and network motif analysis.
 """
 
 from __future__ import annotations
+from typing import Tuple, List, Optional, Union, Dict, Any
 from ..core.stats_summary import CorrSigResult, CCFResult
 import numpy as np
 import math
@@ -132,7 +133,7 @@ def _nz(x: np.ndarray) -> np.ndarray:
 # ---------- Fisher-z and tests ----------
 
 
-def fisher_z_ci(r: float, n: int, alpha: float = 0.05) -> tuple[float, float]:
+def fisher_z_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
     if n < 4:
         raise ValueError("n >= 4 required")
     r = _clip_r(r)
@@ -354,7 +355,7 @@ def partial_corr_sig(R: np.ndarray, n: int, alpha: float = 0.05) -> np.ndarray:
 
 def link_mask_from_distance(
     D: np.ndarray, target_density: float
-) -> tuple[np.ndarray, float]:
+) -> Tuple[np.ndarray, float]:
     D = _nz(D)
     tri = D[np.triu_indices_from(D, 1)]
     eps = float(np.quantile(tri, target_density))

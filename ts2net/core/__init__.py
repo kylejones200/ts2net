@@ -114,7 +114,7 @@ def _vis_weights(y: np.ndarray, E: np.ndarray, mode: str) -> np.ndarray:
 
 def _graph_from_edges_weighted(
     n: int, E: np.ndarray, w: np.ndarray, sparse: bool
-) -> tuple[nx.Graph, object]:
+) -> Tuple[nx.Graph, object]:
     if sparse and csr_matrix is not None:
         rows = E[:, 0].astype(np.int64)
         cols = E[:, 1].astype(np.int64)
@@ -305,7 +305,7 @@ def directed_3node_motifs(
     return {k: {"count": v, "freq": v / total} for k, v in counts.items()}
 
 
-def _deg_seq(sub: nx.Graph) -> list[int]:
+def _deg_seq(sub: nx.Graph) -> List[int]:
     return sorted([d for _, d in sub.degree()])
 
 

@@ -9,14 +9,14 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 from .summary import SummaryTable, _fmt
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple, Dict
 
 
 @dataclass
 class CorrSigResult:
     r: float
     n: int
-    ci: tuple[float, float]
+    ci: Tuple[float, float]
     alpha: float
     sig: bool
 
@@ -35,7 +35,7 @@ class CCFResult:
     r: float
     lag: int
     n_eff: int
-    ci: tuple[float, float]
+    ci: Tuple[float, float]
     alpha: float
     sig: bool
 
@@ -82,10 +82,10 @@ class GraphSummaryResult:
     n_nodes: int = 0
     n_edges: int = 0
     density: float = 0.0
-    motif_counts: dict = None
+    motif_counts: Optional[Dict[str, Any]] = None
     # Legacy field aliases for backward compatibility
-    n: int = None
-    m: int = None
+    n: Optional[int] = None
+    m: Optional[int] = None
     deg_mean: float = 0.0
     deg_std: float = 0.0
     assortativity: float = 0.0

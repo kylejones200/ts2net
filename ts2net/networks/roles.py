@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import networkx as nx
-from typing import Dict, Tuple, Literal
+from typing import Dict, Tuple, Literal, List, Optional
 
 from .communities import _role_features_basic
 from .utils import SKMixin
@@ -18,7 +18,7 @@ except Exception:
     _core_rs = None
 
 
-def _edges_array(G: nx.Graph) -> tuple[int, np.ndarray, bool]:
+def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
     nodes = list(G.nodes())
     idx = {u: i for i, u in enumerate(nodes)}
     undirected = not G.is_directed()
@@ -62,7 +62,7 @@ def _core_number(G: nx.Graph) -> np.ndarray:
     return np.array([core[u] for u in nodes], dtype=np.int64)
 
 
-def _egonet_density(G: nx.Graph, nodes: list) -> np.ndarray:
+def _egonet_density(G: nx.Graph, nodes: List) -> np.ndarray:
     H = G.to_undirected()
     out = np.zeros(len(nodes), float)
     for i, u in enumerate(nodes):
@@ -76,7 +76,7 @@ def _egonet_density(G: nx.Graph, nodes: list) -> np.ndarray:
     return out
 
 
-def _motif_features(G: nx.Graph, nodes: list) -> np.ndarray:
+def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     H = G.to_undirected()
     tri = _triangles_per_node(H)
     deg = np.array([H.degree(u) for u in nodes], dtype=np.int64)
@@ -84,7 +84,7 @@ def _motif_features(G: nx.Graph, nodes: list) -> np.ndarray:
     return np.vstack([tri, wedges]).T.astype(float)
 
 
-def _core_periphery_scores(G: nx.Graph, nodes: list) -> np.ndarray:
+def _core_periphery_scores(G: nx.Graph, nodes: List) -> np.ndarray:
     H = G.to_undirected()
     c = _core_number(H).astype(float)
     if c.max() > 0:
@@ -92,7 +92,7 @@ def _core_periphery_scores(G: nx.Graph, nodes: list) -> np.ndarray:
     return c
 
 
-def role_features_extended(G: nx.Graph) -> tuple[list, np.ndarray]:
+def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
     H = G.to_undirected()
     nodes, Xbasic = _role_features_basic(H)
     nodes = list(nodes)
@@ -119,7 +119,7 @@ def node_roles_spectral(
     n_roles: int = 6,
     seed: int = 3363,
     affinity: Literal["rbf", "cosine"] = "rbf",
-    gamma: float = None,
+    gamma: Optional[float] = None,
 ) -> Dict:
     from sklearn.cluster import SpectralClustering
 
