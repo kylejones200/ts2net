@@ -27,6 +27,9 @@ dependencies = [
     "networkx>=3.0",
     "pandas>=1.5",
     "matplotlib>=3.8",
+    "scipy>=1.9",
+    "joblib>=1.0",
+    "click>=8.0",
 ]
 
 [project.urls]
@@ -50,6 +53,7 @@ dev = [
     "flake8>=6.0",
     "mypy>=1.0",
     "isort>=5.12",
+    "PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -57,8 +61,6 @@ ts2net = "ts2net.cli:main"
 
 # Maturin configuration for Rust extension
 [tool.maturin]
-# The Python module name where the Rust extension will be imported from
-module-name = "ts2net._ts2net_rs"
 # Path to the Cargo.toml of the Rust project (relative to the project root)
 manifest-path = "./ts2net_rs/Cargo.toml"
 # Build in release mode for better performance
