@@ -60,7 +60,7 @@ ts2net = "ts2net.cli:main"
 # The Python module name where the Rust extension will be imported from
 module-name = "ts2net._ts2net_rs"
 # Path to the Cargo.toml of the Rust project (relative to the project root)
-manifest-path = "./ts2net_rs/cargo.toml"
+manifest-path = "./ts2net_rs/Cargo.toml"
 # Build in release mode for better performance
 release = true
 # Strip the binary to reduce size
