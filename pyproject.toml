@@ -1,0 +1,67 @@
+[build-system]
+requires = ["maturin>=1.5"]
+build-backend = "maturin"
+
+[project]
+name = "ts2net"
+version = "0.4.0"
+description = "Time series to network conversion and analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Kyle T. Jones", email = "kyle@kyletjones.com"},
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Intended Audience :: Science/Research",
+]
+
+# Main dependencies
+dependencies = [
+    "numpy>=1.23",
+    "networkx>=3.0",
+    "pandas>=1.5",
+    "matplotlib>=3.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/kylejones200/ts2net"
+Repository = "https://github.com/kylejones200/ts2net"
+Issues = "https://github.com/kylejones200/ts2net/issues"
+Documentation = "https://ts2net.readthedocs.io"
+
+# Optional dependencies
+[project.optional-dependencies]
+speed = ["numba"]
+dtw = ["tslearn"]
+approx = ["pynndescent"]
+rdata = ["pyreadr"]
+gpu = ["cudtw"]
+mic = ["minepy"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "isort>=5.12",
+]
+
+[project.scripts]
+ts2net = "ts2net.cli:main"
+
+# Maturin configuration for Rust extension
+[tool.maturin]
+# The Python module name where the Rust extension will be imported from
+module-name = "ts2net._ts2net_rs"
+# Path to the Cargo.toml of the Rust project (relative to the project root)
+manifest-path = "./ts2net_rs/cargo.toml"
+# Build in release mode for better performance
+release = true
+# Strip the binary to reduce size
+strip = true

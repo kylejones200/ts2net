@@ -1,0 +1,43 @@
+# tests/parity_config.yaml
+# Paths are examples. Adjust to your data.
+- name: hvg_sine
+  kind: HVG
+  series: data/sine.csv
+  params: {}
+- name: nvg_sine
+  kind: NVG
+  series: data/sine.csv
+  params: {}
+- name: rn_eps
+  kind: RN
+  series: data/lorenz_x.csv
+  params:
+    m: 3
+    tau: 2
+    rule: epsilon
+    epsilon: 0.2
+    theiler: 1
+    metric: euclidean
+- name: rn_knn
+  kind: RN
+  series: data/lorenz_x.csv
+  params:
+    m: 3
+    tau: 2
+    rule: knn
+    k: 12
+    theiler: 1
+    metric: euclidean
+- name: tn_ord
+  kind: TN
+  series: data/stock.csv
+  params:
+    symbolizer: ordinal
+    order: 3
+    delay: 1
+    tie_rule: stable
+- name: dtw_panel
+  kind: DTW
+  panel: data/panel.csv
+  params:
+    band: 64

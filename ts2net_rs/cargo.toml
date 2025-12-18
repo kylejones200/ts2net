@@ -1,0 +1,38 @@
+[package]
+name = "ts2net_rs"
+version = "0.5.0"
+authors = ["Kyle Jones, kyle@kyletjones.com"]
+edition = "2021"
+description = "High-performance time series to network conversion in Rust"
+repository = "https://github.com/kylejones200/ts2net-rs"
+license = "MIT"
+
+[lib]
+name = "ts2net_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.19", features = ["extension-module"] }
+numpy = "0.19"
+ndarray = { version = "0.15", features = ["rayon"] }
+rayon = "1.10"
+kiddo = "4"   # Fast k-d tree with constant dimension support
+rand = "0.8"  # Random number generation
+rand_distr = "0.4"  # Random distributions
+rustfft = "6"  # Fast Fourier transforms
+num-complex = "0.4"  # Complex number support
+approx = "0.5"  # Approximate equality comparisons
+
+[features]
+default = ["python"]
+python = ["pyo3/auto-initialize"]
+
+[dev-dependencies]
+approx = "0.5"
+rstest = "0.18"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"

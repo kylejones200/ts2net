@@ -1,0 +1,32 @@
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-mock>=3.10.0
+pytest-xdist>=2.5.0
+
+# Test data generation
+hypothesis>=6.0.0
+
+# Code quality
+black>=22.0.0
+flake8>=4.0.0
+isort>=5.0.0
+mypy>=0.910
+
+# Documentation
+sphinx>=4.0.0
+sphinx-rtd-theme>=1.0.0
+
+# Optional dependencies for testing
+networkx>=2.6.0
+scipy>=1.7.0
+numpy>=1.20.0
+pandas>=1.3.0
+pyarrow>=6.0.0
+
+# For CLI testing
+click>=8.0.0
+
+# For testing with optional dependencies
+pytest-xdist>=2.5.0
+pytest-timeout>=2.0.0

@@ -1,0 +1,42 @@
+name: Wheels
+on:
+  release:
+    types: [created]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macos-13, windows-2022]
+        py: ["3.9","3.10","3.11","3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ matrix.py }} }
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build wheels
+        run: |
+          pip install -U pip maturin
+          maturin build --release -m ts2net-rs/Cargo.toml --compatibility manylinux_2_28
+          pip install build
+          python -m build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-py${{ matrix.py }}
+          path: |
+            target/wheels/*.whl
+            dist/*.tar.gz
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist_all }
+      - name: Publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install twine
+          twine upload dist_all/**/*

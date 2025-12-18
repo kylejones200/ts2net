@@ -1,0 +1,6 @@
+{
+  "kind": "HVG",
+  "series": "data/sine.csv",
+  "panel": null,
+  "params": {}
+}
