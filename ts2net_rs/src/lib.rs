@@ -187,13 +187,13 @@ use kiddo::{distance::squared_euclidean, KdTree};
 
 fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Array2<f64>) {
     let n = pts.len_of(Axis(0));
-    let mut tree: KdTree<f64, usize, M> = KdTree::new();
+    let mut tree: KdTree<f64, M> = KdTree::new();
     for (i, row) in pts.outer_iter().enumerate() {
         let mut p = [0.0f64; M];
         for d in 0..M {
             p[d] = row[d];
         }
-        tree.add(&p, i).unwrap();
+        tree.add(&p, i as u64).unwrap();
     }
     let mut idx = Array2::<usize>::zeros((n, k));
     let mut dst = Array2::<f64>::zeros((n, k));
@@ -205,8 +205,9 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
         let res = tree.nearest(&q, k + 1, &squared_euclidean).unwrap();
         let mut t = 0;
         for (dist, &j) in res.iter() {
-            if j != i && t < k {
-                idx[[i, t]] = j;
+            let j_usize = j as usize;
+            if j_usize != i && t < k {
+                idx[[i, t]] = j_usize;
                 dst[[i, t]] = dist.sqrt();
                 t += 1;
             }
@@ -217,13 +218,13 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
 
 fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
     let n = pts.len_of(Axis(0));
-    let mut tree: KdTree<f64, usize, M> = KdTree::new();
+    let mut tree: KdTree<f64, M> = KdTree::new();
     for (i, row) in pts.outer_iter().enumerate() {
         let mut p = [0.0f64; M];
         for d in 0..M {
             p[d] = row[d];
         }
-        tree.add(&p, i).unwrap();
+        tree.add(&p, i as u64).unwrap();
     }
     let r2 = eps * eps;
     let mut out: Vec<Vec<usize>> = Vec::with_capacity(n);
@@ -233,7 +234,10 @@ fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
             q[d] = row[d];
         }
         let res = tree.within_unsorted(&q, r2, &squared_euclidean).unwrap();
-        let v: Vec<usize> = res.iter().filter_map(|(_, &j)| if j != i { Some(j) } else { None }).collect();
+        let v: Vec<usize> = res.iter().filter_map(|(_, &j)| {
+            let j_usize = j as usize;
+            if j_usize != i { Some(j_usize) } else { None }
+        }).collect();
         out.push(v);
     }
     out
@@ -796,7 +800,7 @@ fn iaaft(
             };
         }
         ifft.process(&mut spec);
-        let mut y2: Vec<f64> = spec.iter().map(|c| c.re / (n as f64)).collect();
+        let y2: Vec<f64> = spec.iter().map(|c| c.re / (n as f64)).collect();
         // rank-order match original
         let mut idx: Vec<usize> = (0..n).collect();
         idx.sort_by(|&i, &j| v[i].partial_cmp(&v[j]).unwrap());
