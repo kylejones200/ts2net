@@ -1,6 +1,13 @@
-# core_rust.py - Rust bindings for performance-critical functions
-from typing import Optional, Union, Tuple
+# ts2net/core/core_rust.py - Rust bindings for performance-critical functions
+from typing import Optional, Union, Tuple, Dict, Any, List
 import numpy as np
+import networkx as nx
+
+try:
+    from scipy.sparse import csr_matrix
+except ImportError:
+    csr_matrix = None
+
 from ts2net_rs import (
     rn_adj_epsilon as _rn_adj_eps_rs,
     event_sync as _event_sync_rs,
@@ -13,6 +20,11 @@ from ts2net_rs import (
     iaaft as _iaaft_rs,
     corr_perm as _corr_perm_rs,
     moran_i as _moran_rs,
+    hvg_edges as _hvg_edges_rs,
+    nvg_edges_sweepline as _nvg_edges_rs,
+    cdist_dtw as _cdist_dtw_rs,
+    knn as _knn_rs,
+    radius as _radius_rs,
 )
 
 
@@ -26,7 +38,7 @@ def rn_adj_epsilon(
 
 def event_sync(
     e1: np.ndarray, e2: np.ndarray, adaptive: bool = True, tau_max: Optional[float] = None
-):
+) -> Dict[str, Any]:
     e1 = np.asarray(e1, np.uint64)
     e2 = np.asarray(e2, np.uint64)
     out = np.array(
@@ -57,7 +69,7 @@ def fnn(
     )
 
 
-def cao(x: np.ndarray, m_max: int = 10, tau: int = 1):
+def cao(x: np.ndarray, m_max: int = 10, tau: int = 1) -> Tuple[np.ndarray, np.ndarray]:
     E1, E2 = _cao_rs(np.asarray(x, float), int(m_max), int(tau))
     return np.array(E1, float), np.array(E2, float)
 
@@ -99,26 +111,8 @@ def moran_i(y: np.ndarray, W: np.ndarray) -> Tuple[float, float]:
     return float(I), float(z)
 
 
-# core_rust.py - Rust bindings for ts2net
-import numpy as np
-import networkx as nx
-
-try:
-    from scipy.sparse import csr_matrix
-except Exception:
-    csr_matrix = None
-
-from ts2net_rs import (
-    hvg_edges as _hvg_edges_rs,
-    nvg_edges_sweepline as _nvg_edges_rs,
-    cdist_dtw as _cdist_dtw_rs,
-    knn as _knn_rs,
-    radius as _radius_rs,
-)
-
-
-def _adj_from_edges(n: int, E: np.ndarray, directed: bool, sparse: bool):
-    if sparse and csr_matrix is not None:
+def _adj_from_edges(n: int, E: np.ndarray, directed: bool, sparse_out: bool):
+    if sparse_out and csr_matrix is not None:
         rows = E[:, 0].astype(np.int64)
         cols = E[:, 1].astype(np.int64)
         data = np.ones(len(rows), dtype=float)
@@ -149,18 +143,18 @@ def _adj_to_graph(A, directed: bool = False):
     )
 
 
-def hvg_graph(x: np.ndarray, sparse: bool = False):
+def hvg_graph(x: np.ndarray, sparse_out: bool = False):
     y = np.asarray(x, float).ravel()
     E = np.array(_hvg_edges_rs(y), dtype=np.int64)
-    A = _adj_from_edges(len(y), E, directed=False, sparse=sparse)
+    A = _adj_from_edges(len(y), E, directed=False, sparse_out=sparse_out)
     G = _adj_to_graph(A, directed=False)
     return G, A
 
 
-def nvg_graph(x: np.ndarray, sparse: bool = False):
+def nvg_graph(x: np.ndarray, sparse_out: bool = False):
     y = np.asarray(x, float).ravel()
     E = np.array(_nvg_edges_rs(y), dtype=np.int64)
-    A = _adj_from_edges(len(y), E, directed=False, sparse=sparse)
+    A = _adj_from_edges(len(y), E, directed=False, sparse_out=sparse_out)
     G = _adj_to_graph(A, directed=False)
     return G, A
 
@@ -170,73 +164,13 @@ def cdist_dtw(X: np.ndarray, band: Optional[int] = None) -> np.ndarray:
     return np.array(_cdist_dtw_rs(X, band))
 
 
-def knn(X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+def knn(X: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
     X = np.asarray(X, float)
     idx, dist = _knn_rs(X, int(k))
     return np.array(idx, dtype=np.int64), np.array(dist, dtype=float)
 
 
-def radius(X: np.ndarray, eps: float) -> list[list[int]]:
+def radius(X: np.ndarray, eps: float) -> List[List[int]]:
     X = np.asarray(X, float)
     neighs = _radius_rs(X, float(eps))
     return [[int(j) for j in row] for row in neighs]
-
-
-# core_rust.py - Rust bindings for ts2net
-import numpy as np
-import networkx as nx
-
-try:
-    from scipy.sparse import csr_matrix
-except Exception:
-    csr_matrix = None
-
-from ts2net_rs import hvg_edges as _hvg_edges_rs, nvg_edges_sweepline as _nvg_edges_rs
-
-
-def _adj_from_edges(n: int, E: np.ndarray, directed: bool, sparse: bool):
-    if sparse and csr_matrix is not None:
-        rows = E[:, 0].astype(np.int64)
-        cols = E[:, 1].astype(np.int64)
-        data = np.ones(len(rows), dtype=float)
-        A = csr_matrix((data, (rows, cols)), shape=(n, n))
-        if not directed:
-            A = A.maximum(A.T)
-        A.setdiag(0.0)
-        A.eliminate_zeros()
-        return A
-    A = np.zeros((n, n), dtype=int)
-    for i, j in E:
-        A[i, j] = 1
-        if not directed:
-            A[j, i] = 1
-    np.fill_diagonal(A, 0)
-    return A
-
-
-def _adj_to_graph(A, directed: bool = False):
-    if hasattr(A, "tocsr"):
-        return nx.from_scipy_sparse_array(
-            A, create_using=nx.DiGraph() if directed else nx.Graph()
-        )
-    return (
-        nx.from_numpy_array(A)
-        if not directed
-        else nx.from_numpy_array(A, create_using=nx.DiGraph())
-    )
-
-
-def hvg_graph(x: np.ndarray, sparse: bool = False):
-    y = np.asarray(x, float).ravel()
-    E = np.array(_hvg_edges_rs(y), dtype=np.int64)
-    A = _adj_from_edges(len(y), E, directed=False, sparse=sparse)
-    G = _adj_to_graph(A, directed=False)
-    return G, A
-
-
-def nvg_graph(x: np.ndarray, sparse: bool = False):
-    y = np.asarray(x, float).ravel()
-    E = np.array(_nvg_edges_rs(y), dtype=np.int64)
-    A = _adj_from_edges(len(y), E, directed=False, sparse=sparse)
-    G = _adj_to_graph(A, directed=False)
-    return G, A
