@@ -63,6 +63,8 @@ ts2net = "ts2net.cli:main"
 [tool.maturin]
 # Path to the Cargo.toml of the Rust project (relative to the project root)
 manifest-path = "./ts2net_rs/Cargo.toml"
+# Path to the Python source code
+python-source = "src"
 # Build in release mode for better performance
 release = true
 # Strip the binary to reduce size
