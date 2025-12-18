@@ -23,6 +23,10 @@ jobs:
           pip install -U pip maturin
           maturin build --release -o dist
           pip install dist/*.whl
+          # Verify installation
+          echo "=== Verifying ts2net installation ==="
+          pip list | grep ts2net
+          python -c "import ts2net; print('ts2net version:', ts2net.__version__)"
           # Install optional dependencies without -e (editable mode)
           pip install numba tslearn pynndescent pyreadr || true
           pip install pytest pytest-cov PyYAML

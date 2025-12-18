@@ -39,6 +39,11 @@ jobs:
           ls -la dist/
           # Install the wheel
           pip install dist/*.whl
+          # Verify installation
+          echo "=== Verifying ts2net installation ==="
+          pip list | grep ts2net
+          python -c "import sys; print('Python path:', sys.path)"
+          python -c "import ts2net; print('ts2net version:', ts2net.__version__); print('ts2net location:', ts2net.__file__)"
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
