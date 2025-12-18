@@ -32,7 +32,10 @@ jobs:
           
       - name: Build and install package
         run: |
-          maturin build --release -o dist
+          which python
+          python --version
+          maturin build --release -o dist --interpreter $(which python)
+          ls -la dist/
           pip install dist/*.whl
 
       - name: Run tests
