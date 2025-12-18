@@ -32,8 +32,9 @@ jobs:
           
       - name: Build and install package
         run: |
-          # Use pip install . which will use maturin to build and install everything
-          pip install -v .
+          # Install the package in editable mode for testing
+          # This ensures Python finds the code and the Rust extension
+          pip install -e .
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
