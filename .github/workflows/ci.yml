@@ -26,7 +26,7 @@ jobs:
           # Verify installation
           echo "=== Verifying ts2net installation ==="
           pip list | grep ts2net
-          python -c "import ts2net; print('ts2net version:', ts2net.__version__)"
+          pip show ts2net
           # Install optional dependencies without -e (editable mode)
           pip install numba tslearn pynndescent pyreadr || true
           pip install pytest pytest-cov PyYAML
@@ -34,9 +34,7 @@ jobs:
         env:
           PYTHONHASHSEED: "0"
         run: |
-          mv ts2net ts2net_src
-          pytest -q
-          mv ts2net_src ts2net
+          pytest --import-mode=importlib -q
   parity:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04

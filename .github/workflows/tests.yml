@@ -42,18 +42,16 @@ jobs:
           # Verify installation
           echo "=== Verifying ts2net installation ==="
           pip list | grep ts2net
+          pip show ts2net
           python -c "import sys; print('Python path:', sys.path)"
-          python -c "import ts2net; print('ts2net version:', ts2net.__version__); print('ts2net location:', ts2net.__file__)"
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
       - name: Run tests
         run: |
-          # Move the local ts2net folder temporarily so pytest is forced to use the installed package
-          mv ts2net ts2net_src
-          pytest tests/ --cov=ts2net --cov-report=xml --cov-report=term
-          # Move it back after tests
-          mv ts2net_src ts2net
+          # Move to tests directory to ensure we don't import from local source
+          # but we need to keep the config files in the root reachable or move them
+          pytest --import-mode=importlib tests/ --cov=ts2net --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
