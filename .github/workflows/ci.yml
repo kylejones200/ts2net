@@ -24,7 +24,7 @@ jobs:
           maturin build --release -o dist
           pip install dist/*.whl
           pip install -e .[speed,dtw,approx,rdata] || true
-          pip install pytest
+          pip install pytest pytest-cov
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
@@ -52,7 +52,7 @@ jobs:
           maturin build --release -o dist
           pip install dist/*.whl
           pip install -e .[rdata] || true
-          pip install pytest pyyaml
+          pip install pytest pytest-cov pyyaml
       - name: Parity
         env:
           RSCRIPT: Rscript
