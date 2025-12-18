@@ -183,7 +183,7 @@ fn cdist_dtw(
 }
 
 // ---- KD-tree (kiddo) for k-NN and radius queries ----
-use kiddo::KdTree;
+use kiddo::{KdTree, SquaredEuclidean};
 
 fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Array2<f64>) {
     let n = pts.len_of(Axis(0));
@@ -202,7 +202,7 @@ fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Arra
         for d in 0..M {
             q[d] = row[d];
         }
-        let res = tree.nearest(&q, k + 1);
+        let res = tree.nearest::<SquaredEuclidean>(&q, k + 1);
         let mut t = 0;
         for neighbor in res.iter() {
             let j_usize = neighbor.item as usize;
@@ -233,7 +233,7 @@ fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
         for d in 0..M {
             q[d] = row[d];
         }
-        let res = tree.within_unsorted(&q, r2);
+        let res = tree.within_unsorted::<SquaredEuclidean>(&q, r2);
         let v: Vec<usize> = res.iter().filter_map(|neighbor| {
             let j_usize = neighbor.item as usize;
             if j_usize != i { Some(j_usize) } else { None }
@@ -469,7 +469,7 @@ fn false_nearest_neighbors(
 
 #[pyfunction]
 fn cao_e1_e2(
-    py: Python<'_>,
+    _py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     m_max: usize,
     tau: usize,
