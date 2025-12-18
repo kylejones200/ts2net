@@ -33,7 +33,10 @@ jobs:
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
-        run: pytest -q
+        run: |
+          mv ts2net ts2net_src
+          pytest -q
+          mv ts2net_src ts2net
   parity:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04

@@ -49,7 +49,11 @@ jobs:
 
       - name: Run tests
         run: |
+          # Move the local ts2net folder temporarily so pytest is forced to use the installed package
+          mv ts2net ts2net_src
           pytest tests/ --cov=ts2net --cov-report=xml --cov-report=term
+          # Move it back after tests
+          mv ts2net_src ts2net
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
