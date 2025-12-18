@@ -34,9 +34,13 @@ jobs:
         run: |
           which python
           python --version
-          maturin build --release -o dist --interpreter $(which python)
+          # Build wheel for current Python version
+          maturin build --release -o dist
           ls -la dist/
+          # Install the wheel
           pip install dist/*.whl
+          # Install optional dependencies for testing
+          pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
       - name: Run tests
         run: |
