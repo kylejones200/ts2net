@@ -495,8 +495,11 @@ def net_enn_approx(D: NDArray[np.float64], epsilon: Optional[float] = None,
     
     for i in range(n):
         # Get actual number of neighbors returned (may be less than requested)
-        n_neigh = min(len(indices[i]), k_query)
+        # indices and distances are 2D arrays: (n, k_query)
+        n_neigh = min(indices.shape[1], k_query)
         for j_idx in range(1, n_neigh):  # Skip first (self)
+            if j_idx >= indices.shape[1]:
+                break
             j = indices[i, j_idx]
             dist = distances[i, j_idx]
             
