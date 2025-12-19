@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2024-12-19
+
 ### Added
 - Real-world example using FRED economic data (`examples/example_fred_data.py`)
   - Fetches GDP, Unemployment Rate, and CPI from FRED
@@ -54,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project structure optimized for distribution
 - Documentation setup with Sphinx
 
-[Unreleased]: https://github.com/kylejones200/ts2net/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kylejones200/ts2net/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kylejones200/ts2net/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kylejones200/ts2net/releases/tag/v0.4.0
 
