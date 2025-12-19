@@ -14,11 +14,16 @@ Quick start
 .. code-block:: python
 
    import numpy as np
-   from ts2net import HVG, NVG, RecurrenceNetwork, TransitionNetwork, graph_summary
+   from ts2net import HVG, graph_summary
 
    x = np.sin(np.linspace(0, 12*np.pi, 800)) + 0.15 * np.random.randn(800)
-   G_hvg, A_hvg = HVG().fit_transform(x)
-   print(graph_summary(G_hvg))
+   
+   hvg = HVG()
+   hvg.build(x)
+   
+   print(f"Nodes: {hvg.n_nodes}, Edges: {hvg.n_edges}")
+   G = hvg.as_networkx()
+   print(graph_summary(G))
 
 CLI
 ---

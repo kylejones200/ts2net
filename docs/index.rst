@@ -10,6 +10,7 @@ Contents:
    :caption: Guide
 
    usage
+   examples
 
 .. toctree::
    :maxdepth: 2
