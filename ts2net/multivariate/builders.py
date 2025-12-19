@@ -472,8 +472,16 @@ def net_enn_approx(D: NDArray[np.float64], epsilon: Optional[float] = None,
         raise ValueError("Must specify either epsilon or percentile")
     
     if epsilon is None:
-        upper_tri = D[np.triu_indices(n, k=1)]
-        epsilon = np.percentile(upper_tri, percentile)
+        # If metric is 'precomputed', D is a distance matrix
+        # Otherwise, D is a feature matrix and we need to compute distances first
+        if metric == 'precomputed':
+            upper_tri = D[np.triu_indices(n, k=1)]
+            epsilon = np.percentile(upper_tri, percentile)
+        else:
+            # For feature matrices, compute pairwise distances to determine epsilon
+            from scipy.spatial.distance import pdist, squareform
+            dists = pdist(D, metric=metric)
+            epsilon = np.percentile(dists, percentile)
         logger.info(f"Using {percentile}th percentile: ε={epsilon:.4f}")
     
     logger.info(f"Building approximate ε-NN with pynndescent (n={n}, ε={epsilon:.4f})...")
@@ -493,15 +501,18 @@ def net_enn_approx(D: NDArray[np.float64], epsilon: Optional[float] = None,
     # Build adjacency matrix
     A = np.zeros((n, n))
     
+    # Get actual number of neighbors returned
+    # indices and distances are 2D arrays: (n, k_actual) where k_actual <= k_query
+    max_neighbors = indices.shape[1]
+    
     for i in range(n):
-        # Get actual number of neighbors returned (may be less than requested)
-        # indices and distances are 2D arrays: (n, k_query)
-        n_neigh = min(indices.shape[1], k_query)
-        for j_idx in range(1, n_neigh):  # Skip first (self)
-            if j_idx >= indices.shape[1]:
+        # Iterate from 1 to max_neighbors-1 (skip first which is self)
+        # Use min to ensure we never exceed bounds
+        for j_idx in range(1, min(max_neighbors, k_query)):
+            if j_idx >= max_neighbors:
                 break
-            j = indices[i, j_idx]
-            dist = distances[i, j_idx]
+            j = int(indices[i, j_idx])
+            dist = float(distances[i, j_idx])
             
             if dist < epsilon:
                 weight = dist if weighted else 1.0
