@@ -1,4 +1,8 @@
-"""Quick Start"""
+"""Quick Start Example
+
+This example demonstrates basic usage with synthetic data.
+For real-world examples, see example_fred_data.py
+"""
 
 import numpy as np
 import logging
@@ -7,8 +11,10 @@ from ts2net import HVG, build_network
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
+# Generate synthetic time series (random walk with trend)
 np.random.seed(42)
-x = np.random.randn(1000)
+n = 1000
+x = np.cumsum(np.random.randn(n)) + 0.01 * np.arange(n)  # Random walk with drift
 
 logger.info("ts2net Quick Start\n")
 
