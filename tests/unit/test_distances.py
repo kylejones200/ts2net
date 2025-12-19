@@ -21,7 +21,7 @@ class TestCorrelationDistance:
         X = np.vstack([x1, x2])
         D = tsdist_cor(X, method="pearson")
         assert D.shape == (2, 2)
-        assert np.allclose(D[0, 0], 0.0)  # Self-distance should be 0
+        assert np.isclose(D[0, 0], 0.0, atol=1e-10)  # Self-distance should be 0
 
 
 class TestCCFDistance:
@@ -52,12 +52,12 @@ class TestInformationTheoreticDistances:
     def test_tsdist_nmi_identical_series(self):
         """Test NMI with identical time series."""
         x = np.random.rand(100)
-        assert tsdist_nmi(x, x) == 0.0
+        assert np.isclose(tsdist_nmi(x, x), 0.0, atol=1e-10)
     
     def test_tsdist_voi_identical_series(self):
         """Test VOI with identical time series."""
         x = np.random.rand(100)
-        assert tsdist_voi(x, x) == 0.0
+        assert np.isclose(tsdist_voi(x, x), 0.0, atol=1e-10)
 
 
 class TestDistanceMatrixUtils:

@@ -108,6 +108,6 @@ class TestCoreWithDistances:
         off_diag = D_zscore[np.triu_indices(3, k=1)]
         assert len(off_diag) > 0  # Just check we have off-diagonal elements
         
-        # Test that diagonal remains zero
-        assert np.all(np.diag(D_norm) == 0.0)
-        assert np.all(np.diag(D_zscore) == 0.0)
+        # Test that diagonal remains zero (allowing for numerical precision)
+        assert np.allclose(np.diag(D_norm), 0.0, atol=1e-10)
+        assert np.allclose(np.diag(D_zscore), 0.0, atol=1e-10)
