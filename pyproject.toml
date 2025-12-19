@@ -7,13 +7,15 @@ name = "ts2net"
 version = "0.4.0"
 description = "Time series to network conversion and analysis"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "Kyle T. Jones", email = "kyle@kyletjones.com"},
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering",
@@ -30,6 +32,7 @@ dependencies = [
     "scipy>=1.9",
     "joblib>=1.0",
     "click>=8.0",
+    "scikit-learn>=1.0",
 ]
 
 [project.urls]

@@ -22,7 +22,7 @@ try:
         cao as _cao_rs,
         surrogate_phase as _surr_phase_rs,
         iaaft as _iaaft_rs,
-        permutation_entropy as _perm_entropy_rs,
+        corr_perm as _corr_perm_rs,
     )
 except ImportError:
     # Rust functions not available, will use Python fallbacks
@@ -30,30 +30,7 @@ except ImportError:
     _cao_rs = None
     _surr_phase_rs = None
     _iaaft_rs = None
-    _perm_entropy_rs = None
-
-
-def false_nearest_neighbors(x, m_max=10, tau=1, Rtol=10.0, Atol=2.0):
-    return _fnn_rs(x, m_max, tau, Rtol, Atol)
-
-
-def cao_e1_e2(x, m_max=10, tau=1):
-    return _cao_rs(x, m_max, tau)
-
-
-def surrogate_phase(x, rng=None):
-    seed = int(rng) if rng is not None else 3363
-    return _surr_phase_rs(x, seed)
-
-
-def iAAFT(x, iters=50, rng=None):
-    seed = int(rng) if rng is not None else 3363
-    return _iaaft_rs(x, iters, seed)
-
-
-def corr_perm_pvalue(x, y, n_perm=1000, rng=None):
-    seed = int(rng) if rng is not None else 3363
-    return _corr_perm_rs(x, y, n_perm, seed)
+    _corr_perm_rs = None
 
 
 def corr_t_pvalue(r: float, n: int) -> float:
@@ -68,6 +45,11 @@ def corr_t_pvalue(r: float, n: int) -> float:
 def corr_perm_pvalue(
     x: np.ndarray, y: np.ndarray, n_perm: int = 1000, rng=None
 ) -> float:
+    """Correlation permutation test p-value. Uses Rust implementation if available."""
+    if _corr_perm_rs is not None:
+        seed = int(rng) if rng is not None else 3363
+        return _corr_perm_rs(x, y, n_perm, seed)
+    # Python fallback
     rng = np.random.default_rng(None if rng is None else rng)
     x = _nz(x)
     y = _nz(y)
@@ -210,6 +192,11 @@ def surrogate_circular(x: np.ndarray, rng=None) -> np.ndarray:
 
 
 def surrogate_phase(x: np.ndarray, rng=None) -> np.ndarray:
+    """Phase randomization surrogate. Uses Rust implementation if available."""
+    if _surr_phase_rs is not None:
+        seed = int(rng) if rng is not None else 3363
+        return _surr_phase_rs(x, seed)
+    # Python fallback
     rng = np.random.default_rng(None if rng is None else rng)
     x = _nz(x)
     X = np.fft.rfft(x)
@@ -225,6 +212,11 @@ def surrogate_phase(x: np.ndarray, rng=None) -> np.ndarray:
 
 
 def iaaft(x: np.ndarray, iters: int = 50, rng=None) -> np.ndarray:
+    """Iterative amplitude adjusted Fourier transform. Uses Rust implementation if available."""
+    if _iaaft_rs is not None:
+        seed = int(rng) if rng is not None else 3363
+        return _iaaft_rs(x, iters, seed)
+    # Python fallback
     rng = np.random.default_rng(None if rng is None else rng)
     x = _nz(x)
     y = np.sort(x)[np.argsort(rng.standard_normal(x.size))]
@@ -558,6 +550,10 @@ def ccf_sig(x: np.ndarray, y: np.ndarray, max_lag: int = 20, alpha: float = 0.05
 def false_nearest_neighbors(
     x: np.ndarray, m_max: int = 10, tau: int = 1, Rtol: float = 10.0, Atol: float = 2.0
 ):
+    """False nearest neighbors analysis. Uses Rust implementation if available."""
+    if _fnn_rs is not None:
+        return _fnn_rs(x, m_max, tau, Rtol, Atol)
+    # Python fallback
     x = np.asarray(x, float)
     n = x.size
 
@@ -585,6 +581,10 @@ def false_nearest_neighbors(
 
 
 def cao_e1_e2(x: np.ndarray, m_max: int = 10, tau: int = 1):
+    """Cao's method for embedding dimension. Uses Rust implementation if available."""
+    if _cao_rs is not None:
+        return _cao_rs(x, m_max, tau)
+    # Python fallback
     x = np.asarray(x, float)
 
     def embed(m):
