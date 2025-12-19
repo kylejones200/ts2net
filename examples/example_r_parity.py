@@ -1,5 +1,10 @@
 """R ts2net API Parity"""
 
+import sys
+import os
+# Add parent directory to path for development
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import networkx as nx
 import logging

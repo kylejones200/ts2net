@@ -67,6 +67,7 @@ jobs:
     name: Publish to PyPI
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
+    environment: pypi  # Use PyPI environment for deployment protection
     permissions:
       id-token: write  # Required for trusted publishing
     

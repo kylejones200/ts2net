@@ -4,10 +4,14 @@ Benchmark script to demonstrate Numba acceleration in ts2net.
 This script compares performance with and without Numba for various algorithms.
 """
 
+import sys
+import os
+# Add parent directory to path for development
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import logging
 import time
 import numpy as np
-import sys
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)

@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redundant test files (`tests_visibility.py`, `tests_recurrance.py`, etc.)
 - Duplicate `wheels.yml` workflow (using trusted publishing instead)
 
-## [0.4.0] - 2024-12-18
+## [0.4.0] - 2024-12-19
 
 ### Added
 - Initial release with core functionality

@@ -4,6 +4,11 @@ This example demonstrates basic usage with synthetic data.
 For real-world examples, see example_fred_data.py
 """
 
+import sys
+import os
+# Add parent directory to path for development
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import logging
 from ts2net import HVG, build_network

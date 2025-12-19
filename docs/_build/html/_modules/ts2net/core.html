@@ -1,0 +1,663 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ts2net.core &mdash; ts2net 0.4.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=6c02275b"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            ts2net
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">Usage Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">ts2net</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ts2net.core</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ts2net.core</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Core module for time series to network conversion.</span>
+
+<span class="sd">This module provides implementations of various time series to network conversion</span>
+<span class="sd">algorithms including Recurrence Networks, Visibility Graphs, and Transition Networks.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="c1"># Standard library imports</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">fields</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">combinations</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Callable</span>
+
+<span class="c1"># Third-party imports</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nx</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.sparse</span><span class="w"> </span><span class="kn">import</span> <span class="n">csr_matrix</span>
+
+<span class="c1"># Local imports</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.recurrence</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecurrenceNetwork</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.transition</span><span class="w"> </span><span class="kn">import</span> <span class="n">TransitionNetwork</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.visibility</span><span class="w"> </span><span class="kn">import</span> <span class="n">HVG</span><span class="p">,</span> <span class="n">NVG</span>
+
+<span class="c1"># Removed circular import - these classes are defined in this file</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">numba</span><span class="w"> </span><span class="kn">import</span> <span class="n">njit</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">njit</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Dummy decorator when numba is not available.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">deco</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">f</span>
+
+        <span class="k">return</span> <span class="n">deco</span>
+
+
+<span class="c1"># Third-party imports</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.sparse</span><span class="w"> </span><span class="kn">import</span> <span class="n">csr_matrix</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">csr_matrix</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_scipy_sparse_array</span> <span class="k">as</span> <span class="n">_nx_from_csr</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">_nx_from_csr</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">networkx</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_scipy_sparse_matrix</span> <span class="k">as</span> <span class="n">_nx_from_csr_legacy</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">_nx_from_csr_legacy</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="c1"># Local application imports - temporarily disable Rust imports due to build issues</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.core_rust</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">hvg_graph</span> <span class="k">as</span> <span class="n">_hvg_graph_rs</span><span class="p">,</span>
+        <span class="n">knn</span> <span class="k">as</span> <span class="n">_knn_rs</span><span class="p">,</span>
+        <span class="n">nvg_graph</span> <span class="k">as</span> <span class="n">_nvg_graph_rs</span><span class="p">,</span>
+        <span class="n">radius</span> <span class="k">as</span> <span class="n">_radius_rs</span><span class="p">,</span>
+        <span class="n">rn_adj_epsilon</span> <span class="k">as</span> <span class="n">_rn_adj_eps_rs</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">_rust_available</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="c1"># Rust extension not available, use Python fallbacks</span>
+    <span class="n">_hvg_graph_rs</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_knn_rs</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_nvg_graph_rs</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_radius_rs</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_rn_adj_eps_rs</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_rust_available</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.stats_summary</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSummaryResult</span>
+
+<span class="c1"># SKMixin is a simple mixin class for scikit-learn compatibility</span>
+<div class="viewcode-block" id="SKMixin">
+<a class="viewcode-back" href="../../api.html#ts2net.SKMixin">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SKMixin</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mixin class for scikit-learn compatibility.&quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="SKMixin.get_params">
+<a class="viewcode-back" href="../../api.html#ts2net.SKMixin.get_params">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get parameters for this estimator.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)}</span></div>
+
+    
+<div class="viewcode-block" id="SKMixin.set_params">
+<a class="viewcode-back" href="../../api.html#ts2net.SKMixin.set_params">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set parameters for this estimator.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+</div>
+
+
+
+<span class="c1"># HVG and NVG implementations have been moved to their respective modules</span>
+<span class="c1"># in the visibility/ subpackage</span>
+
+
+<span class="c1"># ---- Weighted visibility helpers ----</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_vis_weights</span><span class="p">(</span><span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">_WEIGHT_MODES</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;absdiff&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span>
+        <span class="s2">&quot;inv_dist&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)),</span>
+        <span class="s2">&quot;slope&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]])</span> <span class="o">/</span> <span class="p">(</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]),</span>
+        <span class="s2">&quot;distance&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span>
+        <span class="s2">&quot;product&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]]</span> <span class="o">*</span> <span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span>
+        <span class="s2">&quot;mean&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="p">((</span><span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]]</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]])</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span>
+    <span class="p">}</span>
+    
+    <span class="n">weight_fn</span> <span class="o">=</span> <span class="n">_WEIGHT_MODES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">weight_fn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown mode: </span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">weight_fn</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">E</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_graph_from_edges_weighted</span><span class="p">(</span>
+    <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">E</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">w</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">sparse</span><span class="p">:</span> <span class="nb">bool</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="nb">object</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="n">sparse</span> <span class="ow">and</span> <span class="n">csr_matrix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">E</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="n">E</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">csr_matrix</span><span class="p">((</span><span class="n">w</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span> <span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">)),</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">A</span><span class="o">.</span><span class="n">setdiag</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">A</span><span class="o">.</span><span class="n">eliminate_zeros</span><span class="p">()</span>
+        <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">from_scipy_sparse_array</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">G</span><span class="p">,</span> <span class="n">A</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="nb">float</span><span class="p">)</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">),</span> <span class="n">ww</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
+        <span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">ww</span>
+        <span class="n">A</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">ww</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">from_numpy_array</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">G</span><span class="p">,</span> <span class="n">A</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ordinal_patterns</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span>
+    <span class="k">if</span> <span class="n">order</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;order must be &gt;= 2&quot;</span><span class="p">)</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">n</span> <span class="o">-</span> <span class="n">order</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">L</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Series too short for chosen order.&quot;</span><span class="p">)</span>
+    <span class="n">pats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">L</span><span class="p">):</span>
+        <span class="n">w</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">order</span><span class="p">]</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">lexsort</span><span class="p">((</span><span class="n">base</span><span class="p">,</span> <span class="n">w</span><span class="p">))</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">used</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">order</span><span class="p">):</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">code</span> <span class="o">+=</span> <span class="p">(</span><span class="n">r</span> <span class="o">-</span> <span class="n">used</span><span class="p">[:</span><span class="n">r</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">factorial</span><span class="p">(</span><span class="n">order</span> <span class="o">-</span> <span class="n">j</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">used</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">pats</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">code</span>
+    <span class="k">return</span> <span class="n">pats</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_adj_to_graph</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">directed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">()</span> <span class="k">if</span> <span class="n">directed</span> <span class="k">else</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">G</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+    <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">directed</span><span class="p">:</span>
+            <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">j</span><span class="p">:</span>
+                <span class="n">G</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">G</span>
+
+
+<span class="nd">@njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_hvg_edges</span><span class="p">(</span><span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">size</span>
+    <span class="n">ei</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">ej</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">stack</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="k">while</span> <span class="n">stack</span> <span class="ow">and</span> <span class="n">y</span><span class="p">[</span><span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">&lt;</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">]:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+            <span class="n">ei</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">ej</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">stack</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">ei</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">ej</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+        <span class="n">stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ei</span><span class="p">)</span>
+    <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+        <span class="n">E</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">ei</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+        <span class="n">E</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">ej</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">E</span>
+
+
+<div class="viewcode-block" id="triangle_count">
+<a class="viewcode-back" href="../../api.html#ts2net.triangle_count">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">triangle_count</span><span class="p">(</span><span class="n">G</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">H</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+    <span class="n">tri_dict</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">triangles</span><span class="p">(</span><span class="n">H</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">tri_dict</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="o">//</span> <span class="mi">3</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="wedge_count">
+<a class="viewcode-back" href="../../api.html#ts2net.wedge_count">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">wedge_count</span><span class="p">(</span><span class="n">G</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">H</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+    <span class="n">deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">d</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">H</span><span class="o">.</span><span class="n">degree</span><span class="p">()],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">deg</span> <span class="o">*</span> <span class="p">(</span><span class="n">deg</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="motif_summary">
+<a class="viewcode-back" href="../../api.html#ts2net.motif_summary">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">motif_summary</span><span class="p">(</span><span class="n">G</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">und</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="n">triangle_count</span><span class="p">(</span><span class="n">und</span><span class="p">)</span>
+    <span class="n">W</span> <span class="o">=</span> <span class="n">wedge_count</span><span class="p">(</span><span class="n">und</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">und</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span>
+    <span class="n">N3</span> <span class="o">=</span> <span class="n">n</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span> <span class="o">//</span> <span class="mi">6</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">N3</span> <span class="o">-</span> <span class="p">(</span><span class="n">T</span> <span class="o">+</span> <span class="n">W</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;triangles&quot;</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="s2">&quot;wedges&quot;</span><span class="p">:</span> <span class="n">W</span><span class="p">,</span> <span class="s2">&quot;other_3_node&quot;</span><span class="p">:</span> <span class="n">S</span><span class="p">,</span> <span class="s2">&quot;N3&quot;</span><span class="p">:</span> <span class="n">N3</span><span class="p">}</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_giant_component</span><span class="p">(</span><span class="n">H</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">H</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">H</span>
+    <span class="n">comps</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">nx</span><span class="o">.</span><span class="n">connected_components</span><span class="p">(</span><span class="n">H</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="nb">len</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">H</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">([</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">comps</span><span class="p">])))</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="small_world_summary">
+<a class="viewcode-back" href="../../api.html#ts2net.small_world_summary">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">small_world_summary</span><span class="p">(</span><span class="n">G</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">H</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+    <span class="n">GCC</span> <span class="o">=</span> <span class="n">_giant_component</span><span class="p">(</span><span class="n">H</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">GCC</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">GCC</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+            <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+            <span class="s2">&quot;C_er&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+            <span class="s2">&quot;L_er&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+            <span class="s2">&quot;sigma&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="n">k_bar</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">m</span> <span class="o">/</span> <span class="n">n</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">average_clustering</span><span class="p">(</span><span class="n">GCC</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">L</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">average_shortest_path_length</span><span class="p">(</span><span class="n">GCC</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">nx</span><span class="o">.</span><span class="n">NetworkXError</span><span class="p">:</span>
+        <span class="n">L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">m</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">C_er</span> <span class="o">=</span> <span class="n">p</span>
+    <span class="k">if</span> <span class="n">k_bar</span> <span class="o">&gt;</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="n">L_er</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">k_bar</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">L_er</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">num</span> <span class="o">=</span> <span class="p">(</span><span class="n">C</span> <span class="o">/</span> <span class="n">C_er</span><span class="p">)</span> <span class="k">if</span> <span class="n">C_er</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">den</span> <span class="o">=</span> <span class="p">(</span><span class="n">L</span> <span class="o">/</span> <span class="n">L_er</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="n">L_er</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">L_er</span><span class="p">))</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">sigma</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">num</span> <span class="o">/</span> <span class="n">den</span> <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">num</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">den</span><span class="p">)</span> <span class="ow">and</span> <span class="n">den</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="n">C</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="n">L</span><span class="p">,</span> <span class="s2">&quot;C_er&quot;</span><span class="p">:</span> <span class="n">C_er</span><span class="p">,</span> <span class="s2">&quot;L_er&quot;</span><span class="p">:</span> <span class="n">L_er</span><span class="p">,</span> <span class="s2">&quot;sigma&quot;</span><span class="p">:</span> <span class="n">sigma</span><span class="p">}</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_sampled_combinations</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">max_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">3363</span><span class="p">):</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">max_samples</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">combo</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="n">combo</span>
+        <span class="k">return</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">attempts</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">cap</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">max_samples</span><span class="p">,</span> <span class="mi">1_000_000</span><span class="p">)</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">seen</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">cap</span> <span class="ow">and</span> <span class="n">attempts</span> <span class="o">&lt;</span> <span class="n">cap</span> <span class="o">*</span> <span class="mi">10</span><span class="p">:</span>
+        <span class="n">combo</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">r</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">combo</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">combo</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">combo</span>
+        <span class="n">attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+
+
+<div class="viewcode-block" id="directed_3node_motifs">
+<a class="viewcode-back" href="../../api.html#ts2net.directed_3node_motifs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">directed_3node_motifs</span><span class="p">(</span>
+    <span class="n">G</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3363</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Graph must be directed.&quot;</span><span class="p">)</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">trio</span> <span class="ow">in</span> <span class="n">_sampled_combinations</span><span class="p">(</span><span class="n">G</span><span class="o">.</span><span class="n">nodes</span><span class="p">(),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="n">trio</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">nx</span><span class="o">.</span><span class="n">is_weakly_connected</span><span class="p">(</span><span class="n">sub</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="n">mapping</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">nodes</span><span class="p">(),</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">relabel_nodes</span><span class="p">(</span><span class="n">sub</span><span class="p">,</span> <span class="n">mapping</span><span class="p">)</span>
+        <span class="n">bits</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">has_edge</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
+        <span class="p">]</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">bits</span><span class="p">))</span>
+        <span class="n">counts</span><span class="p">[</span><span class="n">code</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">,</span> <span class="s2">&quot;freq&quot;</span><span class="p">:</span> <span class="n">v</span> <span class="o">/</span> <span class="n">total</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_deg_seq</span><span class="p">(</span><span class="n">sub</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">([</span><span class="n">d</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">sub</span><span class="o">.</span><span class="n">degree</span><span class="p">()])</span>
+
+
+<div class="viewcode-block" id="undirected_4node_motifs">
+<a class="viewcode-back" href="../../api.html#ts2net.undirected_4node_motifs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">undirected_4node_motifs</span><span class="p">(</span>
+    <span class="n">G</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3363</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Graph must be undirected.&quot;</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;K4&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;C4&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;triangle_tail&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;P4&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;K1,3&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;other&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">quad</span> <span class="ow">in</span> <span class="n">_sampled_combinations</span><span class="p">(</span><span class="n">G</span><span class="o">.</span><span class="n">nodes</span><span class="p">(),</span> <span class="mi">4</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+        <span class="n">sub</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="n">quad</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">nx</span><span class="o">.</span><span class="n">is_connected</span><span class="p">(</span><span class="n">sub</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">sub</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">_deg_seq</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;K4&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">==</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;C4&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;triangle_tail&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;P4&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">]:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;K1,3&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;other&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">,</span> <span class="s2">&quot;freq&quot;</span><span class="p">:</span> <span class="n">v</span> <span class="o">/</span> <span class="n">total</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div>
+
+
+
+<div class="viewcode-block" id="motif_counts">
+<a class="viewcode-back" href="../../api.html#ts2net.motif_counts">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">motif_counts</span><span class="p">(</span>
+    <span class="n">G</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">],</span>
+    <span class="n">motif_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;3node&#39;</span><span class="p">,</span>
+    <span class="n">max_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3363</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Count motifs in a graph.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    G : nx.Graph or nx.DiGraph</span>
+<span class="sd">        Input graph</span>
+<span class="sd">    motif_type : str, default &#39;3node&#39;</span>
+<span class="sd">        Type of motifs to count (&#39;3node&#39; or &#39;4node&#39;)</span>
+<span class="sd">    max_samples : int, optional</span>
+<span class="sd">        Maximum number of samples for motif counting</span>
+<span class="sd">    seed : int, default 3363</span>
+<span class="sd">        Random seed for sampling</span>
+<span class="sd">        </span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Dict[str, int]</span>
+<span class="sd">        Dictionary of motif counts</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">motif_type</span> <span class="o">==</span> <span class="s1">&#39;3node&#39;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">directed_3node_motifs</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">motif_type</span> <span class="o">==</span> <span class="s1">&#39;4node&#39;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">undirected_4node_motifs</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">max_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span></div>
+
+
+
+<div class="viewcode-block" id="graph_summary">
+<a class="viewcode-back" href="../../api.html#ts2net.graph_summary">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">graph_summary</span><span class="p">(</span>
+    <span class="n">G</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">],</span>
+    <span class="n">motifs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">motif_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3363</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute a comprehensive summary of graph properties.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    G : nx.Graph or nx.DiGraph</span>
+<span class="sd">        Input graph</span>
+<span class="sd">    motifs : str, optional</span>
+<span class="sd">        Type of motifs to compute (&#39;3node&#39;, &#39;4node&#39;, or None)</span>
+<span class="sd">    motif_samples : int, optional</span>
+<span class="sd">        Maximum number of samples for motif counting</span>
+<span class="sd">    seed : int, default 3363</span>
+<span class="sd">        Random seed for sampling</span>
+<span class="sd">        </span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Dictionary of graph properties</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">und</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+    <span class="n">deg</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">und</span><span class="o">.</span><span class="n">degree</span><span class="p">())</span>
+    <span class="n">deg_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">deg</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="n">und</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">(),</span>
+        <span class="s2">&quot;m&quot;</span><span class="p">:</span> <span class="n">und</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">(),</span>
+        <span class="s2">&quot;density&quot;</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">density</span><span class="p">(</span><span class="n">und</span><span class="p">),</span>
+        <span class="s2">&quot;deg_mean&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">deg_vals</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">deg_vals</span><span class="o">.</span><span class="n">size</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="s2">&quot;deg_std&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">deg_vals</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="k">if</span> <span class="n">deg_vals</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="s2">&quot;avg_degree&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">deg_vals</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">deg_vals</span><span class="o">.</span><span class="n">size</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="s2">&quot;assortativity&quot;</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">nx</span><span class="o">.</span><span class="n">degree_assortativity_coefficient</span><span class="p">(</span><span class="n">und</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">und</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span>
+            <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;avg_clustering&quot;</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">nx</span><span class="o">.</span><span class="n">average_clustering</span><span class="p">(</span><span class="n">und</span><span class="p">)</span> <span class="k">if</span> <span class="n">und</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="p">),</span>
+    <span class="p">}</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">small_world_summary</span><span class="p">(</span><span class="n">und</span><span class="p">))</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">motif_summary</span><span class="p">(</span><span class="n">und</span><span class="p">))</span>
+    
+    <span class="k">if</span> <span class="n">motifs</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;directed3&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">():</span>
+        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;motifs_directed_3&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">directed_3node_motifs</span><span class="p">(</span>
+            <span class="n">G</span><span class="p">,</span> <span class="n">max_samples</span><span class="o">=</span><span class="n">motif_samples</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">motifs</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;undirected4&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">):</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="n">G</span><span class="o">.</span><span class="n">to_undirected</span><span class="p">()</span> <span class="k">if</span> <span class="n">G</span><span class="o">.</span><span class="n">is_directed</span><span class="p">()</span> <span class="k">else</span> <span class="n">G</span>
+        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;motifs_undirected_4&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">undirected_4node_motifs</span><span class="p">(</span>
+            <span class="n">base</span><span class="p">,</span> <span class="n">max_samples</span><span class="o">=</span><span class="n">motif_samples</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span>
+        <span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">out</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_as_1d</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">float</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Expected a 1-D array.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">a</span>
+
+
+<div class="viewcode-block" id="embed">
+<a class="viewcode-back" href="../../api.html#ts2net.embed">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">embed</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">tau</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Time-delay embedding of a time series.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x : np.ndarray</span>
+<span class="sd">        1D time series</span>
+<span class="sd">    m : int</span>
+<span class="sd">        Embedding dimension</span>
+<span class="sd">    tau : int</span>
+<span class="sd">        Time delay</span>
+<span class="sd">        </span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray</span>
+<span class="sd">        2D array of shape (L, m) where L = len(x) - (m-1)*tau</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">_as_1d</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">n</span> <span class="o">-</span> <span class="p">(</span><span class="n">m</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">tau</span>
+    <span class="k">if</span> <span class="n">L</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Series too short: n=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> &lt; required=</span><span class="si">{</span><span class="p">(</span><span class="n">m</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">tau</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2"> for m=</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">, tau=</span><span class="si">{</span><span class="n">tau</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">L</span><span class="p">,</span> <span class="n">m</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+        <span class="n">E</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">tau</span> <span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="n">tau</span> <span class="o">+</span> <span class="n">L</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">E</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_run_single</span><span class="p">(</span><span class="n">series</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+    <span class="n">_BUILDERS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;HVG&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">,</span> <span class="n">kw</span><span class="p">:</span> <span class="n">HVG</span><span class="p">()</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+        <span class="s2">&quot;NVG&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">,</span> <span class="n">kw</span><span class="p">:</span> <span class="n">NVG</span><span class="p">()</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+        <span class="s2">&quot;RN&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">,</span> <span class="n">kw</span><span class="p">:</span> <span class="n">RecurrenceNetwork</span><span class="p">(</span><span class="o">**</span><span class="n">kw</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+        <span class="s2">&quot;TN&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">,</span> <span class="n">kw</span><span class="p">:</span> <span class="n">TransitionNetwork</span><span class="p">(</span><span class="o">**</span><span class="n">kw</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+    <span class="p">}</span>
+    
+    <span class="n">builder_fn</span> <span class="o">=</span> <span class="n">_BUILDERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">builder</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">builder_fn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown builder: </span><span class="si">{</span><span class="n">builder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">builder_fn</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+
+
+<span class="c1"># Builder registry for batch processing</span>
+<span class="n">_BUILDERS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;hvg&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">HVG</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+    <span class="s1">&#39;nvg&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">NVG</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+    <span class="s1">&#39;recurrence&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">RecurrenceNetwork</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+    <span class="s1">&#39;transition&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">TransitionNetwork</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="batch_transform">
+<a class="viewcode-back" href="../../api.html#ts2net.batch_transform">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_transform</span><span class="p">(</span>
+    <span class="n">X</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">builder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">,</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Transform multiple time series using the specified builder.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    X : Sequence[np.ndarray]</span>
+<span class="sd">        Sequence of time series arrays</span>
+<span class="sd">    builder : str</span>
+<span class="sd">        Name of the builder to use</span>
+<span class="sd">    **kwargs</span>
+<span class="sd">        Additional keyword arguments for the builder</span>
+<span class="sd">        </span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    List[Union[nx.Graph, nx.DiGraph]]</span>
+<span class="sd">        List of transformed graphs</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_BUILDERS</span><span class="p">[</span><span class="n">builder</span><span class="p">](</span><span class="n">x</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="p">]</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Kyle T. Jones.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
