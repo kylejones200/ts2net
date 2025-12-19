@@ -80,9 +80,6 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # Use trusted publishing (configured on PyPI)
-          # For pending publishers, the project name is automatically detected
-          skip-existing: true
-          print-hash: true
+        # Uses trusted publishing - no token needed
+        # Configured on PyPI as pending publisher for ts2net project
 
