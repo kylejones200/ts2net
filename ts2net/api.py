@@ -211,7 +211,10 @@ class RecurrenceNetwork:
         self.epsilon = epsilon
         self.metric = metric
         self.only_degrees = only_degrees
-        self._impl = _RN_Old(m=m, tau=tau, rule=rule, k=k, epsilon=epsilon, metric=metric)
+        # Map parameters to old implementation (uses threshold instead of epsilon)
+        # For k-NN rule, use k parameter; for epsilon rule, use threshold
+        threshold = epsilon if rule == 'epsilon' else None
+        self._impl = _RN_Old(m=m, tau=tau, rule=rule, k=k, metric=metric, threshold=threshold)
         self._graph = None
     
     def build(self, x: NDArray[np.float64]):
@@ -289,9 +292,10 @@ class TransitionNetwork:
         self.normalize = normalize
         self.sparse = sparse
         self.only_degrees = only_degrees
+        # Map parameters to old implementation (doesn't accept normalize or sparse)
         self._impl = _TN_Old(
             symbolizer=symbolizer, order=order, delay=delay,
-            tie_rule=tie_rule, bins=bins, normalize=normalize, sparse=sparse
+            tie_rule=tie_rule, bins=bins
         )
         self._graph = None
     
