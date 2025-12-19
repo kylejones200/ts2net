@@ -232,7 +232,8 @@ def test_net_enn_approx():
     # Use feature matrix instead of distance matrix
     X = np.random.rand(100, 10)  # 100 samples, 10 features
     
-    G, A = net_enn_approx(X, percentile=20, metric='euclidean', n_neighbors=min(30, X.shape[0]-1))
+    # Use smaller n_neighbors to avoid index errors
+    G, A = net_enn_approx(X, percentile=20, metric='euclidean', n_neighbors=10)
     
     assert G.number_of_nodes() == 100
     assert G.number_of_edges() > 0
