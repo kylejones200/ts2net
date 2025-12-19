@@ -35,9 +35,8 @@ class TestVisibilityGraphsWithCore:
         
         # Check small-world properties
         sw_summary = small_world_summary(G)
-        assert "avg_degree" in sw_summary
-        assert "avg_path_length" in sw_summary
-        assert "clustering" in sw_summary
+        assert "C" in sw_summary  # Clustering coefficient
+        assert "L" in sw_summary  # Average path length
     
     def test_nvg_with_graph_summary(self, sample_time_series):
         """Test NVG generation and graph summary."""
@@ -55,9 +54,8 @@ class TestVisibilityGraphsWithCore:
         
         # Check small-world properties
         sw_summary = small_world_summary(G)
-        assert "avg_degree" in sw_summary
-        assert "avg_path_length" in sw_summary
-        assert "clustering" in sw_summary
+        assert "C" in sw_summary  # Clustering coefficient
+        assert "L" in sw_summary  # Average path length
     
     def test_batch_transform_with_visibility(self, sample_time_series):
         """Test batch transform with visibility graph builder."""

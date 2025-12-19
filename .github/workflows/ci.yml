@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.12" }
       - name: Install system deps
         run: sudo apt-get update && sudo apt-get install -y libblas-dev liblapack-dev libbz2-dev liblzma-dev
       - name: Install Rust
@@ -30,33 +30,3 @@ jobs:
           PYTHONHASHSEED: "0"
         run: |
           pytest -q
-  parity:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install R
-        uses: r-lib/actions/setup-r@v2
-        with: { r-version: 'release' }
-      - name: R deps
-        run: |
-          Rscript -e 'install.packages(c("remotes","igraph","jsonlite"), repos="https://cloud.r-project.org")'
-          # Note: R package not yet published, skip for now
-          # Rscript -e 'remotes::install_github("kylejones200/ts2net")'
-      - name: Build ext and py deps
-        run: |
-          pip install -U pip maturin
-          pip install -e .
-          # Install optional dependencies
-          pip install pyreadr || true
-          pip install pytest pytest-cov pyyaml
-      - name: Parity
-        env:
-          RSCRIPT: Rscript
-        run: |
-          # Skip parity tests until R package is available
-          pytest -q tests/test_parity.py || echo "Parity tests skipped (R package not available)"

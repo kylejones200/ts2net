@@ -49,6 +49,7 @@ def test_tsdist_voi_identical():
 
 
 @pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
+@pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
 def test_tsdist_mic():
     """Test Maximal Information Coefficient distance"""
     x = np.linspace(0, 10, 100)
@@ -59,6 +60,7 @@ def test_tsdist_mic():
     assert d < 0.5  # Should detect strong association
 
 
+@pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
 @pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
 def test_tsdist_mic_independent():
     """Test MIC with independent series"""
@@ -198,11 +200,10 @@ def test_windowing_integration():
 def test_net_knn_approx():
     """Test approximate k-NN construction"""
     np.random.seed(42)
-    D = np.random.rand(100, 100)
-    D = (D + D.T) / 2  # Make symmetric
-    np.fill_diagonal(D, 0)
+    # Use feature matrix instead of distance matrix (pynndescent works better with features)
+    X = np.random.rand(100, 10)  # 100 samples, 10 features
     
-    G, A = net_knn_approx(D, k=5, metric='precomputed', weighted=False)
+    G, A = net_knn_approx(X, k=5, metric='euclidean', weighted=False)
     
     assert G.number_of_nodes() == 100
     # Approximate, so edges may vary slightly
@@ -213,11 +214,10 @@ def test_net_knn_approx():
 def test_net_knn_approx_weighted():
     """Test weighted approximate k-NN"""
     np.random.seed(42)
-    D = np.random.rand(50, 50)
-    D = (D + D.T) / 2
-    np.fill_diagonal(D, 0)
+    # Use feature matrix instead of distance matrix
+    X = np.random.rand(50, 10)  # 50 samples, 10 features
     
-    G, A = net_knn_approx(D, k=3, metric='precomputed', weighted=True)
+    G, A = net_knn_approx(X, k=3, metric='euclidean', weighted=True)
     
     assert G.number_of_nodes() == 50
     # Check that edges have weights
@@ -230,11 +230,10 @@ def test_net_knn_approx_weighted():
 def test_net_enn_approx():
     """Test approximate ε-NN construction"""
     np.random.seed(42)
-    D = np.random.rand(100, 100)
-    D = (D + D.T) / 2
-    np.fill_diagonal(D, 0)
+    # Use feature matrix instead of distance matrix
+    X = np.random.rand(100, 10)  # 100 samples, 10 features
     
-    G, A = net_enn_approx(D, percentile=20, metric='precomputed', n_neighbors=30)
+    G, A = net_enn_approx(X, percentile=20, metric='euclidean', n_neighbors=30)
     
     assert G.number_of_nodes() == 100
     assert G.number_of_edges() > 0
@@ -246,15 +245,19 @@ def test_approx_vs_exact():
     from ts2net.multivariate import net_knn
     
     np.random.seed(42)
-    D = np.random.rand(30, 30)
+    # Use feature matrix for approximate, distance matrix for exact
+    X = np.random.rand(30, 10)  # 30 samples, 10 features
+    # For exact, compute distance matrix
+    from ts2net.multivariate import ts_dist
+    D = ts_dist(X, method='correlation', n_jobs=1)
     D = (D + D.T) / 2
     np.fill_diagonal(D, 0)
     
     # Exact
     G_exact, A_exact = net_knn(D, k=3, weighted=False)
     
-    # Approximate
-    G_approx, A_approx = net_knn_approx(D, k=3, metric='precomputed', 
+    # Approximate (use feature matrix)
+    G_approx, A_approx = net_knn_approx(X, k=3, metric='euclidean', 
                                          n_neighbors=10, weighted=False)
     
     # Should be similar (but not necessarily identical)

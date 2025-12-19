@@ -441,6 +441,36 @@ def _as_1d(x: Union[np.ndarray, Iterable[float]]) -> np.ndarray:
     return a
 
 
+def embed(x: np.ndarray, m: int, tau: int) -> np.ndarray:
+    """
+    Time-delay embedding of a time series.
+    
+    Parameters
+    ----------
+    x : np.ndarray
+        1D time series
+    m : int
+        Embedding dimension
+    tau : int
+        Time delay
+        
+    Returns
+    -------
+    np.ndarray
+        2D array of shape (L, m) where L = len(x) - (m-1)*tau
+    """
+    x = _as_1d(x)
+    n = len(x)
+    L = n - (m - 1) * tau
+    if L <= 0:
+        raise ValueError(f"Series too short: n={n} < required={(m-1)*tau+1} for m={m}, tau={tau}")
+    
+    E = np.empty((L, m), dtype=float)
+    for i in range(m):
+        E[:, i] = x[i * tau : i * tau + L]
+    return E
+
+
 def _run_single(series: np.ndarray, builder: str, kwargs: dict):
     _BUILDERS = {
         "HVG": lambda s, kw: HVG().fit_transform(s),
