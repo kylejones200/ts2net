@@ -487,16 +487,16 @@ def net_enn_approx(D: NDArray[np.float64], epsilon: Optional[float] = None,
     )
     
     # Query neighbors within epsilon
-    indices, distances = index.query(D, k=n_neighbors)
+    k_query = min(n_neighbors, n - 1)
+    indices, distances = index.query(D, k=k_query)
     
     # Build adjacency matrix
     A = np.zeros((n, n))
     
     for i in range(n):
-        for j_idx in range(1, n_neighbors):  # Skip first (self)
-            if j_idx >= len(indices[i]):
-                break
-            
+        # Get actual number of neighbors returned (may be less than requested)
+        n_neigh = min(len(indices[i]), k_query)
+        for j_idx in range(1, n_neigh):  # Skip first (self)
             j = indices[i, j_idx]
             dist = distances[i, j_idx]
             

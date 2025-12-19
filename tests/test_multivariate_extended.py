@@ -51,6 +51,9 @@ def test_tsdist_voi_identical():
 @pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
 def test_tsdist_mic():
     """Test Maximal Information Coefficient distance"""
+    if not HAS_MINEPY:
+        pytest.skip("minepy not installed")
+    from ts2net.multivariate.distances import tsdist_mic
     x = np.linspace(0, 10, 100)
     y = np.sin(x)  # Nonlinear relationship
     
@@ -62,6 +65,9 @@ def test_tsdist_mic():
 @pytest.mark.skipif(not HAS_MINEPY, reason="minepy not installed")
 def test_tsdist_mic_independent():
     """Test MIC with independent series"""
+    if not HAS_MINEPY:
+        pytest.skip("minepy not installed")
+    from ts2net.multivariate.distances import tsdist_mic
     np.random.seed(42)
     x = np.random.randn(100)
     y = np.random.randn(100)
