@@ -112,7 +112,16 @@ def moran_i(y: np.ndarray, W: np.ndarray) -> Tuple[float, float]:
 
 
 def _adj_from_edges(n: int, E: np.ndarray, directed: bool, sparse_out: bool):
-    if sparse_out and csr_matrix is not None:
+    # Always use sparse to avoid memory blowup
+    # Safety guardrail: refuse dense for large graphs
+    if not sparse_out and n > 50_000:
+        raise ValueError(
+            f"Refusing to build dense adjacency matrix for n={n} nodes. "
+            f"This would require ~{n**2 * 8 / 1e9:.1f} GB of memory. "
+            f"Use sparse_out=True instead."
+        )
+    
+    if csr_matrix is not None:
         rows = E[:, 0].astype(np.int64)
         cols = E[:, 1].astype(np.int64)
         data = np.ones(len(rows), dtype=float)
@@ -122,6 +131,13 @@ def _adj_from_edges(n: int, E: np.ndarray, directed: bool, sparse_out: bool):
         A.setdiag(0.0)
         A.eliminate_zeros()
         return A
+    
+    # Fallback only for small graphs (should rarely be used)
+    if n > 10_000:
+        raise ValueError(
+            f"scipy.sparse not available and n={n} is too large for dense matrix. "
+            f"Install scipy to use sparse matrices."
+        )
     A = np.zeros((n, n), dtype=int)
     for i, j in E:
         A[i, j] = 1

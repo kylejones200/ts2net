@@ -44,10 +44,27 @@ class HVG:
     """
     
     def __init__(self, weighted: bool = False, limit: Optional[int] = None, 
-                 only_degrees: bool = False):
+                 only_degrees: bool = False, output: str = "edges"):
+        """
+        Parameters
+        ----------
+        weighted : bool
+            Edge weights = abs(y_i - y_j)
+        limit : int, optional
+            Maximum temporal distance
+        only_degrees : bool
+            DEPRECATED: Use output="degrees" instead. Performance mode - skip edge storage
+        output : str, default "edges"
+            Output mode: "edges" (full edge list), "degrees" (degree sequence only),
+            or "stats" (summary statistics only, most memory efficient)
+        """
         self.weighted = weighted
         self.limit = limit
-        self.only_degrees = only_degrees
+        # Backward compatibility
+        if only_degrees:
+            self.output = "degrees"
+        else:
+            self.output = output
         self._impl = _HVG_Old(weighted=weighted, limit=limit)
         self._graph = None
     
@@ -56,20 +73,34 @@ class HVG:
         # Use old implementation
         G_nx, A = self._impl.fit_transform(x)
         
-        # Convert to new Graph object
-        if self.only_degrees:
-            # Performance mode
+        # Convert to new Graph object based on output mode
+        if self.output == "degrees":
+            # Degrees-only mode: compute degrees, skip edges
             degrees = np.array([d for _, d in G_nx.degree()])
             self._graph = Graph(
                 edges=[],
                 n_nodes=len(x),
                 directed=False,
                 weighted=self.weighted,
-                _adjacency=A,
+                _adjacency=None,  # Don't store sparse matrix either
                 _degrees=degrees
             )
-        else:
-            # Normal mode
+        elif self.output == "stats":
+            # Stats-only mode: compute degrees and basic stats, skip edges
+            degrees = np.array([d for _, d in G_nx.degree()])
+            n_edges = G_nx.number_of_edges()
+            self._graph = Graph(
+                edges=[],
+                n_nodes=len(x),
+                directed=False,
+                weighted=self.weighted,
+                _adjacency=None,
+                _degrees=degrees
+            )
+            # Store edge count separately since we don't have edges
+            self._graph._n_edges_cached = n_edges
+        else:  # output == "edges"
+            # Full edge list mode
             edges = list(G_nx.edges(data='weight' if self.weighted else False))
             if self.weighted:
                 edges = [(u, v, w) for u, v, w in edges]
@@ -79,17 +110,19 @@ class HVG:
                 n_nodes=len(x),
                 directed=False,
                 weighted=self.weighted,
-                _adjacency=A
+                _adjacency=None  # Build sparse lazily if needed
             )
         
         return self
     
     @property
     def edges(self):
-        """Edge list"""
+        """Edge list (None if output='degrees' or 'stats')"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return None if self.only_degrees else self._graph.edges
+        if self.output in ("degrees", "stats"):
+            return None
+        return self._graph.edges
     
     @property
     def n_nodes(self):
@@ -111,45 +144,91 @@ class HVG:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
     
-    def adjacency_matrix(self, sparse: bool = False):
-        """Adjacency matrix"""
+    def adjacency_matrix(self, format: str = "sparse"):
+        """Adjacency matrix (sparse by default)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.adjacency_matrix(sparse=sparse)
+        return self._graph.adjacency_matrix(format=format)
     
-    def as_networkx(self):
-        """Convert to NetworkX"""
+    def edges_coo(self):
+        """Return edges in COO format (src, dst, weight arrays)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.as_networkx()
+        return self._graph.edges_coo()
+    
+    def as_networkx(self, force: bool = False):
+        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.as_networkx(force=force)
 
 
 class NVG:
     """Natural Visibility Graph"""
     
     def __init__(self, weighted: bool = False, limit: Optional[int] = None,
-                 only_degrees: bool = False):
+                 only_degrees: bool = False, output: str = "edges",
+                 max_edges: Optional[int] = None, max_edges_per_node: Optional[int] = None,
+                 max_memory_mb: Optional[float] = None):
+        """
+        Parameters
+        ----------
+        weighted : bool
+            Edge weights = abs(y_i - y_j)
+        limit : int, optional
+            Maximum temporal distance (horizon limit, critical scale control)
+        only_degrees : bool
+            DEPRECATED: Use output="degrees" instead
+        output : str, default "edges"
+            Output mode: "edges", "degrees", or "stats"
+        max_edges : int, optional
+            Maximum total edges (safety cap)
+        max_edges_per_node : int, optional
+            Maximum edges per node (additional scale control)
+        max_memory_mb : float, optional
+            Maximum memory in MB (converted to max_edges estimate)
+        """
         self.weighted = weighted
         self.limit = limit
-        self.only_degrees = only_degrees
-        self._impl = _NVG_Old(weighted=weighted, limit=limit)
+        if only_degrees:
+            self.output = "degrees"
+        else:
+            self.output = output
+        self._impl = _NVG_Old(
+            weighted=weighted, limit=limit,
+            max_edges=max_edges, max_edges_per_node=max_edges_per_node,
+            max_memory_mb=max_memory_mb
+        )
         self._graph = None
     
     def build(self, x: NDArray[np.float64]):
         """Build NVG from time series."""
         G_nx, A = self._impl.fit_transform(x)
         
-        if self.only_degrees:
+        # Convert based on output mode (same pattern as HVG)
+        if self.output == "degrees":
             degrees = np.array([d for _, d in G_nx.degree()])
             self._graph = Graph(
                 edges=[],
                 n_nodes=len(x),
                 directed=False,
                 weighted=self.weighted,
-                _adjacency=A,
+                _adjacency=None,
                 _degrees=degrees
             )
-        else:
+        elif self.output == "stats":
+            degrees = np.array([d for _, d in G_nx.degree()])
+            n_edges = G_nx.number_of_edges()
+            self._graph = Graph(
+                edges=[],
+                n_nodes=len(x),
+                directed=False,
+                weighted=self.weighted,
+                _adjacency=None,
+                _degrees=degrees
+            )
+            self._graph._n_edges_cached = n_edges
+        else:  # output == "edges"
             edges = list(G_nx.edges(data='weight' if self.weighted else False))
             if self.weighted:
                 edges = [(u, v, w) for u, v, w in edges]
@@ -159,7 +238,7 @@ class NVG:
                 n_nodes=len(x),
                 directed=False,
                 weighted=self.weighted,
-                _adjacency=A
+                _adjacency=None
             )
         
         return self

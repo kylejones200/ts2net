@@ -6,7 +6,7 @@ Inspired by ts2vg's clean API - keeps NetworkX optional, NumPy primary.
 
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from dataclasses import dataclass
 
 
@@ -43,12 +43,15 @@ class Graph:
     n_nodes: int
     directed: bool = False
     weighted: bool = False
-    _adjacency: Optional[NDArray] = None
+    _adjacency: Optional = None  # scipy sparse matrix, not dense
     _degrees: Optional[NDArray] = None
     
     @property
     def n_edges(self) -> int:
         """Number of edges"""
+        # Support cached edge count for stats-only mode
+        if hasattr(self, '_n_edges_cached'):
+            return self._n_edges_cached
         return len(self.edges)
     
     def degree_sequence(self) -> NDArray[np.int64]:
@@ -70,45 +73,105 @@ class Graph:
             self._degrees = degrees
         return self._degrees
     
-    def adjacency_matrix(self, sparse: bool = False) -> NDArray:
+    def adjacency_matrix(self, format: str = "sparse"):
         """
-        Adjacency matrix (cached).
+        Adjacency matrix (lazy, sparse by default).
         
         Parameters
         ----------
-        sparse : bool
-            Return scipy sparse matrix (CSR format)
+        format : str, default "sparse"
+            Output format: "sparse" (CSR), "dense", or "coo"
         
         Returns
         -------
-        A : array (n_nodes, n_nodes) or scipy.sparse.csr_matrix
-            Adjacency matrix
+        A : scipy.sparse.csr_matrix, scipy.sparse.coo_matrix, or array
+            Adjacency matrix. Sparse by default to avoid memory blowup.
+        
+        Raises
+        ------
+        ValueError
+            If format="dense" and n_nodes > 50_000 (safety guardrail)
         """
+        from scipy import sparse as sp
+        
+        # Safety guardrail: refuse dense for large graphs
+        if format == "dense" and self.n_nodes > 50_000:
+            raise ValueError(
+                f"Refusing to build dense adjacency matrix for n={self.n_nodes} nodes. "
+                f"This would require ~{self.n_nodes**2 * 8 / 1e9:.1f} GB of memory. "
+                f"Use format='sparse' or format='coo' instead, or use only_degrees=True "
+                f"to skip edge storage entirely."
+            )
+        
+        # Build sparse COO from edges (memory efficient)
         if self._adjacency is None:
-            A = np.zeros((self.n_nodes, self.n_nodes))
-            
-            for edge in self.edges:
+            if len(self.edges) == 0:
+                # Empty graph
+                self._adjacency = sp.coo_matrix((self.n_nodes, self.n_nodes))
+            else:
+                # Extract edge data
                 if self.weighted:
-                    i, j, w = edge
+                    rows = [e[0] for e in self.edges]
+                    cols = [e[1] for e in self.edges]
+                    data = [e[2] for e in self.edges]
                 else:
-                    i, j = edge
-                    w = 1.0
+                    rows = [e[0] for e in self.edges]
+                    cols = [e[1] for e in self.edges]
+                    data = [1.0] * len(self.edges)
                 
-                A[i, j] = w
+                # Add reverse edges for undirected graphs
                 if not self.directed:
-                    A[j, i] = w
-            
-            self._adjacency = A
+                    rows = rows + cols
+                    cols = cols + rows[:len(rows)//2]
+                    data = data + data
+                
+                self._adjacency = sp.coo_matrix((data, (rows, cols)), 
+                                                shape=(self.n_nodes, self.n_nodes))
         
-        if sparse:
-            from scipy import sparse as sp
-            return sp.csr_matrix(self._adjacency)
-        
-        return self._adjacency
+        # Convert to requested format
+        if format == "dense":
+            return self._adjacency.toarray()
+        elif format == "coo":
+            return self._adjacency.tocoo()
+        else:  # sparse (default)
+            return self._adjacency.tocsr()
     
-    def as_networkx(self):
+    def edges_coo(self) -> Tuple[NDArray, NDArray, Optional[NDArray]]:
+        """
+        Return edges in COO format (coordinate arrays).
+        
+        Returns
+        -------
+        src : array (n_edges,)
+            Source node indices
+        dst : array (n_edges,)
+            Destination node indices
+        weight : array (n_edges,) or None
+            Edge weights (if weighted), None otherwise
+        """
+        if len(self.edges) == 0:
+            return (np.array([], dtype=np.int64), 
+                    np.array([], dtype=np.int64), 
+                    None if not self.weighted else np.array([]))
+        
+        if self.weighted:
+            src = np.array([e[0] for e in self.edges], dtype=np.int64)
+            dst = np.array([e[1] for e in self.edges], dtype=np.int64)
+            weight = np.array([e[2] for e in self.edges], dtype=np.float64)
+            return src, dst, weight
+        else:
+            src = np.array([e[0] for e in self.edges], dtype=np.int64)
+            dst = np.array([e[1] for e in self.edges], dtype=np.int64)
+            return src, dst, None
+    
+    def as_networkx(self, force: bool = False):
         """
         Convert to NetworkX graph (optional dependency).
+        
+        Parameters
+        ----------
+        force : bool, default False
+            If False, refuse conversion for n > 200_000 nodes (safety guardrail)
         
         Returns
         -------
@@ -119,7 +182,18 @@ class Graph:
         ------
         ImportError
             If NetworkX is not installed
+        ValueError
+            If n_nodes > 200_000 and force=False
         """
+        # Safety guardrail for large graphs
+        if not force and self.n_nodes > 200_000:
+            raise ValueError(
+                f"Refusing NetworkX conversion for n={self.n_nodes} nodes. "
+                f"NetworkX is not designed for graphs this large. "
+                f"Use force=True to override, or work with edges_coo() / "
+                f"adjacency_matrix(format='sparse') instead."
+            )
+        
         try:
             import networkx as nx
         except ImportError:
@@ -142,26 +216,67 @@ class Graph:
         
         return G
     
-    def summary(self) -> dict:
+    def summary(self, include_triangles: bool = False) -> dict:
         """
-        Graph summary statistics.
+        Graph summary statistics (computed from edges/degrees, no dense matrix).
+        
+        Parameters
+        ----------
+        include_triangles : bool, default False
+            If True, compute triangle count (requires edge list, slower)
         
         Returns
         -------
         stats : dict
-            Dictionary with n_nodes, n_edges, avg_degree, density
+            Dictionary with n_nodes, n_edges, avg_degree, std_degree, density,
+            and optionally triangles
         """
         degrees = self.degree_sequence()
         max_edges = self.n_nodes * (self.n_nodes - 1)
         if not self.directed:
             max_edges //= 2
         
-        return {
+        stats = {
             'n_nodes': self.n_nodes,
             'n_edges': self.n_edges,
             'avg_degree': float(np.mean(degrees)),
+            'std_degree': float(np.std(degrees)) if len(degrees) > 1 else 0.0,
+            'min_degree': int(np.min(degrees)) if len(degrees) > 0 else 0,
+            'max_degree': int(np.max(degrees)) if len(degrees) > 0 else 0,
             'density': self.n_edges / max_edges if max_edges > 0 else 0.0,
         }
+        
+        if include_triangles and len(self.edges) > 0:
+            # Count triangles from edge list (no dense matrix needed)
+            triangles = self._count_triangles()
+            stats['triangles'] = triangles
+        
+        return stats
+    
+    def _count_triangles(self) -> int:
+        """Count triangles from edge list (memory efficient)."""
+        if len(self.edges) == 0:
+            return 0
+        
+        # Build neighbor sets (sparse representation)
+        neighbors = {i: set() for i in range(self.n_nodes)}
+        for edge in self.edges:
+            i, j = edge[0], edge[1]
+            neighbors[i].add(j)
+            if not self.directed:
+                neighbors[j].add(i)
+        
+        # Count triangles
+        triangles = 0
+        for i in range(self.n_nodes):
+            for j in neighbors[i]:
+                if j > i:  # Avoid double counting
+                    # Count common neighbors
+                    common = neighbors[i] & neighbors[j]
+                    triangles += len(common)
+        
+        # Each triangle counted 3 times (once per edge)
+        return triangles // 3 if not self.directed else triangles
     
     def __repr__(self) -> str:
         return f"Graph(n_nodes={self.n_nodes}, n_edges={self.n_edges}, directed={self.directed})"

@@ -50,6 +50,7 @@ rdata = ["pyreadr"]
 gpu = ["cudtw"]
 mic = ["minepy"]
 examples = ["pandas-datareader", "signalplot"]
+polars = ["polars>=0.20", "pyarrow>=12.0"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

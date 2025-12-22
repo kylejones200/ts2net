@@ -1,0 +1,31 @@
+## Added
+- Real-world example using FRED economic data (`examples/example_fred_data.py`)
+  - Fetches GDP, Unemployment Rate, and CPI from FRED
+  - Demonstrates proximity networks from sliding windows
+  - Network visualizations with signalplot
+- Pre-push git hook for automated testing before pushing to main
+- Examples documentation page (`docs/examples.rst`)
+- `examples/images/` directory for generated visualizations
+- Pre-push testing setup documentation
+
+## Changed
+- Restricted Python version support to 3.12+ (removed 3.9-3.11)
+- Updated CI workflows to test only Python 3.12 and 3.13
+- Simplified test suite (removed parity tests, reduced unit test verbosity)
+- Updated documentation to use new API (`build()` instead of `fit_transform()`)
+- Updated ReadTheDocs configuration to use Python 3.12
+- Improved network visualizations with better styling and statistics
+
+## Fixed
+- Fixed RecurrenceNetwork and TransitionNetwork parameter mapping in API wrapper
+- Fixed floating-point precision issues in distance tests
+- Fixed approximate k-NN tests to handle feature matrices correctly
+- Fixed MIC tests to properly check for minepy availability
+- Fixed z-score normalization test expectations
+
+## Removed
+- Parity testing framework (R dependency removed)
+- Redundant test files (`tests_visibility.py`, `tests_recurrance.py`, etc.)
+- Duplicate `wheels.yml` workflow (using trusted publishing instead)
+
+

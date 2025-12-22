@@ -74,21 +74,29 @@ class RecurrenceNetwork:
         if not hasattr(self, 'X_'):
             raise ValueError("Please fit the model first using .fit()")
             
-        # Create distance matrix
+        # Build edges directly (avoid dense distance matrix)
         n = len(self.X_)
-        dist_matrix = np.zeros((n, n))
         
+        # Safety guardrail: refuse exact all-pairs for large n
+        if n > 50_000 and self.rule == 'epsilon':
+            raise ValueError(
+                f"Refusing exact all-pairs recurrence for n={n} nodes. "
+                f"This would require ~{n**2 * 8 / 1e9:.1f} GB for distance matrix. "
+                f"Use rule='knn' with small k (e.g., k=10-30) instead, or resample the series."
+            )
+        
+        # Build edges directly without full distance matrix
+        edges = []
         for i in range(n):
-            for j in range(i, n):
+            for j in range(i + 1, n):
                 dist = np.linalg.norm(self.X_[i] - self.X_[j])
-                dist_matrix[i, j] = dist
-                dist_matrix[j, i] = dist
-        
-        # Create recurrence matrix
-        recurrence_matrix = dist_matrix <= self.threshold
+                if dist <= self.threshold:
+                    edges.append((i, j))
         
         # Convert to networkx graph
-        G = nx.from_numpy_array(recurrence_matrix.astype(float))
+        G = nx.Graph()
+        G.add_nodes_from(range(n))
+        G.add_edges_from(edges)
         
         return G
     
@@ -99,8 +107,11 @@ class RecurrenceNetwork:
             X: Input time series data
             
         Returns:
-            Tuple[nx.Graph, np.ndarray]: The resulting recurrence network and adjacency matrix
+            Tuple[nx.Graph, scipy.sparse.csr_matrix]: The resulting recurrence network 
+                and sparse adjacency matrix (never dense)
         """
+        from scipy import sparse as sp
         G = self.fit(X).transform()
-        A = nx.adjacency_matrix(G).toarray()
+        # Return sparse matrix, never dense
+        A = nx.adjacency_matrix(G, format='csr')
         return G, A

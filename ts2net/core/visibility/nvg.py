@@ -40,29 +40,44 @@ except ImportError:
 
 
 @njit(cache=True)
-def _nvg_adj_matrix_numba(x: np.ndarray, weighted: bool = False, limit: int = -1) -> np.ndarray:
+def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
     """
-    Build NVG adjacency matrix using Numba acceleration.
+    Build NVG edges using sweepline (no dense matrix).
     
     Args:
         x: 1D array of time series values
         weighted: If True, weight edges by absolute difference
-        limit: Temporal visibility limit (-1 = no limit)
+        limit: Maximum temporal distance (horizon limit, -1 = no limit)
+               This is a critical scale control parameter.
         
     Returns:
-        A: Adjacency matrix of shape (n, n)
+        rows, cols, weights: Edge arrays in COO format
     """
     n = len(x)
-    A = np.zeros((n, n), dtype=np.float64)
+    # Pre-allocate (NVG can have many edges, but we cap with limit)
+    # Estimate: worst case ~n*limit edges if limit is set
+    if limit > 0:
+        max_edges = min(n * limit, n * (n - 1) // 2)
+    else:
+        max_edges = n * (n - 1) // 2  # Worst case: complete graph
+    
+    rows = np.zeros(max_edges, dtype=np.int64)
+    cols = np.zeros(max_edges, dtype=np.int64)
+    if weighted:
+        weights = np.zeros(max_edges, dtype=np.float64)
+    else:
+        weights = None
+    
+    edge_count = 0
     
     for i in range(n):
         for j in range(i + 1, n):
-            # Apply temporal limit if specified
+            # Apply horizon limit (critical for scale control)
             if limit > 0 and (j - i) > limit:
                 continue
-                
-            visible = True
             
+            # Check visibility
+            visible = True
             for k in range(i + 1, j):
                 y_line = x[i] + (x[j] - x[i]) * (k - i) / (j - i)
                 if x[k] > y_line:
@@ -70,15 +85,33 @@ def _nvg_adj_matrix_numba(x: np.ndarray, weighted: bool = False, limit: int = -1
                     break
             
             if visible:
+                if edge_count >= max_edges:
+                    # Resize if needed (should be rare with limit)
+                    new_max = max_edges * 2
+                    new_rows = np.zeros(new_max, dtype=np.int64)
+                    new_cols = np.zeros(new_max, dtype=np.int64)
+                    new_rows[:max_edges] = rows
+                    new_cols[:max_edges] = cols
+                    rows, cols = new_rows, new_cols
+                    if weighted:
+                        new_weights = np.zeros(new_max, dtype=np.float64)
+                        new_weights[:max_edges] = weights
+                        weights = new_weights
+                    max_edges = new_max
+                
+                rows[edge_count] = i
+                cols[edge_count] = j
                 if weighted:
-                    weight = abs(x[i] - x[j])
-                    A[i, j] = weight
-                    A[j, i] = weight
-                else:
-                    A[i, j] = 1.0
-                    A[j, i] = 1.0
+                    weights[edge_count] = abs(x[i] - x[j])
+                edge_count += 1
     
-    return A
+    # Trim to actual size
+    rows = rows[:edge_count]
+    cols = cols[:edge_count]
+    if weighted and weights is not None:
+        weights = weights[:edge_count]
+    
+    return rows, cols, weights
 
 
 class NVG(SKMixin):
@@ -89,7 +122,9 @@ class NVG(SKMixin):
     that doesn't intersect any intermediate points.
     """
     
-    def __init__(self, weighted: bool = False, sparse: bool = False, limit: Optional[int] = None):
+    def __init__(self, weighted: bool = False, sparse: bool = False, limit: Optional[int] = None,
+                 max_edges: Optional[int] = None, max_edges_per_node: Optional[int] = None,
+                 max_memory_mb: Optional[float] = None):
         """Initialize the NVG converter.
         
         Args:
@@ -97,11 +132,22 @@ class NVG(SKMixin):
                 between the connected points.
             sparse: If True, use sparse matrices for the adjacency matrix.
             limit: If provided, only connect points within temporal distance ≤ limit.
-                   (R ts2net compatibility parameter)
+                   (R ts2net compatibility parameter, critical scale control)
+            max_edges: Maximum total edges (safety cap, prevents memory blowup)
+            max_edges_per_node: Maximum edges per node (additional scale control)
+            max_memory_mb: Maximum memory in MB (converted to max_edges estimate)
         """
         self.weighted = weighted
         self.sparse = sparse
         self.limit = limit
+        self.max_edges = max_edges
+        self.max_edges_per_node = max_edges_per_node
+        
+        # Convert memory limit to edge limit (rough estimate: 16 bytes per edge)
+        if max_memory_mb is not None:
+            estimated_max_edges = int(max_memory_mb * 1024 * 1024 / 16)
+            if self.max_edges is None or estimated_max_edges < self.max_edges:
+                self.max_edges = estimated_max_edges
     
     def fit(self, x: np.ndarray) -> 'NVG':
         """Fit the NVG model to the input time series.
@@ -131,31 +177,85 @@ class NVG(SKMixin):
             
         n = len(self.x_)
         
-        # Use fast Numba implementation if available
+        # Apply default horizon limit for large series (scale control)
+        # For n > 10k, default limit to 5000 to prevent memory blowup
+        effective_limit = self.limit
+        if effective_limit is None and n > 10_000:
+            effective_limit = 5000  # Default horizon for large series
+            import warnings
+            warnings.warn(
+                f"NVG: n={n} is large. Applying default horizon limit={effective_limit} "
+                f"to prevent memory blowup. Set limit explicitly to override.",
+                UserWarning
+            )
+        
+        # Use fast Numba implementation if available (builds edges, not dense matrix)
         if HAS_NUMBA:
-            A = _nvg_adj_matrix_numba(self.x_, self.weighted)
+            limit_val = effective_limit if effective_limit is not None else -1
+            max_edges_val = self.max_edges if self.max_edges is not None else -1
+            max_per_node = self.max_edges_per_node if self.max_edges_per_node is not None else -1
+            rows, cols, weights, hit_limit = _nvg_edges_numba(
+                self.x_, self.weighted, limit_val, max_edges_val, max_per_node
+            )
             
-            if self.sparse:
-                # Convert to sparse
-                A_sparse = sparse.csr_matrix(A)
-                G = nx.from_scipy_sparse_array(A_sparse)
-                return G, A_sparse
+            if hit_limit:
+                import warnings
+                warnings.warn(
+                    f"NVG: Hit edge limit (max_edges={self.max_edges}, "
+                    f"max_edges_per_node={self.max_edges_per_node}). "
+                    f"Graph is partial. Increase limits for full graph.",
+                    UserWarning
+                )
+            
+            # Build NetworkX graph from edges
+            G = nx.Graph()
+            G.add_nodes_from(range(n))
+            
+            if self.weighted and weights is not None:
+                for i in range(len(rows)):
+                    G.add_edge(int(rows[i]), int(cols[i]), weight=float(weights[i]))
             else:
-                G = nx.from_numpy_array(A)
-                return G, A
+                for i in range(len(rows)):
+                    G.add_edge(int(rows[i]), int(cols[i]))
+            
+            # Build sparse matrix from edges (never dense)
+            if weights is not None:
+                A = sparse.csr_matrix((weights, (rows, cols)), shape=(n, n))
+                # Make symmetric for undirected graph
+                A = A + A.T
+            else:
+                data = np.ones(len(rows), dtype=float)
+                A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+                A = A + A.T
+            
+            return G, A
         
         # Fallback to original implementation if Numba not available
+        # Always use sparse to avoid memory blowup
+        
+        # Apply default horizon limit for large series
+        effective_limit = self.limit
+        if effective_limit is None and n > 10_000:
+            effective_limit = 5000
+            import warnings
+            warnings.warn(
+                f"NVG: n={n} is large. Applying default horizon limit={effective_limit}. "
+                f"Set limit explicitly to override.",
+                UserWarning
+            )
+        
         G = nx.Graph()
         G.add_nodes_from(range(n))
         
-        if self.sparse:
-            rows, cols, data = [], [], []
-        else:
-            A = np.zeros((n, n), dtype=float)
+        rows, cols, data = [], [], []
         
         # Build the NVG by checking natural visibility between all pairs
         for i in range(n):
             for j in range(i + 1, n):
+                # Apply horizon limit (critical scale control)
+                if effective_limit is not None and (j - i) > effective_limit:
+                    continue
+                
                 # Check if there's a clear line of sight between i and j
                 visible = True
                 for k in range(i + 1, j):
@@ -167,20 +267,14 @@ class NVG(SKMixin):
                 if visible:
                     G.add_edge(i, j)
                     weight = abs(self.x_[i] - self.x_[j]) if self.weighted else 1.0
-                    if self.sparse:
-                        rows.append(i)
-                        cols.append(j)
-                        data.append(weight)
-                        if i != j:  # Undirected graph, add both directions
-                            rows.append(j)
-                            cols.append(i)
-                            data.append(weight)
-                    else:
-                        A[i, j] = weight
-                        A[j, i] = weight  # Undirected graph
+                    rows.append(i)
+                    cols.append(j)
+                    data.append(weight)
         
-        if self.sparse:
-            A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+        # Build sparse matrix (never dense)
+        A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+        # Make symmetric for undirected graph
+        A = A + A.T
         
         return G, A
     

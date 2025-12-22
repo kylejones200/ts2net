@@ -170,3 +170,6 @@ yarn-error.log*
 .netlify
 .cursor
 .parity
+
+# Documentation build
+docs/_build/

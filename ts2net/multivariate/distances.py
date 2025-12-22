@@ -438,7 +438,8 @@ def _compute_distance_matrix_parallel(X: np.ndarray, dist_func: Callable,
     pairs = [(i, j) for i in range(n_series) for j in range(i + 1, n_series)]
     
     # Compute distances in parallel
-    distances = Parallel(n_jobs=n_jobs)(
+    # Use threading backend to avoid loky multiprocessing segfaults in test environments
+    distances = Parallel(n_jobs=n_jobs, backend='threading')(
         delayed(dist_func)(X[i], X[j], **kwargs) for i, j in pairs
     )
     

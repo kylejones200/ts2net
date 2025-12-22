@@ -19,3 +19,10 @@ __all__ = [
     'build_network',
     'graph_summary',
 ]
+
+# Optional Polars-based IO
+try:
+    from .io_polars import load_series_from_parquet_polars
+    __all__.append('load_series_from_parquet_polars')
+except ImportError:
+    pass

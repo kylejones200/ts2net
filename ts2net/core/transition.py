@@ -158,8 +158,11 @@ class TransitionNetwork:
             X: Input time series data
             
         Returns:
-            Tuple[nx.DiGraph, np.ndarray]: The resulting transition network and adjacency matrix
+            Tuple[nx.DiGraph, scipy.sparse.csr_matrix]: The resulting transition network 
+                and sparse adjacency matrix (never dense)
         """
+        from scipy import sparse as sp
         G = self.fit(X).transform()
-        A = nx.adjacency_matrix(G).toarray()
+        # Return sparse matrix, never dense
+        A = nx.adjacency_matrix(G, format='csr')
         return G, A

@@ -40,54 +40,94 @@ except ImportError:
 
 
 @njit(cache=True)
-def _hvg_adj_matrix_numba(x: np.ndarray, weighted: bool = False, limit: int = -1) -> np.ndarray:
+def _hvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
     """
-    Build HVG adjacency matrix directly using Numba.
+    Build HVG edges using O(n) stack algorithm (no dense matrix).
     
-    Uses a stack-based algorithm for O(n) expected time complexity
-    instead of the naive O(n³) approach.
+    Uses a stack-based algorithm for O(n) expected time complexity.
+    Returns edge list to avoid building dense adjacency matrix.
     
     Args:
         x: 1D array of time series values
         weighted: If True, weight edges by absolute difference
+        limit: Maximum temporal distance (-1 = no limit)
         
     Returns:
-        A: Adjacency matrix of shape (n, n)
+        edges: List of (i, j) or (i, j, weight) tuples
     """
     n = len(x)
-    A = np.zeros((n, n), dtype=np.float64)
+    # Pre-allocate lists (will resize as needed, but this is faster than appending)
+    max_edges = 2 * n  # HVG typically has ~2n edges
+    rows = np.zeros(max_edges, dtype=np.int64)
+    cols = np.zeros(max_edges, dtype=np.int64)
+    if weighted:
+        weights = np.zeros(max_edges, dtype=np.float64)
+    else:
+        weights = None
     
-    # Stack-based algorithm for horizontal visibility
-    # The stack maintains indices of points that can potentially see future points
+    edge_count = 0
     stack = []
     
     for j in range(n):
         # Pop all points that are smaller than current point
-        # These points can see the current point horizontally
         while len(stack) > 0 and x[stack[-1]] < x[j]:
             i = stack.pop()
+            # Check limit
+            if limit > 0 and abs(j - i) > limit:
+                continue
+            # Add edge
+            if edge_count >= max_edges:
+                # Resize (rare case)
+                new_max = max_edges * 2
+                new_rows = np.zeros(new_max, dtype=np.int64)
+                new_cols = np.zeros(new_max, dtype=np.int64)
+                new_rows[:max_edges] = rows
+                new_cols[:max_edges] = cols
+                rows, cols = new_rows, new_cols
+                if weighted:
+                    new_weights = np.zeros(new_max, dtype=np.float64)
+                    new_weights[:max_edges] = weights
+                    weights = new_weights
+                max_edges = new_max
+            
+            rows[edge_count] = i
+            cols[edge_count] = j
             if weighted:
-                weight = abs(x[i] - x[j])
-                A[i, j] = weight
-                A[j, i] = weight
-            else:
-                A[i, j] = 1.0
-                A[j, i] = 1.0
+                weights[edge_count] = abs(x[i] - x[j])
+            edge_count += 1
         
         # The top of the stack (if exists) can also see current point
         if len(stack) > 0:
             i = stack[-1]
-            if weighted:
-                weight = abs(x[i] - x[j])
-                A[i, j] = weight
-                A[j, i] = weight
-            else:
-                A[i, j] = 1.0
-                A[j, i] = 1.0
+            if limit <= 0 or abs(j - i) <= limit:
+                if edge_count >= max_edges:
+                    new_max = max_edges * 2
+                    new_rows = np.zeros(new_max, dtype=np.int64)
+                    new_cols = np.zeros(new_max, dtype=np.int64)
+                    new_rows[:max_edges] = rows
+                    new_cols[:max_edges] = cols
+                    rows, cols = new_rows, new_cols
+                    if weighted:
+                        new_weights = np.zeros(new_max, dtype=np.float64)
+                        new_weights[:max_edges] = weights
+                        weights = new_weights
+                    max_edges = new_max
+                
+                rows[edge_count] = i
+                cols[edge_count] = j
+                if weighted:
+                    weights[edge_count] = abs(x[i] - x[j])
+                edge_count += 1
         
         stack.append(j)
     
-    return A
+    # Trim to actual size
+    rows = rows[:edge_count]
+    cols = cols[:edge_count]
+    if weighted:
+        weights = weights[:edge_count]
+    
+    return rows, cols, weights
 
 
 class HVG(SKMixin):
@@ -139,32 +179,48 @@ class HVG(SKMixin):
             
         n = len(self.x_)
         
-        # Use fast Numba implementation if available
+        # Use fast Numba implementation if available (builds edges, not dense matrix)
         if HAS_NUMBA:
             limit_val = self.limit if self.limit is not None else -1
-            A = _hvg_adj_matrix_numba(self.x_, self.weighted, limit_val)
+            rows, cols, weights = _hvg_edges_numba(self.x_, self.weighted, limit_val)
             
-            if self.sparse:
-                # Convert to sparse
-                A_sparse = sparse.csr_matrix(A)
-                G = nx.from_scipy_sparse_array(A_sparse)
-                return G, A_sparse
+            # Build NetworkX graph from edges
+            G = nx.Graph()
+            G.add_nodes_from(range(n))
+            
+            if self.weighted and weights is not None:
+                for i in range(len(rows)):
+                    G.add_edge(int(rows[i]), int(cols[i]), weight=float(weights[i]))
             else:
-                G = nx.from_numpy_array(A)
-                return G, A
+                for i in range(len(rows)):
+                    G.add_edge(int(rows[i]), int(cols[i]))
+            
+            # Build sparse matrix from edges (never dense)
+            if weights is not None:
+                A = sparse.csr_matrix((weights, (rows, cols)), shape=(n, n))
+                # Make symmetric for undirected graph
+                A = A + A.T
+            else:
+                data = np.ones(len(rows), dtype=float)
+                A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+                A = A + A.T
+            
+            return G, A
         
         # Fallback to original implementation if Numba not available
+        # Always use sparse to avoid memory blowup
         G = nx.Graph()
         G.add_nodes_from(range(n))
         
-        if self.sparse:
-            rows, cols, data = [], [], []
-        else:
-            A = np.zeros((n, n), dtype=float)
+        rows, cols, data = [], [], []
         
         # Build the HVG by checking horizontal visibility between all pairs
         for i in range(n):
             for j in range(i + 1, n):
+                # Apply limit if specified
+                if self.limit is not None and (j - i) > self.limit:
+                    continue
+                
                 # Check if there's a clear line of sight between i and j
                 visible = True
                 for k in range(i + 1, j):
@@ -175,20 +231,14 @@ class HVG(SKMixin):
                 if visible:
                     G.add_edge(i, j)
                     weight = abs(self.x_[i] - self.x_[j]) if self.weighted else 1.0
-                    if self.sparse:
-                        rows.append(i)
-                        cols.append(j)
-                        data.append(weight)
-                        if i != j:  # Undirected graph, add both directions
-                            rows.append(j)
-                            cols.append(i)
-                            data.append(weight)
-                    else:
-                        A[i, j] = weight
-                        A[j, i] = weight  # Undirected graph
+                    rows.append(i)
+                    cols.append(j)
+                    data.append(weight)
         
-        if self.sparse:
-            A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+        # Build sparse matrix (never dense)
+        A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+        # Make symmetric for undirected graph
+        A = A + A.T
         
         return G, A
     
