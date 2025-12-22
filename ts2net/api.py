@@ -144,6 +144,12 @@ class HVG:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
     
+    def stats(self, include_triangles: bool = False) -> dict:
+        """Summary statistics (memory efficient, no dense matrix)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.summary(include_triangles=include_triangles)
+    
     def adjacency_matrix(self, format: str = "sparse"):
         """Adjacency matrix (sparse by default)"""
         if self._graph is None:
@@ -279,10 +285,17 @@ class NVG:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def as_networkx(self):
+    def edges_coo(self):
+        """Return edges in COO format (src, dst, weight arrays)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.as_networkx()
+        return self._graph.edges_coo()
+    
+    def as_networkx(self, force: bool = False):
+        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.as_networkx(force=force)
 
 
 class RecurrenceNetwork:
@@ -367,10 +380,17 @@ class RecurrenceNetwork:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def as_networkx(self):
+    def edges_coo(self):
+        """Return edges in COO format (src, dst, weight arrays)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.as_networkx()
+        return self._graph.edges_coo()
+    
+    def as_networkx(self, force: bool = False):
+        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.as_networkx(force=force)
 
 
 class TransitionNetwork:
@@ -457,10 +477,17 @@ class TransitionNetwork:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def as_networkx(self):
+    def edges_coo(self):
+        """Return edges in COO format (src, dst, weight arrays)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.as_networkx()
+        return self._graph.edges_coo()
+    
+    def as_networkx(self, force: bool = False):
+        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.as_networkx(force=force)
 
 
 # Factory function
