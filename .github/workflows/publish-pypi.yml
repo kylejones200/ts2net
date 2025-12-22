@@ -3,6 +3,9 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v0.5.0)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -72,6 +75,8 @@ jobs:
       id-token: write  # Required for trusted publishing
     
     steps:
+      - uses: actions/checkout@v4
+      
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -80,6 +85,12 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
         # Uses trusted publishing - no token needed
-        # Configured on PyPI as pending publisher for ts2net project
+        # Requires PyPI trusted publisher to be configured:
+        # 1. Go to PyPI project settings -> "Publishing" -> "Add a new pending publisher"
+        # 2. Select "GitHub Actions" as publisher
+        # 3. Enter: Owner: kylejones200, Repository: ts2net, Workflow filename: publish-pypi.yml
+        # 4. Environment name: pypi (must match the environment in this workflow)
 

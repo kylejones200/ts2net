@@ -58,3 +58,4 @@ def register_pipeline_commands(cli: click.Group) -> None:
         except Exception as e:
             click.echo(f"Pipeline failed: {e}", err=True)
             sys.exit(1)
+

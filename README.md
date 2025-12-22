@@ -45,6 +45,40 @@ import networkx as nx
 print(nx.average_clustering(G))
 ```
 
+## Structural Decomposition and Residual Topology
+
+For time series with predictable structure (seasonality, trends), decompose first, then analyze the residual:
+
+```python
+from ts2net.bsts import features, BSTSSpec
+
+# Decompose and analyze residual in one pass
+spec = BSTSSpec(
+    level=True,
+    trend=False,
+    seasonal_periods=[24, 168]  # Daily and weekly for hourly data
+)
+
+result = features(x, methods=['hvg', 'transition'], bsts=spec)
+
+# Access three feature blocks
+raw_stats = result.raw_stats              # Basic series statistics
+structural_stats = result.structural_stats # Component variances, seasonal strength
+residual_network_stats = result.residual_network_stats  # Network features from residual
+```
+
+**Use cases:**
+- Compare meters/wells without seasonal confounds
+- Flag series where structural model fails (high residual complexity)
+- Separate predictable structure from irregular dynamics
+
+**Installation:**
+```bash
+pip install ts2net[bsts]  # Installs statsmodels
+```
+
+See `examples/bsts_features.py` for complete examples.
+
 ## Large Series
 
 For large series, use output modes to control memory usage:

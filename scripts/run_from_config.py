@@ -159,21 +159,77 @@ def process_series(series_id: str, series_data: np.ndarray, config: Dict[str, An
     """Process a single series with all enabled graph types."""
     result = {'series_id': series_id, 'n_points': len(series_data)}
     
-    graphs_config = config['graphs']
+    # Handle BSTS decomposition if enabled
+    bsts_config = config.get('bsts', {})
+    series_to_analyze = series_data
+    bsts_enabled = False
     
-    for graph_type in ['hvg', 'nvg', 'recurrence', 'transition']:
-        graph_config = graphs_config.get(graph_type, {})
-        if not graph_config.get('enabled', False):
-            continue
-        
+    if bsts_config.get('enabled', False):
         try:
-            stats = build_graph(series_data, graph_type, graph_config, 
-                              output_mode=config.get('output', {}).get('mode', 'stats'))
-            result[graph_type] = stats
+            from ts2net.bsts import features, BSTSSpec
+            
+            # Build BSTS spec from config
+            bsts_spec = BSTSSpec(
+                level=bsts_config.get('level', True),
+                trend=bsts_config.get('trend', False),
+                seasonal_periods=bsts_config.get('seasonal_periods'),
+                robust=bsts_config.get('robust', False),
+                standardize_residual=bsts_config.get('standardize_residual', True)
+            )
+            
+            # Determine window mode if series is too long
+            max_points = bsts_config.get('max_points', 10_000)
+            window = bsts_config.get('window')
+            if window is None and len(series_data) > max_points:
+                window = max_points  # Auto-enable windowing for long series
+            
+            # Get enabled graph methods
+            enabled_methods = [k for k, v in config.get('graphs', {}).items() 
+                             if v.get('enabled', False)]
+            if not enabled_methods:
+                enabled_methods = ['hvg', 'transition']  # Default
+            
+            # Extract features (includes decomposition + residual analysis)
+            feat_result = features(
+                series_data,
+                methods=enabled_methods,
+                bsts=bsts_spec,
+                window=window,
+                nvg_limit=config.get('graphs', {}).get('nvg', {}).get('limit', 3000)
+            )
+            
+            # Add structural and residual stats to result
+            result['raw_stats'] = feat_result.raw_stats
+            result['structural_stats'] = feat_result.structural_stats
+            result['residual_network_stats'] = feat_result.residual_network_stats
+            
+            bsts_enabled = True
+            
+        except ImportError:
+            logger.warning(f"{series_id}: statsmodels not available, skipping BSTS")
         except Exception as e:
-            logger.warning(f"{series_id} {graph_type}: {e}")
+            logger.warning(f"{series_id} BSTS: {e}")
             if config.get('logging', {}).get('log_errors', True):
-                result[f'{graph_type}_error'] = str(e)
+                result['bsts_error'] = str(e)
+    
+    # Standard graph analysis (only if BSTS not enabled)
+    # If BSTS is enabled, residual network stats are already computed
+    if not bsts_enabled:
+        graphs_config = config['graphs']
+        
+        for graph_type in ['hvg', 'nvg', 'recurrence', 'transition']:
+            graph_config = graphs_config.get(graph_type, {})
+            if not graph_config.get('enabled', False):
+                continue
+            
+            try:
+                stats = build_graph(series_to_analyze, graph_type, graph_config, 
+                                  output_mode=config.get('output', {}).get('mode', 'stats'))
+                result[graph_type] = stats
+            except Exception as e:
+                logger.warning(f"{series_id} {graph_type}: {e}")
+                if config.get('logging', {}).get('log_errors', True):
+                    result[f'{graph_type}_error'] = str(e)
     
     return result
 

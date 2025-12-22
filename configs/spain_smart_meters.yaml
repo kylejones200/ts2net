@@ -41,6 +41,16 @@ windows:
   size: null
   step: null
 
+bsts:
+  enabled: true
+  level: true
+  trend: false
+  seasonal_periods: [24, 168]
+  robust: false
+  standardize_residual: true
+  max_points: 10000
+  window: null
+
 output:
   format: parquet
   path: results/spain_network_stats.parquet
