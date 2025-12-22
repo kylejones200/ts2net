@@ -39,6 +39,10 @@ jobs:
           pip install -e .
           # Install optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
+          # Install BSTS dependencies for BSTS tests
+          pip install statsmodels || echo "statsmodels not available, BSTS tests will be skipped"
+          # Install Polars and pyarrow for Parquet tests
+          pip install polars pyarrow || echo "polars/pyarrow not available, some tests will be skipped"
 
       - name: Run tests
         run: |

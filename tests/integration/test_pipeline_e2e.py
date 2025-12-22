@@ -12,6 +12,7 @@ import json
 
 try:
     import polars as pl
+    import pyarrow  # pyarrow is required for Parquet support
     HAS_POLARS = True
 except ImportError:
     HAS_POLARS = False
