@@ -63,7 +63,8 @@ class TestHVGAlgorithm:
         
         if HAS_NUMBA:
             rows_fast, cols_fast, weights_fast = _hvg_edges_numba(x, weighted=False, limit=-1)
-            edges_fast = set(zip(rows_fast, cols_fast))
+            # Normalize edges to canonical form (i < j) for comparison
+            edges_fast = {(min(i, j), max(i, j)) for i, j in zip(rows_fast, cols_fast)}
             
             # Build with naive approach (for verification)
             edges_naive = set()
@@ -79,11 +80,9 @@ class TestHVGAlgorithm:
                     if visible:
                         edges_naive.add((i, j))
             
-            # Should match (allowing for undirected graph symmetry)
-            # Fast algorithm may have different edge direction, so check both
-            edges_fast_symmetric = edges_fast | {(j, i) for i, j in edges_fast}
-            assert edges_fast_symmetric == edges_naive, \
-                f"Stack algorithm edges don't match naive: {edges_fast_symmetric} vs {edges_naive}"
+            # Should match exactly (both normalized to i < j)
+            assert edges_fast == edges_naive, \
+                f"Stack algorithm edges don't match naive: {edges_fast} vs {edges_naive}"
     
     def test_hvg_linear_scaling(self):
         """Verify HVG scales linearly (approximately 2n edges)."""

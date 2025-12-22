@@ -2,6 +2,23 @@
 
 This directory contains example scripts demonstrating ts2net functionality.
 
+## YAML-Based Pipeline (Recommended for Production)
+
+For reproducible experiments and production use, use the YAML-based pipeline:
+
+**CLI (Recommended):**
+```bash
+ts2net run configs/spain_smart_meters.yaml
+ts2net run configs/morocco_zones.yaml --validate-only  # Validate config only
+```
+
+**Direct script:**
+```bash
+python scripts/run_from_config.py configs/spain_smart_meters.yaml
+```
+
+See `configs/README.md` for configuration details and examples for different datasets (Spain, Morocco, North Dakota wells).
+
 ## Examples
 
 ### `quick_start.py`
@@ -49,17 +66,7 @@ Generated visualizations are saved to `examples/images/`:
 
 These series are naturally correlated and demonstrate how ts2net can reveal relationships between economic indicators.
 
-### `example_r_parity.py`
-Demonstrates R ts2net API parity for multivariate analysis:
-- Multiple time series → network
-- Distance functions (correlation, DTW, NMI, VOI, etc.)
-- Network builders (k-NN, ε-NN, weighted)
-- Window-based proximity networks
 
-**Run:**
-```bash
-python examples/example_r_parity.py
-```
 
 ### `viz_gallery.py` ⭐ **NEW - Visualization Gallery**
 Demonstrates all five flagship visualization functions on the same dataset:

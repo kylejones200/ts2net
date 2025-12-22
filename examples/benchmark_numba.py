@@ -20,17 +20,17 @@ logger = logging.getLogger(__name__)
 try:
     import numba
     HAS_NUMBA = True
-    logger.info(f"✓ Numba {numba.__version__} installed")
+    logger.info(f"Numba {numba.__version__} installed")
 except ImportError:
     HAS_NUMBA = False
-    logger.warning("✗ Numba not installed. Install with: pip install numba")
+    logger.warning("Numba not installed. Install with: pip install numba")
 
 # Import ts2net components
 try:
     from ts2net import HVG, NVG, RecurrenceNetwork, TransitionNetwork
-    logger.info("✓ ts2net imported")
+    logger.info("ts2net imported")
 except ImportError as e:
-    logger.error(f"✗ Failed to import ts2net: {e}")
+    logger.error(f"Failed to import ts2net: {e}")
     sys.exit(1)
 
 

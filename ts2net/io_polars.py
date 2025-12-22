@@ -221,15 +221,76 @@ def load_series_from_parquet_polars(
         # Single series - return (times, values)
         # Note: times may be datetime, convert to numpy array
         times_arr = df_materialized[time_col].to_numpy()
-        values = df_materialized[value_col].to_numpy().astype(np.float64)
+        # Clean and validate values - handle dtype contamination
+        values_raw = df_materialized[value_col].to_numpy()
+        # Force numeric conversion, handling object dtype and mixed types
+        values = _clean_numeric_array(values_raw)
         return times_arr, values
     else:
         # Multiple series - group by id_col
+        # Ensure id_col is string type to avoid concatenation errors
+        df_materialized = df_materialized.with_columns(
+            pl.col(id_col).cast(pl.Utf8).alias(id_col)
+        )
+        
         result = {}
         unique_ids = df_materialized[id_col].unique().to_list()
         for id_val in unique_ids:
+            # Ensure id_val is string
+            id_val_str = str(id_val)
             series_df = df_materialized.filter(pl.col(id_col) == id_val)
             # Already sorted by time from earlier sort
-            values = series_df[value_col].to_numpy().astype(np.float64)
-            result[str(id_val)] = values
+            # Clean and validate values
+            values_raw = series_df[value_col].to_numpy()
+            values = _clean_numeric_array(values_raw)
+            result[id_val_str] = values
         return result
+
+
+def _clean_numeric_array(arr: np.ndarray) -> np.ndarray:
+    """
+    Clean and validate numeric array, handling dtype contamination.
+    
+    Parameters
+    ----------
+    arr : array
+        Input array (may contain non-numeric values)
+    
+    Returns
+    -------
+    arr : array (float64)
+        Clean numeric array
+    
+    Raises
+    ------
+    ValueError
+        If no valid numeric values remain after cleaning
+    """
+    import pandas as pd
+    
+    # Convert to pandas Series for robust numeric coercion
+    if isinstance(arr, np.ndarray):
+        if arr.dtype == object or arr.dtype.kind not in ['f', 'i', 'u']:
+            # Has non-numeric types - use pandas coercion
+            s = pd.Series(arr)
+            s = pd.to_numeric(s, errors='coerce')
+        else:
+            s = pd.Series(arr)
+    else:
+        s = pd.Series(arr)
+        s = pd.to_numeric(s, errors='coerce')
+    
+    # Replace infinities with NaN
+    s = s.replace([np.inf, -np.inf], np.nan)
+    
+    # Drop nulls
+    s = s.dropna()
+    
+    if len(s) == 0:
+        raise ValueError(
+            "No valid numeric values after cleaning. "
+            "Check for non-numeric data, infinities, or all-null series."
+        )
+    
+    # Convert to float64 numpy array
+    return s.values.astype(np.float64)

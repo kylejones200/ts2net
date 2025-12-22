@@ -4,7 +4,11 @@
 import re
 import subprocess
 import sys
+import logging
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 def extract_release_notes(changelog_path, version):
     """Extract release notes for a specific version from CHANGELOG.md"""
@@ -29,11 +33,12 @@ def create_release(version, notes):
     result = subprocess.run(cmd, capture_output=True, text=True)
     
     if result.returncode != 0:
-        print(f"Error creating release: {result.stderr}", file=sys.stderr)
+        logger.error(f"Error creating release: {result.stderr}")
         return False
     
-    print(f"✅ Successfully created release {version}")
-    print(result.stdout)
+    logger.info(f"Successfully created release {version}")
+    if result.stdout:
+        logger.info(result.stdout)
     return True
 
 if __name__ == '__main__':
@@ -42,11 +47,11 @@ if __name__ == '__main__':
     
     try:
         notes = extract_release_notes(changelog_path, '0.5.0')
-        print(f"Creating release {version}...")
-        print(f"Release notes:\n{notes[:200]}...\n")
+        logger.info(f"Creating release {version}...")
+        logger.info(f"Release notes: {notes[:200]}...")
         create_release(version, notes)
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error(f"Error: {e}")
         sys.exit(1)
 
 

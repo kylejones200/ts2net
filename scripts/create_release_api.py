@@ -6,7 +6,11 @@ import os
 import re
 import subprocess
 import sys
+import logging
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 def get_repo_info():
     """Get repository owner and name from git remote"""
@@ -62,13 +66,13 @@ def create_release_api(owner, repo, version, notes, token):
     try:
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode())
-            print(f"✅ Successfully created release {version}")
-            print(f"Release URL: {result.get('html_url', 'N/A')}")
+            logger.info(f"Successfully created release {version}")
+            logger.info(f"Release URL: {result.get('html_url', 'N/A')}")
             return True
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
-        print(f"Error creating release: {e.code} {e.reason}", file=sys.stderr)
-        print(f"Response: {error_body}", file=sys.stderr)
+        logger.error(f"Error creating release: {e.code} {e.reason}")
+        logger.error(f"Response: {error_body}")
         return False
 
 if __name__ == '__main__':
@@ -79,17 +83,17 @@ if __name__ == '__main__':
     token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
     
     if not token:
-        print("Error: GITHUB_TOKEN or GH_TOKEN environment variable not set", file=sys.stderr)
-        print("Set it with: export GITHUB_TOKEN=your_token", file=sys.stderr)
+        logger.error("GITHUB_TOKEN or GH_TOKEN environment variable not set")
+        logger.error("Set it with: export GITHUB_TOKEN=your_token")
         sys.exit(1)
     
     try:
         owner, repo = get_repo_info()
         notes = extract_release_notes(changelog_path, '0.5.0')
-        print(f"Creating release {version} for {owner}/{repo}...")
+        logger.info(f"Creating release {version} for {owner}/{repo}...")
         create_release_api(owner, repo, version, notes, token)
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error(f"Error: {e}")
         sys.exit(1)
 
 

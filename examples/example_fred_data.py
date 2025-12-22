@@ -26,7 +26,7 @@ try:
     HAS_PDR = True
 except ImportError:
     HAS_PDR = False
-    print("⚠️  pandas_datareader not installed. Install with: pip install pandas-datareader")
+    logging.error("pandas_datareader not installed. Install with: pip install pandas-datareader")
 
 try:
     import signalplot as splt
@@ -38,7 +38,7 @@ except ImportError:
         HAS_MATPLOTLIB = True
     except ImportError:
         HAS_MATPLOTLIB = False
-        print("⚠️  signalplot or matplotlib not installed. Install with: pip install signalplot")
+        logging.error("signalplot or matplotlib not installed. Install with: pip install signalplot")
 
 from ts2net import HVG, NVG, RecurrenceNetwork, TransitionNetwork
 from ts2net.multivariate import ts_dist, net_knn, net_enn
@@ -63,8 +63,7 @@ def fetch_fred_data(start_date='2010-01-01', end_date=None):
     if end_date is None:
         end_date = datetime.now().strftime('%Y-%m-%d')
     
-    logger.info("📊 Fetching economic data from FRED...")
-    logger.info("   Start: %s, End: %s", start_date, end_date)
+    logger.info("Fetching economic data from FRED (start: %s, end: %s)", start_date, end_date)
     
     # FRED series codes for correlated economic indicators
     series = {
@@ -80,11 +79,11 @@ def fetch_fred_data(start_date='2010-01-01', end_date=None):
             if not df.empty:
                 # Use first column (some series have multiple columns)
                 data[name] = df.iloc[:, 0]
-                logger.info("   ✓ %s (%s): %d points", name, code, len(data[name]))
+                logger.info("%s (%s): %d points", name, code, len(data[name]))
             else:
-                logger.warning("   ✗ %s (%s): No data", name, code)
+                logger.warning("%s (%s): No data", name, code)
         except Exception as e:
-            logger.warning("   ✗ %s (%s): %s", name, code, str(e))
+            logger.warning("%s (%s): %s", name, code, str(e))
     
     if not data:
         logger.error("Failed to fetch any data from FRED")
@@ -94,18 +93,16 @@ def fetch_fred_data(start_date='2010-01-01', end_date=None):
     df = pd.DataFrame(data)
     df = df.ffill().dropna()  # Forward fill, then drop any remaining NaN
     
-    logger.info("   Combined: %d points × %d series\n", len(df), len(df.columns))
+    logger.info("Combined: %d points × %d series", len(df), len(df.columns))
     return df
 
 
 def example_univariate_analysis(df):
     """Analyze individual time series with visibility graphs."""
-    logger.info("=" * 60)
-    logger.info("UNIVARIATE ANALYSIS: Visibility Graphs")
-    logger.info("=" * 60)
+    logger.info("Univariate analysis: Visibility graphs")
     
     for col in df.columns:
-        logger.info("\n📈 %s", col)
+        logger.info("%s", col)
         x = df[col].values
         
         # Normalize to [0, 1] for better visualization
@@ -114,27 +111,27 @@ def example_univariate_analysis(df):
         # HVG
         hvg = HVG()
         hvg.build(x_norm)
-        logger.info("   HVG: %d nodes, %d edges, density=%.4f", 
+        logger.info("  HVG: %d nodes, %d edges, density=%.4f", 
                    hvg.n_nodes, hvg.n_edges, 
                    hvg.n_edges / (hvg.n_nodes * (hvg.n_nodes - 1) / 2))
         
         # NVG
         nvg = NVG()
         nvg.build(x_norm)
-        logger.info("   NVG: %d nodes, %d edges, density=%.4f", 
+        logger.info("  NVG: %d nodes, %d edges, density=%.4f", 
                    nvg.n_nodes, nvg.n_edges,
                    nvg.n_edges / (nvg.n_nodes * (nvg.n_nodes - 1) / 2))
         
         # Graph summary
         G_hvg = hvg.as_networkx()
         summary = graph_summary(G_hvg)
-        logger.info("   Clustering: %.4f, Avg path length: %.2f", 
+        logger.info("  Clustering: %.4f, Avg path length: %.2f", 
                    summary.get('clustering', 0), summary.get('path_length', 0))
         
         # Visualize HVG - sample a subgraph for large networks
         if hvg.n_nodes > 100:
             # Sample a connected subgraph for visualization
-            logger.info("   Sampling subgraph for visualization (full graph: %d nodes)", hvg.n_nodes)
+            logger.info("  Sampling subgraph for visualization (full graph: %d nodes)", hvg.n_nodes)
             # Get largest connected component
             components = list(nx.connected_components(G_hvg))
             largest_cc = max(components, key=len)
@@ -160,9 +157,7 @@ def example_univariate_analysis(df):
 
 def example_proximity_network(df):
     """Build proximity network from sliding windows of a time series."""
-    
-    logger.info("PROXIMITY NETWORK: Sliding Window Analysis")
-    
+    logger.info("Proximity network: Sliding window analysis")
     
     # Use one series (Unemployment Rate) and create windows
     col = 'UNRATE'
@@ -170,27 +165,27 @@ def example_proximity_network(df):
         col = df.columns[0]
     
     x = df[col].values
-    logger.info("\n📈 Creating windows from: %s (%d points)", col, len(x))
+    logger.info("Creating windows from: %s (%d points)", col, len(x))
     
     # Create sliding windows
     from ts2net.multivariate.windows import ts_to_windows
     window_width = 12  # 12 months = 1 year
     windows = ts_to_windows(x, width=window_width, by=1)
-    logger.info("   Created %d windows of width %d", windows.shape[0], window_width)
+    logger.info("Created %d windows of width %d", windows.shape[0], window_width)
     
     # Build proximity network from windows
     D = ts_dist(windows, method='correlation', n_jobs=1)
-    logger.info("   Distance matrix: %s", D.shape)
+    logger.info("Distance matrix: %s", D.shape)
     
     # Use ε-NN to create a sparse, meaningful network
     G, A = net_enn(D, percentile=15, weighted=True)  # Connect top 15% similar windows
     
-    logger.info("   Network: %d nodes, %d edges", G.number_of_nodes(), G.number_of_edges())
+    logger.info("Network: %d nodes, %d edges", G.number_of_nodes(), G.number_of_edges())
     
     # Network properties
     clustering = nx.average_clustering(G)
     density = G.number_of_edges() / (G.number_of_nodes() * (G.number_of_nodes() - 1) / 2)
-    logger.info("   Clustering: %.4f, Density: %.4f", clustering, density)
+    logger.info("Clustering: %.4f, Density: %.4f", clustering, density)
     
     # Visualize the proximity network
     plot_network(
@@ -205,43 +200,35 @@ def example_proximity_network(df):
 
 def example_multivariate_network(df):
     """Build network from multiple correlated time series."""
-    
-    logger.info("MULTIVARIATE ANALYSIS: Time Series Network")
-    
+    logger.info("Multivariate analysis: Time series network")
     
     # Prepare data: each row is a time point, each column is a series
     X = df.values.T  # Shape: (n_series, n_timepoints)
-    logger.info("\n📊 Data shape: %d series × %d time points", X.shape[0], X.shape[1])
+    logger.info("Data shape: %d series × %d time points", X.shape[0], X.shape[1])
     
     # Normalize each series
     X_norm = np.array([(x - x.min()) / (x.max() - x.min()) for x in X])
     
     # Compute distance matrix
-    logger.info("\n🔍 Computing correlation distance...")
+    logger.info("Computing correlation distance...")
     D = ts_dist(X_norm, method='correlation', n_jobs=1)
-    logger.info("   Distance matrix: %s", D.shape)
-    logger.info("   Range: [%.4f, %.4f]", D.min(), D.max())
+    logger.info("Distance matrix: %s, range: [%.4f, %.4f]", D.shape, D.min(), D.max())
     
     # Build k-NN network
     G, A = net_knn(D, k=2, weighted=True, directed=False)
-    logger.info("   Network: %d nodes, %d edges", G.number_of_nodes(), G.number_of_edges())
+    logger.info("Network: %d nodes, %d edges", G.number_of_nodes(), G.number_of_edges())
     
     # Network properties
     clustering = nx.average_clustering(G)
     density = G.number_of_edges() / (G.number_of_nodes() * (G.number_of_nodes() - 1) / 2)
-    logger.info("   Clustering: %.4f, Density: %.4f", clustering, density)
-    
-    # Note: With only 3 nodes, network is fully connected - not very interesting
-    logger.info("   (Note: With 3 series, network is fully connected)")
+    logger.info("Clustering: %.4f, Density: %.4f", clustering, density)
     
     return G
 
 
 def example_recurrence_network(df):
     """Analyze one series with recurrence network."""
-    logger.info("\n" + "=" * 60)
-    logger.info("RECURRENCE NETWORK: Phase Space Analysis")
-    logger.info("=" * 60)
+    logger.info("Recurrence network: Phase space analysis")
     
     # Use GDP as example
     col = 'GDP'
@@ -251,7 +238,7 @@ def example_recurrence_network(df):
     x = df[col].values
     x_norm = (x - x.min()) / (x.max() - x.min())
     
-    logger.info("\n📈 Series: %s (%d points)", col, len(x_norm))
+    logger.info("Series: %s (%d points)", col, len(x_norm))
     
     # Recurrence network with different parameters
     for m, tau, k in [(2, 1, 5), (3, 1, 8), (3, 2, 10)]:
@@ -259,17 +246,15 @@ def example_recurrence_network(df):
             rn = RecurrenceNetwork(m=m, tau=tau, rule='knn', k=k)
             rn.build(x_norm)
             
-            logger.info("   m=%d, τ=%d, k=%d: %d nodes, %d edges", 
+            logger.info("m=%d, τ=%d, k=%d: %d nodes, %d edges", 
                        m, tau, k, rn.n_nodes, rn.n_edges)
         except Exception as e:
-            logger.warning("   ✗ m=%d, τ=%d, k=%d failed: %s", m, tau, k, str(e))
+            logger.warning("m=%d, τ=%d, k=%d failed: %s", m, tau, k, str(e))
 
 
 def example_transition_network(df):
     """Analyze one series with transition network."""
-    
-    logger.info("TRANSITION NETWORK: Symbolic Dynamics")
-    
+    logger.info("Transition network: Symbolic dynamics")
     
     # Use Unemployment Rate as example
     col = 'UNRATE'
@@ -279,7 +264,7 @@ def example_transition_network(df):
     x = df[col].values
     x_norm = (x - x.min()) / (x.max() - x.min())
     
-    logger.info("\n📈 Series: %s (%d points)", col, len(x_norm))
+    logger.info("Series: %s (%d points)", col, len(x_norm))
     
     # Transition network with ordinal patterns
     for order in [3, 4, 5]:
@@ -287,10 +272,10 @@ def example_transition_network(df):
             tn = TransitionNetwork(symbolizer='ordinal', order=order)
             tn.build(x_norm)
             
-            logger.info("   Order %d: %d states, %d transitions", 
+            logger.info("Order %d: %d states, %d transitions", 
                        order, tn.n_nodes, tn.n_edges)
         except Exception as e:
-            logger.warning("   ✗ Order %d failed: %s", order, str(e))
+            logger.warning("Order %d failed: %s", order, str(e))
 
 
 def plot_data(df):
@@ -344,7 +329,7 @@ def plot_data(df):
             plt.savefig(output_path, dpi=150, bbox_inches='tight')
             plt.close()
         
-        logger.info("\n📊 Plot saved to: examples/images/fred_data.png")
+        logger.info("Plot saved to: examples/images/fred_data.png")
     except Exception as e:
         logger.warning("Could not create plot: %s", str(e))
 
@@ -448,15 +433,14 @@ def plot_network(G, title, filename, layout='spring'):
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         plt.close()
         
-        logger.info("   📊 Network diagram saved to: %s", filename)
+        logger.info("Network diagram saved to: %s", filename)
     except Exception as e:
         logger.warning("   Could not create network plot: %s", str(e))
 
 
 def main():
     """Main example function."""
-    logger.info("ts2net: Real Economic Data Example")
-    logger.info("Using FRED (Federal Reserve Economic Data)\n")
+    logger.info("ts2net: Real Economic Data Example (FRED)")
     
     # Fetch data
     df = fetch_fred_data(start_date='2010-01-01')
@@ -470,19 +454,10 @@ def main():
     
     # Run examples
     example_univariate_analysis(df)
-    example_proximity_network(df)  # More interesting network structure
+    example_proximity_network(df)
     example_multivariate_network(df)
     example_recurrence_network(df)
     example_transition_network(df)
-    
-    
-    logger.info("✅ Example complete!")
-    
-    logger.info("\nKey insights:")
-    logger.info("- Economic indicators show different network structures")
-    logger.info("- Correlation-based networks reveal relationships between series")
-    logger.info("- Recurrence networks capture phase space dynamics")
-    logger.info("- Transition networks model symbolic patterns")
 
 
 if __name__ == "__main__":

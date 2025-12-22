@@ -15,6 +15,71 @@ from .core.recurrence import RecurrenceNetwork as _RN_Old
 from .core.transition import TransitionNetwork as _TN_Old
 
 
+def _validate_and_clean_series(x, method_name: str = "ts2net") -> NDArray[np.float64]:
+    """
+    Validate and clean time series input, handling dtype contamination.
+    
+    Parameters
+    ----------
+    x : array-like
+        Input time series (may contain non-numeric values)
+    method_name : str
+        Method name for error messages
+    
+    Returns
+    -------
+    x : array (float64)
+        Clean numeric array
+    
+    Raises
+    ------
+    ValueError
+        If input cannot be converted to valid numeric array
+    """
+    import pandas as pd
+    
+    # Convert to numpy array first
+    if not isinstance(x, np.ndarray):
+        x = np.asarray(x)
+    
+    # Check if already numeric
+    if x.dtype.kind in ['f', 'i', 'u']:
+        # Numeric type - just ensure float64 and check for inf/nan
+        x = x.astype(np.float64)
+        x = np.where(np.isfinite(x), x, np.nan)
+        x = x[~np.isnan(x)]
+    else:
+        # Non-numeric or object dtype - use pandas coercion
+        s = pd.Series(x)
+        s = pd.to_numeric(s, errors='coerce')
+        s = s.replace([np.inf, -np.inf], np.nan)
+        s = s.dropna()
+        x = s.values.astype(np.float64)
+    
+    # Final validation
+    if len(x) == 0:
+        raise ValueError(
+            f"{method_name}: No valid numeric values in input series. "
+            f"Check for non-numeric data, infinities, or all-null values."
+        )
+    
+    if x.ndim != 1:
+        raise ValueError(
+            f"{method_name}: Input must be 1D array, got shape {x.shape}"
+        )
+    
+    # Check for constant series (can cause issues in some methods)
+    if np.std(x) == 0:
+        import warnings
+        warnings.warn(
+            f"{method_name}: Constant series detected (std=0). "
+            f"Results may be degenerate.",
+            UserWarning
+        )
+    
+    return x
+
+
 class HVG:
     """
     Horizontal Visibility Graph.
@@ -70,6 +135,9 @@ class HVG:
     
     def build(self, x: NDArray[np.float64]):
         """Build HVG from time series."""
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "HVG")
+        
         # Use old implementation
         G_nx, A = self._impl.fit_transform(x)
         
@@ -209,6 +277,9 @@ class NVG:
     
     def build(self, x: NDArray[np.float64]):
         """Build NVG from time series."""
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "NVG")
+        
         G_nx, A = self._impl.fit_transform(x)
         
         # Convert based on output mode (same pattern as HVG)
@@ -344,6 +415,9 @@ class RecurrenceNetwork:
     
     def build(self, x: NDArray[np.float64]):
         """Build recurrence network from time series."""
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "RecurrenceNetwork")
+        
         G_nx, A = self._impl.fit_transform(x)
         
         # Convert based on output mode
@@ -482,6 +556,9 @@ class TransitionNetwork:
     
     def build(self, x: NDArray[np.float64]):
         """Build transition network from time series."""
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "TransitionNetwork")
+        
         G_nx, A = self._impl.fit_transform(x)
         
         # Convert based on output mode

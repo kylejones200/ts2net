@@ -16,7 +16,7 @@ def test_hvg_edges():
     assert np.all(edges >= 0)
     assert np.all(edges < len(y))
 
-    print("✅ test_hvg_edges passed")
+    # Test passed
 
 
 def test_dtw_distance():
@@ -38,10 +38,9 @@ def test_dtw_distance():
     assert dist_matrix.shape == (2, 2)
     assert np.allclose(dist_matrix, dist_matrix.T)  # Should be symmetric
 
-    print("✅ test_dtw_distance passed")
+    # Test passed
 
 
 if __name__ == "__main__":
     test_hvg_edges()
     test_dtw_distance()
-    print("\nAll tests passed!")

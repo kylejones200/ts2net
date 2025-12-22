@@ -1,0 +1,55 @@
+dataset:
+  name: morocco_zones
+  path: data/morocco.parquet
+  id_col: zone
+  time_col: timestamp
+  value_col: consumption
+  start: null
+  end: null
+
+sampling:
+  frequency: null
+  agg: mean
+  resample: false
+
+graphs:
+  hvg:
+    enabled: true
+    output: stats
+    weighted: false
+
+  nvg:
+    enabled: true
+    output: stats
+    limit: 5000
+    max_edges: null
+    max_memory_mb: null
+
+  recurrence:
+    enabled: true
+    output: stats
+    rule: knn
+    k: 15
+    m: 3
+    tau: 1
+    metric: euclidean
+
+  transition:
+    enabled: true
+    output: stats
+    symbolizer: ordinal
+    order: 3
+
+windows:
+  enabled: false
+  size: null
+  step: null
+
+output:
+  format: parquet
+  path: results/morocco_network_stats.parquet
+  overwrite: true
+
+logging:
+  log_errors: true
+  error_path: results/morocco_errors.json

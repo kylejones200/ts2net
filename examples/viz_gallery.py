@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import matplotlib.pyplot as plt
+import logging
 from pathlib import Path
 
 try:
@@ -26,9 +27,12 @@ try:
         plot_hvg_small,
     )
 except ImportError as e:
-    print(f"⚠️  Import error: {e}")
-    print("Make sure ts2net is installed: pip install ts2net")
+    logging.error(f"Import error: {e}")
+    logging.error("Make sure ts2net is installed: pip install ts2net")
     sys.exit(1)
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 # Create output directory
 _images_dir = os.path.join(os.path.dirname(__file__), 'images')
@@ -58,23 +62,11 @@ def generate_sample_data(n=500):
 
 def main():
     """Generate all five flagship figures."""
-    print("=" * 60)
-    print("ts2net Visualization Gallery")
-    print("=" * 60)
-    print()
-    
     # Generate data
     x, events = generate_sample_data(n=500)
-    print(f"Generated time series with {len(x)} points")
-    print(f"Change points at indices: {events}")
-    print()
+    logger.info(f"Generated time series with {len(x)} points, change points at {events}")
     
-    # ============================================================
     # Figure 1: Time series with change points and window boundaries
-    # ============================================================
-    print("📊 Figure 1: Time series with change points...")
-    
-    # Create window boundaries (sliding windows)
     window_size = 50
     window_bounds = [(i, i + window_size) 
                      for i in range(0, len(x) - window_size, 25)]
@@ -89,15 +81,9 @@ def main():
     output_path1 = os.path.join(_images_dir, 'viz_figure1_series_with_events.png')
     fig1.savefig(output_path1, dpi=150, bbox_inches='tight')
     plt.close(fig1)
-    print(f"   Saved: {output_path1}")
-    print()
+    logger.info(f"Saved: {output_path1}")
     
-    # ============================================================
     # Figure 2: Degree profile across time
-    # ============================================================
-    print("📊 Figure 2: Degree profile...")
-    
-    # Build HVG and get degrees
     hvg = HVG()
     g = hvg.build(x)
     degrees = g.degree_sequence()
@@ -110,14 +96,9 @@ def main():
     output_path2 = os.path.join(_images_dir, 'viz_figure2_degree_profile.png')
     fig2.savefig(output_path2, dpi=150, bbox_inches='tight')
     plt.close(fig2)
-    print(f"   Saved: {output_path2}")
-    print()
+    logger.info(f"Saved: {output_path2}")
     
-    # ============================================================
     # Figure 3: Degree distribution as CCDF
-    # ============================================================
-    print("📊 Figure 3: Degree CCDF...")
-    
     fig3, ax3 = plot_degree_ccdf(
         degrees,
         title="HVG Degree Distribution (CCDF)"
@@ -126,13 +107,9 @@ def main():
     output_path3 = os.path.join(_images_dir, 'viz_figure3_degree_ccdf.png')
     fig3.savefig(output_path3, dpi=150, bbox_inches='tight')
     plt.close(fig3)
-    print(f"   Saved: {output_path3}")
-    print()
+    logger.info(f"Saved: {output_path3}")
     
-    # ============================================================
     # Figure 4: Method comparison panel
-    # ============================================================
-    print("📊 Figure 4: Method comparison...")
     
     # Build networks with different methods
     methods_data = {}
@@ -187,27 +164,17 @@ def main():
     output_path4 = os.path.join(_images_dir, 'viz_figure4_method_comparison.png')
     fig4.savefig(output_path4, dpi=150, bbox_inches='tight')
     plt.close(fig4)
-    print(f"   Saved: {output_path4}")
-    print()
+    logger.info(f"Saved: {output_path4}")
     
-    # ============================================================
     # Figure 5: Window level feature map
-    # ============================================================
-    print("📊 Figure 5: Window feature map...")
-    
-    # Compute window-level features
     window_size = 50
     step = 25
-    window_features = {}
-    
     deg_mean_list = []
     deg_std_list = []
     edge_count_list = []
     
     for i in range(0, len(x) - window_size, step):
         window = x[i:i + window_size]
-        
-        # Build HVG for this window
         hvg_window = HVG()
         g_window = hvg_window.build(window)
         deg_window = g_window.degree_sequence()
@@ -233,15 +200,9 @@ def main():
     output_path5 = os.path.join(_images_dir, 'viz_figure5_window_feature_map.png')
     fig5.savefig(output_path5, dpi=150, bbox_inches='tight')
     plt.close(fig5)
-    print(f"   Saved: {output_path5}")
-    print()
+    logger.info(f"Saved: {output_path5}")
     
-    # ============================================================
-    # Bonus: Small n graph drawing (for small series)
-    # ============================================================
-    print("📊 Bonus: Small n graph drawing...")
-    
-    # Use a small subset
+    # Bonus: Small n graph drawing
     x_small = x[:100]
     hvg_small = HVG()
     g_small = hvg_small.build(x_small)
@@ -249,22 +210,16 @@ def main():
     if g_small.edges is not None:
         fig6, ax6 = plot_hvg_small(
             x_small,
-            g_small.edges[:200],  # Limit edges for clarity
+            g_small.edges[:200],
             title="HVG Graph Layout (Small Series)"
         )
         
         output_path6 = os.path.join(_images_dir, 'viz_bonus_hvg_small.png')
         fig6.savefig(output_path6, dpi=150, bbox_inches='tight')
         plt.close(fig6)
-        print(f"   Saved: {output_path6}")
-    else:
-        print("   Skipped (edges not available)")
-    print()
+        logger.info(f"Saved: {output_path6}")
     
-    print("=" * 60)
-    print("✅ Gallery complete!")
-    print(f"All figures saved to: {_images_dir}")
-    print("=" * 60)
+    logger.info(f"All figures saved to: {_images_dir}")
 
 
 if __name__ == "__main__":

@@ -4,8 +4,11 @@ Example: Polars-based ingestion and windowing for Spanish energy data.
 This example demonstrates:
 - Loading time series from Parquet using Polars (lazy evaluation)
 - Building window-level series per meter or region
-- Running ts2net analysis with only_degrees=True for memory efficiency
+- Running ts2net analysis with output='stats' for memory efficiency
 - Writing results back to Parquet
+
+Note: This example is superseded by the YAML-based pipeline (scripts/run_from_config.py).
+See configs/spain_smart_meters.yaml for the recommended approach.
 """
 
 import sys
@@ -22,7 +25,7 @@ try:
     HAS_POLARS = True
 except ImportError:
     HAS_POLARS = False
-    print("⚠️  Polars not installed. Install with: pip install ts2net[polars]")
+    logging.error("Polars not installed. Install with: pip install ts2net[polars]")
     sys.exit(1)
 
 try:
@@ -30,7 +33,7 @@ try:
     from ts2net import HVG, graph_summary
     from ts2net.core import graph_summary as core_graph_summary
 except ImportError as e:
-    print(f"⚠️  Import error: {e}")
+    logging.error(f"Import error: {e}")
     sys.exit(1)
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -70,7 +73,6 @@ def analyze_series_windowed(
     results = {}
     
     for series_id, values in series_dict.items():
-        logger.info(f"Processing {series_id} ({len(values)} points)...")
         
         # Create sliding windows
         n_windows = (len(values) - window_width) // step + 1
@@ -149,37 +151,25 @@ def write_results_to_parquet(results: dict, output_path: str):
     # Create Polars DataFrame and write
     df = pl.DataFrame(rows)
     df.write_parquet(output_path)
-    logger.info(f"✅ Results written to {output_path}")
-    logger.info(f"   {len(rows)} rows, {len(results)} series")
+    logger.info(f"Results written to {output_path}: {len(rows)} rows, {len(results)} series")
 
 
 def main():
     """Main example function."""
-    logger.info("=" * 60)
-    logger.info("Polars-based Time Series Analysis")
-    logger.info("=" * 60)
-    logger.info("")
-    
     # Example: Load Spanish energy consumption data
     # This is a template - replace with your actual Parquet file path
     parquet_path = "data/spain_energy.parquet"  # Replace with actual path
     
-    logger.info("📊 Loading time series from Parquet...")
-    logger.info(f"   Path: {parquet_path}")
+    logger.info(f"Loading time series from Parquet: {parquet_path}")
     
     # Check if file exists (for demo purposes)
     if not Path(parquet_path).exists():
-        logger.warning(f"⚠️  File not found: {parquet_path}")
-        logger.info("")
+        logger.warning(f"File not found: {parquet_path}")
         logger.info("This is a template example. To use:")
         logger.info("1. Prepare a Parquet file with columns: timestamp, consumption, meter_id")
         logger.info("2. Update parquet_path in this script")
         logger.info("3. Run the script")
-        logger.info("")
-        logger.info("Example Parquet schema:")
-        logger.info("  - timestamp: datetime")
-        logger.info("  - consumption: float64")
-        logger.info("  - meter_id: string (optional)")
+        logger.info("Example Parquet schema: timestamp (datetime), consumption (float64), meter_id (string, optional)")
         return
     
     try:
@@ -194,12 +184,10 @@ def main():
             tz='Europe/Madrid',  # Spanish timezone
         )
         
-        logger.info(f"✅ Loaded {len(series)} series")
-        logger.info(f"   Series IDs: {list(series.keys())[:5]}...")
-        logger.info("")
+        logger.info(f"Loaded {len(series)} series: {list(series.keys())[:5]}...")
         
         # Analyze with sliding windows
-        logger.info("🔍 Analyzing with sliding windows (24-hour windows)...")
+        logger.info("Analyzing with sliding windows (24-hour windows)...")
         results = analyze_series_windowed(
             series,
             window_width=24,  # 24-hour windows
@@ -213,13 +201,8 @@ def main():
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         write_results_to_parquet(results, output_path)
         
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("✅ Analysis complete!")
-        logger.info("=" * 60)
-        
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
+        logger.error(f"Error: {e}")
         import traceback
         traceback.print_exc()
 

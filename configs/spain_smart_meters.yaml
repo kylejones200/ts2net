@@ -1,0 +1,51 @@
+dataset:
+  name: spain_smart_meters
+  path: data/spain.parquet
+  id_col: meter_id
+  time_col: timestamp
+  value_col: kwh
+  start: 2014-01-01
+  end: 2022-12-31
+  tz: Europe/Madrid
+
+sampling:
+  frequency: hourly
+  agg: mean
+  resample: false
+
+graphs:
+  hvg:
+    enabled: true
+    output: stats
+    weighted: false
+
+  nvg:
+    enabled: true
+    output: stats
+    limit: 3000
+    max_edges: null
+    max_memory_mb: null
+
+  recurrence:
+    enabled: false
+
+  transition:
+    enabled: true
+    output: stats
+    symbolizer: ordinal
+    order: 3
+    n_states: null
+
+windows:
+  enabled: false
+  size: null
+  step: null
+
+output:
+  format: parquet
+  path: results/spain_network_stats.parquet
+  overwrite: true
+
+logging:
+  log_errors: true
+  error_path: results/spain_errors.json
