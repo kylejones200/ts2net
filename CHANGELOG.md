@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2024-12-20
+
+### Added
+- BSTS (Bayesian Structural Time Series) decomposition and residual topology analysis
+  - `ts2net.bsts` module with `decompose()`, `features()`, and `BSTSSpec`
+  - Structural decomposition (level, trend, seasonal components)
+  - Residual network analysis (HVG, NVG, transition on residuals)
+  - Windowed analysis support for long series
+  - YAML pipeline integration for BSTS
+- Comprehensive test suite for correctness and invariants
+  - Hard correctness tests comparing fast vs naive O(n²) implementations
+  - Property-based tests for pathological ties (repeated values)
+  - Cross-platform determinism tests
+  - End-to-end pipeline tests with known fixtures
+  - Performance regression tests
+  - Data hygiene tests
+- PyPI publishing workflow improvements
+  - Triggers on version tags in addition to GitHub releases
+  - Setup documentation (`PYPI_SETUP.md`)
+
+### Changed
+- Explicit tie-breaking rules documented for HVG and NVG
+- Improved test coverage and organization
+
+### Fixed
+- Fixed indentation error in recurrence.py
+- Fixed NVG test unpacking (4-value return)
+- Fixed pipeline determinism test (sort results for comparison)
+
 ## [0.5.0] - 2024-12-19
 
 ### Added

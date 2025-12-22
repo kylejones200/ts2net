@@ -96,6 +96,25 @@ output:
   overwrite: bool
 ```
 
+### BSTS Section (Optional)
+
+```yaml
+bsts:
+  enabled: bool              # Enable structural decomposition
+  level: bool                # Include local level component
+  trend: bool                # Include local linear trend
+  seasonal_periods: list      # Seasonal periods (e.g., [24, 168] for hourly)
+  robust: bool               # Use Student-t errors (default: false)
+  standardize_residual: bool  # Standardize residual (default: true)
+  max_points: int            # Max points for single fit (default: 10000)
+  window: int | null         # Window size for windowed analysis (null = full series)
+```
+
+When BSTS is enabled, the pipeline:
+1. Decomposes series into structural components (level, trend, seasonality)
+2. Analyzes the residual with network methods (HVG, NVG, transition)
+3. Returns both structural statistics and residual network statistics
+
 ### Logging Section
 
 ```yaml

@@ -45,6 +45,12 @@ def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1,
     """
     Build NVG edges using sweepline (no dense matrix) with bounded work.
     
+    Tie-Breaking Rule:
+    Two points i and j are naturally visible if the line connecting (i, x[i])
+    to (j, x[j]) does not intersect any intermediate points. If an intermediate
+    point k lies exactly on the line (x[k] == line_height), visibility is blocked.
+    Points below the line do not block visibility.
+    
     Args:
         x: 1D array of time series values
         weighted: If True, weight edges by absolute difference

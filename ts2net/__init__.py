@@ -8,7 +8,7 @@ from .core.graph import Graph
 from .api import HVG, NVG, RecurrenceNetwork, TransitionNetwork, build_network
 from .core import graph_summary
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     'Graph',
@@ -60,3 +60,10 @@ except ImportError:
 # Windowed graphs API
 from .api_windows import build_windows
 __all__.append('build_windows')
+
+# BSTS decomposition and features (optional - requires statsmodels)
+try:
+    from .bsts import decompose, BSTSSpec, features
+    __all__ = __all__ + ['decompose', 'BSTSSpec', 'features']
+except ImportError:
+    pass

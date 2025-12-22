@@ -47,6 +47,14 @@ def _hvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
     Uses a stack-based algorithm for O(n) expected time complexity.
     Returns edge list to avoid building dense adjacency matrix.
     
+    Tie-Breaking Rule:
+    Two points i and j are horizontally visible if all points k between them
+    satisfy x[k] < min(x[i], x[j]). If any intermediate point equals or exceeds
+    min(x[i], x[j]), visibility is blocked. This means:
+    - Points with the same value are visible only if all intermediate points
+      are strictly less than that value
+    - Consecutive points are always visible (no intermediate points to block)
+    
     Args:
         x: 1D array of time series values
         weighted: If True, weight edges by absolute difference

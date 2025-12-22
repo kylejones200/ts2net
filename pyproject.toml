@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ts2net"
-version = "0.5.0"
+version = "0.6.0"
 description = "Time series to network conversion and analysis"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -52,6 +52,7 @@ gpu = ["cudtw"]
 mic = ["minepy"]
 examples = ["pandas-datareader", "signalplot"]
 polars = ["polars>=0.20", "pyarrow>=12.0"]
+bsts = ["statsmodels>=0.14"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

@@ -88,6 +88,29 @@ python examples/viz_gallery.py
 - All functions return `(fig, ax)` for customization
 - Designed for structure, stability, and comparison (not hairballs)
 
+### `bsts_features.py` ⭐ **NEW - BSTS Decomposition & Residual Topology**
+Demonstrates structural time series decomposition and residual network analysis:
+- Decompose series into level, trend, and seasonal components
+- Analyze residual with visibility and transition graphs
+- Compare meters/wells without seasonal confounds
+- Flag series where structural model fails (high residual complexity)
+
+**Run:**
+```bash
+python examples/bsts_features.py
+```
+
+**Features:**
+- Smart meter example with daily/weekly seasonality
+- Well production example with decline trends
+- Windowed analysis for long series
+- Shows how residual topology captures dynamics missed by structural model
+
+**Requirements:**
+```bash
+pip install ts2net[bsts]  # Installs statsmodels
+```
+
 ### `polars_spain_windows.py` ⭐ **NEW - Polars Ingestion & Windowing**
 Demonstrates Polars-based Parquet ingestion and windowed analysis:
 - Lazy-loading time series from Parquet using Polars
