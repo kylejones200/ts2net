@@ -102,11 +102,19 @@ def load_series_from_parquet_polars(
     # Lazy scan - only reads metadata initially
     df = pl.scan_parquet(path).select(select_cols)
     
-    # Apply timezone if specified
+    # Apply timezone if specified (convert string time_col to datetime if needed)
+    # Note: Polars will handle timezone conversion if time_col is already datetime
     if tz is not None:
-        df = df.with_columns(
-            pl.col(time_col).dt.replace_time_zone(tz)
-        )
+        # Try to set timezone - will work if column is datetime
+        try:
+            df = df.with_columns(
+                pl.col(time_col).dt.replace_time_zone(tz)
+            )
+        except Exception:
+            # If time_col is string, parse it first
+            df = df.with_columns(
+                pl.col(time_col).str.strptime(pl.Datetime).dt.replace_time_zone(tz)
+            )
     
     # Apply time filters with pushdown (efficient)
     if start is not None:

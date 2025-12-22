@@ -262,14 +262,22 @@ class NVG:
         return self._graph.n_edges
     
     def degree_sequence(self):
+        """Degree sequence"""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
     
-    def adjacency_matrix(self, sparse: bool = False):
+    def stats(self, include_triangles: bool = False) -> dict:
+        """Summary statistics (memory efficient, no dense matrix)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.adjacency_matrix(sparse=sparse)
+        return self._graph.summary(include_triangles=include_triangles)
+    
+    def adjacency_matrix(self, format: str = "sparse"):
+        """Adjacency matrix (sparse by default)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.adjacency_matrix(format=format)
     
     def as_networkx(self):
         if self._graph is None:
@@ -342,14 +350,22 @@ class RecurrenceNetwork:
         return self._graph.n_edges
     
     def degree_sequence(self):
+        """Degree sequence"""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
     
-    def adjacency_matrix(self, sparse: bool = False):
+    def stats(self, include_triangles: bool = False) -> dict:
+        """Summary statistics (memory efficient, no dense matrix)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.adjacency_matrix(sparse=sparse)
+        return self._graph.summary(include_triangles=include_triangles)
+    
+    def adjacency_matrix(self, format: str = "sparse"):
+        """Adjacency matrix (sparse by default)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.adjacency_matrix(format=format)
     
     def as_networkx(self):
         if self._graph is None:
@@ -424,14 +440,22 @@ class TransitionNetwork:
         return self._graph.n_edges
     
     def degree_sequence(self):
+        """Degree sequence"""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
     
-    def adjacency_matrix(self, sparse: bool = False):
+    def stats(self, include_triangles: bool = False) -> dict:
+        """Summary statistics (memory efficient, no dense matrix)"""
         if self._graph is None:
             raise ValueError("Call build() first")
-        return self._graph.adjacency_matrix(sparse=sparse)
+        return self._graph.summary(include_triangles=include_triangles)
+    
+    def adjacency_matrix(self, format: str = "sparse"):
+        """Adjacency matrix (sparse by default)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.adjacency_matrix(format=format)
     
     def as_networkx(self):
         if self._graph is None:
