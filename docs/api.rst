@@ -36,3 +36,10 @@ Spatial
    :members:
    :undoc-members:
    :show-inheritance:
+
+BSTS (Bayesian Structural Time Series)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: ts2net.bsts
+   :members:
+   :undoc-members:
+   :show-inheritance:
