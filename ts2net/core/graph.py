@@ -154,15 +154,32 @@ class Graph:
                     np.array([], dtype=np.int64), 
                     None if not self.weighted else np.array([]))
         
-        if self.weighted:
-            src = np.array([e[0] for e in self.edges], dtype=np.int64)
-            dst = np.array([e[1] for e in self.edges], dtype=np.int64)
-            weight = np.array([e[2] for e in self.edges], dtype=np.float64)
-            return src, dst, weight
-        else:
-            src = np.array([e[0] for e in self.edges], dtype=np.int64)
-            dst = np.array([e[1] for e in self.edges], dtype=np.int64)
-            return src, dst, None
+        # Handle different edge formats
+        # Standard: (u, v) or (u, v, w)
+        # Some networks might have nested tuples, handle gracefully
+        try:
+            if self.weighted:
+                src = np.array([e[0] for e in self.edges], dtype=np.int64)
+                dst = np.array([e[1] for e in self.edges], dtype=np.int64)
+                weight = np.array([e[2] for e in self.edges], dtype=np.float64)
+                return src, dst, weight
+            else:
+                src = np.array([e[0] for e in self.edges], dtype=np.int64)
+                dst = np.array([e[1] for e in self.edges], dtype=np.int64)
+                return src, dst, None
+        except (IndexError, TypeError):
+            # Handle edge format issues - try to extract from NetworkX edge format
+            # This shouldn't happen with proper edge storage, but be defensive
+            import warnings
+            warnings.warn(
+                f"Edge format issue in edges_coo(). Edges may be in unexpected format. "
+                f"First edge: {self.edges[0] if self.edges else 'empty'}",
+                UserWarning
+            )
+            # Fallback: return empty arrays
+            return (np.array([], dtype=np.int64), 
+                    np.array([], dtype=np.int64), 
+                    None if not self.weighted else np.array([]))
     
     def as_networkx(self, force: bool = False):
         """

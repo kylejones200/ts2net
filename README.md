@@ -47,15 +47,48 @@ print(nx.average_clustering(G))
 
 ## Large Series
 
-For large series (n > 100k), use `only_degrees=True` to skip edge storage:
+For large series, use output modes to control memory usage:
 
 ```python
-hvg = HVG(only_degrees=True)
+# Degrees only (most memory efficient)
+hvg = HVG(output="degrees")
 hvg.build(x)
+degrees = hvg.degree_sequence()  # Fast, no edge storage
 
-degrees = hvg.degree_sequence()  # Fast
-# hvg.edges is None (not stored)
+# Stats only (summary statistics without edges)
+hvg = HVG(output="stats")
+hvg.build(x)
+stats = hvg.stats()  # n_nodes, n_edges, avg_degree, etc.
+
+# Full edges (default, use for small-medium series)
+hvg = HVG(output="edges")
+hvg.build(x)
+edges = hvg.edges  # Full edge list
 ```
+
+### Scale Guidelines
+
+| Series Length | Method | Recommended Settings | Memory Risk |
+|--------------|--------|---------------------|-------------|
+| n < 10k | All methods | `output="edges"` | Safe |
+| 10k < n < 100k | HVG | `output="edges"` or `output="degrees"` | Safe with sparse |
+| 10k < n < 100k | NVG | `limit=2000-5000`, `output="degrees"` | **Use horizon limit** |
+| 10k < n < 100k | Recurrence | `rule='knn'`, `k=10-30` | **Avoid exact all-pairs** |
+| n > 100k | HVG | `output="degrees"` or `output="stats"` | Safe |
+| n > 100k | NVG | `limit=2000-5000`, `max_edges=1e6`, `output="degrees"` | **Required limits** |
+| n > 100k | Recurrence | `rule='knn'`, `k=10-30`, `output="degrees"` | **kNN only** |
+
+**Critical Warnings:**
+- **Dense adjacency matrices are disabled by default** for n > 50k (prevents 63GB+ memory blowup)
+- **NVG without `limit` can create millions of edges** for smooth series
+- **Recurrence exact all-pairs is O(n²) memory** - use kNN for large n
+- **NetworkX conversion refused** for n > 200k (use `force=True` to override)
+
+**Memory Estimates:**
+- Dense adjacency: ~8 * n² bytes (e.g., 90k nodes = 63 GB)
+- Sparse adjacency: ~16 * m bytes where m = edges (e.g., 100k edges = 1.6 MB)
+- Edge list: ~16 * m bytes (similar to sparse)
+- Degrees only: ~8 * n bytes (e.g., 90k nodes = 720 KB)
 
 ## Methods
 
@@ -73,7 +106,12 @@ hvg.build(x)
 ```python
 from ts2net import NVG
 
-nvg = NVG(weighted=False, limit=None)
+# For large series, use horizon limit and bounded work
+nvg = NVG(weighted=False, limit=5000, max_edges=1_000_000, output="degrees")
+nvg.build(x)
+
+# Or with memory limit
+nvg = NVG(limit=2000, max_memory_mb=100)  # Caps at ~100MB
 nvg.build(x)
 ```
 

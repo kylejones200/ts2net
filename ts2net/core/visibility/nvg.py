@@ -40,41 +40,56 @@ except ImportError:
 
 
 @njit(cache=True)
-def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
+def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1, 
+                     max_edges: int = -1, max_edges_per_node: int = -1):
     """
-    Build NVG edges using sweepline (no dense matrix).
+    Build NVG edges using sweepline (no dense matrix) with bounded work.
     
     Args:
         x: 1D array of time series values
         weighted: If True, weight edges by absolute difference
         limit: Maximum temporal distance (horizon limit, -1 = no limit)
-               This is a critical scale control parameter.
+        max_edges: Maximum total edges (-1 = no limit, critical scale control)
+        max_edges_per_node: Maximum edges per node (-1 = no limit)
         
     Returns:
-        rows, cols, weights: Edge arrays in COO format
+        rows, cols, weights, hit_limit: Edge arrays and flag if limit was hit
     """
     n = len(x)
-    # Pre-allocate (NVG can have many edges, but we cap with limit)
-    # Estimate: worst case ~n*limit edges if limit is set
-    if limit > 0:
-        max_edges = min(n * limit, n * (n - 1) // 2)
-    else:
-        max_edges = n * (n - 1) // 2  # Worst case: complete graph
     
-    rows = np.zeros(max_edges, dtype=np.int64)
-    cols = np.zeros(max_edges, dtype=np.int64)
+    # Determine allocation size with caps
+    if max_edges > 0:
+        alloc_size = min(max_edges, n * (n - 1) // 2)
+    elif limit > 0:
+        alloc_size = min(n * limit, n * (n - 1) // 2)
+    else:
+        alloc_size = n * (n - 1) // 2  # Worst case
+    
+    rows = np.zeros(alloc_size, dtype=np.int64)
+    cols = np.zeros(alloc_size, dtype=np.int64)
     if weighted:
-        weights = np.zeros(max_edges, dtype=np.float64)
+        weights = np.zeros(alloc_size, dtype=np.float64)
     else:
         weights = None
     
     edge_count = 0
+    edges_per_node = np.zeros(n, dtype=np.int64)
+    hit_limit = False
     
     for i in range(n):
         for j in range(i + 1, n):
-            # Apply horizon limit (critical for scale control)
+            # Apply horizon limit (critical scale control)
             if limit > 0 and (j - i) > limit:
                 continue
+            
+            # Check per-node edge limit
+            if max_edges_per_node > 0 and edges_per_node[i] >= max_edges_per_node:
+                continue
+            
+            # Check total edge limit
+            if max_edges > 0 and edge_count >= max_edges:
+                hit_limit = True
+                break
             
             # Check visibility
             visible = True
@@ -85,25 +100,33 @@ def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
                     break
             
             if visible:
-                if edge_count >= max_edges:
-                    # Resize if needed (should be rare with limit)
-                    new_max = max_edges * 2
+                if edge_count >= alloc_size:
+                    # Hit allocation limit - resize or stop
+                    if max_edges > 0:
+                        hit_limit = True
+                        break
+                    # Resize (should be rare with proper limits)
+                    new_max = alloc_size * 2
                     new_rows = np.zeros(new_max, dtype=np.int64)
                     new_cols = np.zeros(new_max, dtype=np.int64)
-                    new_rows[:max_edges] = rows
-                    new_cols[:max_edges] = cols
+                    new_rows[:alloc_size] = rows
+                    new_cols[:alloc_size] = cols
                     rows, cols = new_rows, new_cols
                     if weighted:
                         new_weights = np.zeros(new_max, dtype=np.float64)
-                        new_weights[:max_edges] = weights
+                        new_weights[:alloc_size] = weights
                         weights = new_weights
-                    max_edges = new_max
+                    alloc_size = new_max
                 
                 rows[edge_count] = i
                 cols[edge_count] = j
                 if weighted:
                     weights[edge_count] = abs(x[i] - x[j])
                 edge_count += 1
+                edges_per_node[i] += 1
+        
+        if hit_limit:
+            break
     
     # Trim to actual size
     rows = rows[:edge_count]
@@ -111,7 +134,7 @@ def _nvg_edges_numba(x: np.ndarray, weighted: bool = False, limit: int = -1):
     if weighted and weights is not None:
         weights = weights[:edge_count]
     
-    return rows, cols, weights
+    return rows, cols, weights, hit_limit
 
 
 class NVG(SKMixin):

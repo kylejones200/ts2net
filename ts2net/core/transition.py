@@ -164,5 +164,9 @@ class TransitionNetwork:
         from scipy import sparse as sp
         G = self.fit(X).transform()
         # Return sparse matrix, never dense
-        A = nx.adjacency_matrix(G, format='csr')
+        A = nx.adjacency_matrix(G)
+        # Convert to CSR if not already
+        from scipy import sparse as sp
+        if not isinstance(A, sp.csr_matrix):
+            A = A.tocsr()
         return G, A

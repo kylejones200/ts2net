@@ -74,29 +74,84 @@ class RecurrenceNetwork:
         if not hasattr(self, 'X_'):
             raise ValueError("Please fit the model first using .fit()")
             
-        # Build edges directly (avoid dense distance matrix)
         n = len(self.X_)
         
-        # Safety guardrail: refuse exact all-pairs for large n
-        if n > 50_000 and self.rule == 'epsilon':
-            raise ValueError(
-                f"Refusing exact all-pairs recurrence for n={n} nodes. "
-                f"This would require ~{n**2 * 8 / 1e9:.1f} GB for distance matrix. "
-                f"Use rule='knn' with small k (e.g., k=10-30) instead, or resample the series."
-            )
+        # Handle k-NN rule (preferred for large n)
+        if self.rule == 'knn' or (self.rule is None and self.k is not None):
+            k = self.k if self.k is not None else 5
+            
+            # For large n, use approximate kNN
+            if n > 10_000:
+                # Try to use approximate kNN if available
+                try:
+                    from ts2net.multivariate.builders import net_knn_approx
+                    # Use embedding directly (not distance matrix)
+                    G, A = net_knn_approx(
+                        self.X_, 
+                        k=k, 
+                        metric=self.metric,
+                        weighted=False,
+                        directed=False
+                    )
+                    return G
+                except ImportError:
+                    # Fall back to exact kNN for smaller n, or raise error
+                    if n > 50_000:
+                        raise ValueError(
+                            f"Approximate kNN required for n={n}. "
+                            f"Install pynndescent: pip install ts2net[approx]"
+                        )
+                    # Use exact kNN (build edges per node, no full distance matrix)
+                    return self._build_knn_exact(k)
+            else:
+                # Small n: use exact kNN
+                return self._build_knn_exact(k)
         
-        # Build edges directly without full distance matrix
-        edges = []
-        for i in range(n):
-            for j in range(i + 1, n):
-                dist = np.linalg.norm(self.X_[i] - self.X_[j])
-                if dist <= self.threshold:
-                    edges.append((i, j))
+        # Epsilon/radius rule (exact all-pairs - only for small n)
+        if self.rule == 'epsilon' or self.rule is None:
+            # Safety guardrail: refuse exact all-pairs for large n
+            if n > 50_000:
+                raise ValueError(
+                    f"Refusing exact all-pairs recurrence for n={n} nodes. "
+                    f"This would require ~{n**2 * 8 / 1e9:.1f} GB for distance matrix. "
+                    f"Use rule='knn' with small k (e.g., k=10-30) instead, or resample the series."
+                )
+            
+            # Build edges directly without full distance matrix
+            edges = []
+            for i in range(n):
+                for j in range(i + 1, n):
+                    dist = np.linalg.norm(self.X_[i] - self.X_[j])
+                    if dist <= self.threshold:
+                        edges.append((i, j))
+            
+            # Convert to networkx graph
+            G = nx.Graph()
+            G.add_nodes_from(range(n))
+            G.add_edges_from(edges)
+            return G
         
-        # Convert to networkx graph
+        raise ValueError(f"Unknown rule: {self.rule}. Use 'knn' or 'epsilon'")
+    
+    def _build_knn_exact(self, k: int) -> nx.Graph:
+        """Build exact k-NN graph (for small n, no full distance matrix)."""
+        n = len(self.X_)
         G = nx.Graph()
         G.add_nodes_from(range(n))
-        G.add_edges_from(edges)
+        
+        # Build kNN edges per node (memory efficient)
+        for i in range(n):
+            # Compute distances to all other nodes
+            distances = []
+            for j in range(n):
+                if i != j:
+                    dist = np.linalg.norm(self.X_[i] - self.X_[j])
+                    distances.append((j, dist))
+            
+            # Find k nearest neighbors
+            distances.sort(key=lambda x: x[1])
+            for j, _ in distances[:k]:
+                G.add_edge(i, j)
         
         return G
     
@@ -113,5 +168,9 @@ class RecurrenceNetwork:
         from scipy import sparse as sp
         G = self.fit(X).transform()
         # Return sparse matrix, never dense
-        A = nx.adjacency_matrix(G, format='csr')
+        A = nx.adjacency_matrix(G)
+        # Convert to CSR if not already
+        from scipy import sparse as sp
+        if not isinstance(A, sp.csr_matrix):
+            A = A.tocsr()
         return G, A

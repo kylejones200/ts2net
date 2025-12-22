@@ -42,7 +42,7 @@ def analyze_series_windowed(
     window_width: int = 24,
     step: int = 1,
     method: str = "hvg",
-    only_degrees: bool = True
+    output: str = "stats"
 ):
     """
     Analyze time series with sliding windows using ts2net.
@@ -57,8 +57,8 @@ def analyze_series_windowed(
         Step size for sliding window
     method : str
         Network method: 'hvg', 'nvg', 'recurrence', 'transition'
-    only_degrees : bool
-        If True, only compute degrees (memory efficient)
+    output : str
+        Output mode: 'edges', 'degrees', or 'stats' (most memory efficient)
     
     Returns
     -------
@@ -87,38 +87,38 @@ def analyze_series_windowed(
             if np.all(np.isnan(window)) or np.std(window) == 0:
                 continue
             
-            # Build network for this window
+            # Build network for this window (using new output API)
             try:
                 if method == 'recurrence':
                     from ts2net import RecurrenceNetwork
-                    builder = RecurrenceNetwork(m=3, rule='knn', k=5, only_degrees=only_degrees)
+                    builder = RecurrenceNetwork(m=3, rule='knn', k=5, output=output)
                     g = builder.build(window)
                 elif method == 'transition':
                     from ts2net import TransitionNetwork
-                    builder = TransitionNetwork(symbolizer='ordinal', order=3, only_degrees=only_degrees)
+                    builder = TransitionNetwork(symbolizer='ordinal', order=3, output=output)
                     g = builder.build(window)
                 elif method == 'hvg':
                     from ts2net import HVG
-                    builder = HVG(only_degrees=only_degrees)
+                    builder = HVG(output=output)
                     g = builder.build(window)
                 elif method == 'nvg':
                     from ts2net import NVG
-                    builder = NVG(only_degrees=only_degrees)
+                    builder = NVG(limit=min(100, window_width), output=output)  # Limit for large windows
                     g = builder.build(window)
                 else:
-                    g = build_network(window, method, only_degrees=only_degrees)
+                    g = build_network(window, method, output=output)
                 
-                # Get statistics
-                degrees = g.degree_sequence()
+                # Get statistics (works with all output modes)
+                stats_dict = g.stats()
                 stats = {
                     'window_start': i,
                     'window_end': i + window_width,
-                    'n_nodes': g.n_nodes,
-                    'n_edges': g.n_edges,
-                    'deg_mean': float(np.mean(degrees)),
-                    'deg_std': float(np.std(degrees)),
-                    'deg_min': int(np.min(degrees)),
-                    'deg_max': int(np.max(degrees)),
+                    'n_nodes': stats_dict['n_nodes'],
+                    'n_edges': stats_dict['n_edges'],
+                    'deg_mean': stats_dict['avg_degree'],
+                    'deg_std': stats_dict.get('std_degree', 0.0),
+                    'deg_min': stats_dict.get('min_degree', 0),
+                    'deg_max': stats_dict.get('max_degree', 0),
                 }
                 
                 window_stats.append(stats)
@@ -205,7 +205,7 @@ def main():
             window_width=24,  # 24-hour windows
             step=1,  # 1-hour step
             method='hvg',
-            only_degrees=True  # Memory efficient
+            output='stats'  # Memory efficient - stats only mode
         )
         
         # Write results

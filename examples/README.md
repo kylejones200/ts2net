@@ -61,6 +61,52 @@ Demonstrates R ts2net API parity for multivariate analysis:
 python examples/example_r_parity.py
 ```
 
+### `viz_gallery.py` ⭐ **NEW - Visualization Gallery**
+Demonstrates all five flagship visualization functions on the same dataset:
+- **Figure 1**: Time series with change points and window boundaries
+- **Figure 2**: Degree profile across time (local complexity proxy)
+- **Figure 3**: Degree distribution as CCDF (log scale, stable comparison)
+- **Figure 4**: Method comparison panel (edge count, avg degree, density)
+- **Figure 5**: Window level feature map (heatmap for anomaly detection)
+- **Bonus**: Small n graph drawing for HVG
+
+**Run:**
+```bash
+python examples/viz_gallery.py
+```
+
+**Features:**
+- Clean, scalable Matplotlib-only plots
+- Consistent styling (no top/right spines, light gridlines)
+- All functions return `(fig, ax)` for customization
+- Designed for structure, stability, and comparison (not hairballs)
+
+### `polars_spain_windows.py` ⭐ **NEW - Polars Ingestion & Windowing**
+Demonstrates Polars-based Parquet ingestion and windowed analysis:
+- Lazy-loading time series from Parquet using Polars
+- Building window-level series per meter or region
+- Running ts2net analysis with `output="stats"` for memory efficiency
+- Writing results back to Parquet
+
+**Requirements:**
+```bash
+pip install ts2net[polars]
+# or
+pip install polars pyarrow
+```
+
+**Run:**
+```bash
+python examples/polars_spain_windows.py
+```
+
+**Features:**
+- Efficient lazy evaluation (only materializes what's needed)
+- Time-based filtering and aggregation
+- Windowed analysis for large time series
+- Memory-efficient stats-only mode
+- Outputs results to Parquet for downstream analysis
+
 ### `benchmark_numba.py`
 Performance benchmarks comparing Numba-accelerated vs. pure Python implementations:
 - HVG performance

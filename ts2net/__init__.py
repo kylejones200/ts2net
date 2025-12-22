@@ -26,3 +26,37 @@ try:
     __all__.append('load_series_from_parquet_polars')
 except ImportError:
     pass
+
+# Visualization module
+try:
+    from .viz import (
+        plot_series_with_events,
+        plot_degree_profile,
+        plot_degree_ccdf,
+        plot_method_comparison,
+        plot_window_feature_map,
+        plot_hvg_small,
+        plot_recurrence_matrix,
+    )
+    __all__.extend([
+        'plot_series_with_events',
+        'plot_degree_profile',
+        'plot_degree_ccdf',
+        'plot_method_comparison',
+        'plot_window_feature_map',
+        'plot_hvg_small',
+        'plot_recurrence_matrix',
+    ])
+except ImportError:
+    pass
+
+# Columnar adapters
+try:
+    from .io_adapters import from_pandas, from_polars
+    __all__.extend(['from_pandas', 'from_polars'])
+except ImportError:
+    pass
+
+# Windowed graphs API
+from .api_windows import build_windows
+__all__.append('build_windows')

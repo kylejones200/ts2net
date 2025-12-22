@@ -117,10 +117,39 @@ def load_series_from_parquet_polars(
             )
     
     # Apply time filters with pushdown (efficient)
+    # Convert string timestamps to Python datetime objects for comparison
     if start is not None:
-        df = df.filter(pl.col(time_col) >= pl.lit(start))
+        if isinstance(start, str):
+            from datetime import datetime
+            try:
+                # Try ISO format first (handles '2024-01-01 00:00:00' and '2024-01-01T00:00:00')
+                start_parsed = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            except ValueError:
+                # Try common format 'YYYY-MM-DD HH:MM:SS'
+                try:
+                    start_parsed = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    # Try date only
+                    start_parsed = datetime.strptime(start, "%Y-%m-%d")
+            df = df.filter(pl.col(time_col) >= start_parsed)
+        else:
+            df = df.filter(pl.col(time_col) >= start)
     if end is not None:
-        df = df.filter(pl.col(time_col) <= pl.lit(end))
+        if isinstance(end, str):
+            from datetime import datetime
+            try:
+                # Try ISO format first
+                end_parsed = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            except ValueError:
+                # Try common format 'YYYY-MM-DD HH:MM:SS'
+                try:
+                    end_parsed = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    # Try date only
+                    end_parsed = datetime.strptime(end, "%Y-%m-%d")
+            df = df.filter(pl.col(time_col) <= end_parsed)
+        else:
+            df = df.filter(pl.col(time_col) <= end)
     
     # Map aggregation function name to Polars method
     agg_map = {

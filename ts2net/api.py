@@ -253,7 +253,9 @@ class NVG:
     def edges(self):
         if self._graph is None:
             raise ValueError("Call build() first")
-        return None if self.only_degrees else self._graph.edges
+        if self.output in ("degrees", "stats"):
+            return None
+        return self._graph.edges
     
     @property
     def n_nodes(self):
@@ -303,14 +305,37 @@ class RecurrenceNetwork:
     
     def __init__(self, m: Optional[int] = None, tau: int = 1, rule: str = 'knn',
                  k: int = 5, epsilon: float = 0.1, metric: str = 'euclidean',
-                 only_degrees: bool = False):
+                 only_degrees: bool = False, output: str = "edges"):
+        """
+        Parameters
+        ----------
+        m : int, optional
+            Embedding dimension
+        tau : int
+            Time delay
+        rule : str
+            'knn', 'epsilon', 'radius'
+        k : int
+            Neighbors for k-NN
+        epsilon : float
+            Threshold for epsilon-recurrence
+        metric : str
+            Distance metric
+        only_degrees : bool
+            DEPRECATED: Use output="degrees" instead
+        output : str, default "edges"
+            Output mode: "edges", "degrees", or "stats"
+        """
         self.m = m
         self.tau = tau
         self.rule = rule
         self.k = k
         self.epsilon = epsilon
         self.metric = metric
-        self.only_degrees = only_degrees
+        if only_degrees:
+            self.output = "degrees"
+        else:
+            self.output = output
         # Map parameters to old implementation (uses threshold instead of epsilon)
         # For k-NN rule, use k parameter; for epsilon rule, use threshold
         threshold = epsilon if rule == 'epsilon' else None
@@ -321,7 +346,8 @@ class RecurrenceNetwork:
         """Build recurrence network from time series."""
         G_nx, A = self._impl.fit_transform(x)
         
-        if self.only_degrees:
+        # Convert based on output mode
+        if self.output == "degrees":
             degrees = np.array([d for _, d in G_nx.degree()])
             n = G_nx.number_of_nodes()
             self._graph = Graph(
@@ -329,17 +355,30 @@ class RecurrenceNetwork:
                 n_nodes=n,
                 directed=False,
                 weighted=False,
-                _adjacency=A,
+                _adjacency=None,
                 _degrees=degrees
             )
-        else:
+        elif self.output == "stats":
+            degrees = np.array([d for _, d in G_nx.degree()])
+            n = G_nx.number_of_nodes()
+            n_edges = G_nx.number_of_edges()
+            self._graph = Graph(
+                edges=[],
+                n_nodes=n,
+                directed=False,
+                weighted=False,
+                _adjacency=None,
+                _degrees=degrees
+            )
+            self._graph._n_edges_cached = n_edges
+        else:  # output == "edges"
             edges = list(G_nx.edges())
             self._graph = Graph(
                 edges=edges,
                 n_nodes=G_nx.number_of_nodes(),
                 directed=False,
                 weighted=False,
-                _adjacency=A
+                _adjacency=None
             )
         
         return self
@@ -348,7 +387,9 @@ class RecurrenceNetwork:
     def edges(self):
         if self._graph is None:
             raise ValueError("Call build() first")
-        return None if self.only_degrees else self._graph.edges
+        if self.output in ("degrees", "stats"):
+            return None
+        return self._graph.edges
     
     @property
     def n_nodes(self):
@@ -398,7 +439,29 @@ class TransitionNetwork:
     
     def __init__(self, symbolizer: str = 'ordinal', order: int = 3, delay: int = 1,
                  tie_rule: str = 'stable', bins: int = 5, normalize: bool = True,
-                 sparse: bool = False, only_degrees: bool = False):
+                 sparse: bool = False, only_degrees: bool = False, output: str = "edges"):
+        """
+        Parameters
+        ----------
+        symbolizer : str
+            Symbolization method
+        order : int
+            Order of patterns
+        delay : int
+            Time delay
+        tie_rule : str
+            How to handle ties
+        bins : int
+            Number of bins
+        normalize : bool
+            Normalize input
+        sparse : bool
+            DEPRECATED: Adjacency matrices are always sparse now
+        only_degrees : bool
+            DEPRECATED: Use output="degrees" instead
+        output : str, default "edges"
+            Output mode: "edges", "degrees", or "stats"
+        """
         self.symbolizer = symbolizer
         self.order = order
         self.delay = delay
@@ -406,7 +469,10 @@ class TransitionNetwork:
         self.bins = bins
         self.normalize = normalize
         self.sparse = sparse
-        self.only_degrees = only_degrees
+        if only_degrees:
+            self.output = "degrees"
+        else:
+            self.output = output
         # Map parameters to old implementation (doesn't accept normalize or sparse)
         self._impl = _TN_Old(
             symbolizer=symbolizer, order=order, delay=delay,
@@ -418,7 +484,8 @@ class TransitionNetwork:
         """Build transition network from time series."""
         G_nx, A = self._impl.fit_transform(x)
         
-        if self.only_degrees:
+        # Convert based on output mode
+        if self.output == "degrees":
             degrees = np.array([d for _, d in G_nx.degree()])
             n = G_nx.number_of_nodes()
             self._graph = Graph(
@@ -426,17 +493,30 @@ class TransitionNetwork:
                 n_nodes=n,
                 directed=True,  # Transition networks are directed
                 weighted=False,
-                _adjacency=A,
+                _adjacency=None,
                 _degrees=degrees
             )
-        else:
+        elif self.output == "stats":
+            degrees = np.array([d for _, d in G_nx.degree()])
+            n = G_nx.number_of_nodes()
+            n_edges = G_nx.number_of_edges()
+            self._graph = Graph(
+                edges=[],
+                n_nodes=n,
+                directed=True,
+                weighted=False,
+                _adjacency=None,
+                _degrees=degrees
+            )
+            self._graph._n_edges_cached = n_edges
+        else:  # output == "edges"
             edges = list(G_nx.edges())
             self._graph = Graph(
                 edges=edges,
                 n_nodes=G_nx.number_of_nodes(),
                 directed=True,
                 weighted=False,
-                _adjacency=A
+                _adjacency=None
             )
         
         return self
@@ -445,7 +525,9 @@ class TransitionNetwork:
     def edges(self):
         if self._graph is None:
             raise ValueError("Call build() first")
-        return None if self.only_degrees else self._graph.edges
+        if self.output in ("degrees", "stats"):
+            return None
+        return self._graph.edges
     
     @property
     def n_nodes(self):
