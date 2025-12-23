@@ -30,3 +30,6 @@ click>=8.0.0
 # For testing with optional dependencies
 pytest-xdist>=2.5.0
 pytest-timeout>=2.0.0
+
+# Temporal CNN (for testing)
+torch>=2.0

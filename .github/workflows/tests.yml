@@ -36,11 +36,11 @@ jobs:
         run: |
           # Install the package in editable mode for testing
           # This ensures Python finds the code and the Rust extension
-          pip install -e .[test]
+          pip install -e .[dev]
           # Install other optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
           # Verify test dependencies are installed
-          python -c "import statsmodels; import pyarrow; import polars; print('✓ All test dependencies installed')"
+          python -c "import statsmodels; import pyarrow; import polars; import torch; print('✓ All test dependencies installed')"
 
       - name: Run tests
         run: |

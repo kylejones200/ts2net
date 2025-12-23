@@ -64,6 +64,7 @@ dev = [
     "mypy>=1.0",
     "isort>=5.12",
     "PyYAML>=6.0",
+    "torch>=2.0",
 ]
 
 [project.scripts]
