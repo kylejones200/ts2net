@@ -23,6 +23,7 @@ class TestBatchProcessing:
     
     def test_batch_transform(self):
         """Test batch transformation of time series."""
+        np.random.seed(42)
         X = [np.random.randn(10) for _ in range(3)]
         results = batch_transform(X, builder="hvg")
         assert len(results) == len(X)

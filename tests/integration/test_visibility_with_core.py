@@ -15,7 +15,7 @@ class TestVisibilityGraphsWithCore:
     @pytest.fixture
     def sample_time_series(self):
         """Generate sample time series for testing."""
-        # Simple sine wave
+        # Simple sine wave (deterministic, no randomness)
         t = np.linspace(0, 4*np.pi, 100)
         return np.sin(t)
     
@@ -99,16 +99,9 @@ class TestVisibilityGraphsWithCore:
         G_hvg, A_hvg = hvg.fit_transform(sample_time_series)
         G_nvg, A_nvg = nvg.fit_transform(sample_time_series)
         
-        # HVG is always a subgraph of NVG
+        # Invariants: HVG is always a subgraph of NVG
         assert G_hvg.number_of_edges() <= G_nvg.number_of_edges()
         
         # Check that all HVG edges are in NVG
         for u, v in G_hvg.edges():
             assert G_nvg.has_edge(u, v)
-        
-        # Check degree distribution properties
-        degrees_hvg = [d for n, d in G_hvg.degree()]
-        degrees_nvg = [d for n, d in G_nvg.degree()]
-        
-        assert np.mean(degrees_hvg) <= np.mean(degrees_nvg)
-        assert np.max(degrees_hvg) <= np.max(degrees_nvg)

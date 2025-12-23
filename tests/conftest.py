@@ -6,7 +6,8 @@ This file contains fixtures and configuration that will be available to all test
 import numpy as np
 import pytest
 
-# Set random seed for reproducibility
+# Set random seed for reproducibility globally
+# All tests should use fixed seeds - this is a fallback
 np.random.seed(42)
 
 # Common test data fixtures

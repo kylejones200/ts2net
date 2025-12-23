@@ -19,8 +19,8 @@ from ts2net.api import HVG, NVG
 from ts2net.core.visibility.hvg import _hvg_edges_numba
 from ts2net.core.visibility.nvg import _nvg_edges_numba
 
-# Mark all tests in this file as hard_validation
-pytestmark = pytest.mark.hard_validation
+# Mark all tests in this file as hard_validation and slow
+pytestmark = [pytest.mark.hard_validation, pytest.mark.slow]
 
 
 # ============================================================================
@@ -385,6 +385,7 @@ class TestMemoryBehavior:
 class TestPerformance:
     """Test performance to catch regressions."""
     
+    @pytest.mark.benchmark
     def test_hvg_performance_1e6(self):
         """Benchmark HVG degrees on n=1e6. Fail if slower than threshold."""
         n = 1_000_000
@@ -410,6 +411,7 @@ class TestPerformance:
         assert len(degrees) == n
         assert np.all(degrees >= 0)
     
+    @pytest.mark.benchmark
     def test_hvg_linear_scaling(self):
         """Test that HVG scales linearly with n."""
         sizes = [10_000, 50_000, 100_000]

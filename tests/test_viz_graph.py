@@ -113,6 +113,7 @@ class TestBuildVisibilityGraph:
     
     def test_limit_parameter(self):
         """Test limit parameter."""
+        np.random.seed(42)
         x = np.random.randn(50)
         
         # Without limit

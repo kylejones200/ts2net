@@ -158,6 +158,7 @@ class TestDirectedHVGDegreeSequences:
     
     def test_in_out_degree_errors_on_undirected(self):
         """in_degree_sequence() and out_degree_sequence() should error on undirected graphs."""
+        np.random.seed(42)
         x = np.random.randn(100)
         hvg = HVG(directed=False)
         hvg.build(x)
@@ -192,6 +193,7 @@ class TestDirectedHVGEdgeDirection:
     
     def test_directed_adjacency_matrix(self):
         """Directed adjacency matrix should be asymmetric."""
+        np.random.seed(42)
         x = np.random.randn(50)
         
         hvg = HVG(directed=True)
@@ -212,6 +214,7 @@ class TestDirectedHVGStats:
     
     def test_stats_include_directed_metrics(self):
         """Stats should include all directed graph metrics."""
+        np.random.seed(42)
         x = np.random.randn(100)
         
         hvg = HVG(directed=True)
@@ -233,6 +236,7 @@ class TestDirectedHVGStats:
     
     def test_irreversibility_score_range(self):
         """Irreversibility score should be in [0, 1]."""
+        np.random.seed(42)
         x = np.random.randn(100)
         
         hvg = HVG(directed=True)
@@ -249,6 +253,7 @@ class TestDirectedHVGBackwardCompatibility:
     
     def test_undirected_still_works(self):
         """Undirected HVG should still work as before."""
+        np.random.seed(42)
         x = np.random.randn(100)
         
         hvg_undir = HVG(directed=False)
@@ -262,6 +267,7 @@ class TestDirectedHVGBackwardCompatibility:
     
     def test_directed_default_is_false(self):
         """Default should be directed=False for backward compatibility."""
+        np.random.seed(42)
         x = np.random.randn(100)
         
         hvg1 = HVG()

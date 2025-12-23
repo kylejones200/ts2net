@@ -52,11 +52,13 @@ class TestInformationTheoreticDistances:
     
     def test_tsdist_nmi_identical_series(self):
         """Test NMI with identical time series."""
+        np.random.seed(42)
         x = np.random.rand(100)
         assert np.isclose(tsdist_nmi(x, x), 0.0, atol=1e-10)
     
     def test_tsdist_voi_identical_series(self):
         """Test VOI with identical time series."""
+        np.random.seed(42)
         x = np.random.rand(100)
         assert np.isclose(tsdist_voi(x, x), 0.0, atol=1e-10)
 

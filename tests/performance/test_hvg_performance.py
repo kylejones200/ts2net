@@ -14,9 +14,11 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.slow
 class TestHVGPerformance:
     """Test HVG performance on large series."""
     
+    @pytest.mark.benchmark
     def test_hvg_degrees_n1e6_benchmark(self):
         """
         Benchmark HVG degrees computation on n=1e6.
@@ -55,6 +57,7 @@ class TestHVGPerformance:
         logger.info(f"\nHVG degrees benchmark: n={n}, time={elapsed:.2f}s, "
                     f"throughput={n/elapsed/1e6:.2f}M points/s")
     
+    @pytest.mark.benchmark
     def test_hvg_edges_n1e6_benchmark(self):
         """
         Benchmark HVG edge computation on n=1e6.

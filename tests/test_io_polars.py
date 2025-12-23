@@ -25,6 +25,7 @@ except ImportError:
 def sample_parquet(tmp_path):
     """Create a sample Parquet file for testing."""
     # Create test data
+    np.random.seed(42)
     dates = pd.date_range('2024-01-01', periods=100, freq='1h')
     data = {
         'timestamp': dates,
@@ -208,3 +209,4 @@ class TestPolarsVsPandas:
                 series_pandas[meter_id],
                 rtol=1e-10
             )
+
