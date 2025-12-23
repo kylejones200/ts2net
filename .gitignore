@@ -155,6 +155,9 @@ $RECYCLE.BIN/
 /*.jpg
 /*.jpeg
 
+# Documentation/notes files
+opn.md
+
 # Logs and databases
 *.log
 *.sql
