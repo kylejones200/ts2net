@@ -15,7 +15,14 @@ from .plots import (
     plot_recurrence_matrix,
 )
 
-from .graph import TSGraph, build_visibility_graph
+from .graph import (
+    TSGraph,
+    build_visibility_graph,
+    build_recurrence_graph,
+    build_ordinal_partition_graph,
+    optimal_lag,
+    optimal_dim,
+)
 from .draw import draw_tsgraph
 
 __all__ = [
@@ -28,5 +35,9 @@ __all__ = [
     'plot_recurrence_matrix',
     'TSGraph',
     'build_visibility_graph',
+    'build_recurrence_graph',
+    'build_ordinal_partition_graph',
+    'optimal_lag',
+    'optimal_dim',
     'draw_tsgraph',
 ]
