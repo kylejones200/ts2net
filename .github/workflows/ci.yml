@@ -21,11 +21,16 @@ jobs:
       - name: Install
         run: |
           pip install -U pip maturin
-          pip install -e .[dev]
+          # Install CPU-only PyTorch first (much smaller, ~200MB vs ~3GB with CUDA)
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          # Install package without dev deps (to avoid reinstalling torch)
+          pip install -e .
+          # Install dev dependencies except torch (already installed)
+          pip install pytest pytest-cov black flake8 mypy isort PyYAML
           # Install optional dependencies
           pip install numba tslearn pynndescent pyreadr || true
           # Verify torch is installed
-          python -c "import torch; print(f'✓ PyTorch {torch.__version__} installed')"
+          python -c "import torch; print(f'✓ PyTorch {torch.__version__} (CPU-only) installed')"
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
