@@ -9,8 +9,45 @@ Time series to networks. Clean API for visibility graphs, recurrence networks, a
 
 ## Install
 
+### Basic Installation
+
 ```bash
 pip install ts2net
+```
+
+### Optional Dependencies
+
+Install with optional features:
+
+```bash
+# Performance acceleration (Numba)
+pip install ts2net[speed]
+
+# BSTS decomposition (statsmodels)
+pip install ts2net[bsts]
+
+# Temporal CNN embeddings (PyTorch)
+pip install ts2net[cnn]
+
+# All optional features
+pip install ts2net[all]
+
+# Development dependencies
+pip install ts2net[dev]
+```
+
+### Verify Installation
+
+```python
+import ts2net
+print(ts2net.__version__)
+
+from ts2net import HVG
+import numpy as np
+x = np.random.randn(100)
+hvg = HVG()
+hvg.build(x)
+print(f"✓ Installation successful: {hvg.n_nodes} nodes, {hvg.n_edges} edges")
 ```
 
 ## Quick Start
@@ -259,11 +296,45 @@ builder.adjacency_matrix()   # numpy array
 builder.as_networkx()        # optional conversion
 ```
 
+## Troubleshooting
+
+### Common Issues
+
+**Memory errors with large time series:**
+- Use `output="degrees"` or `output="stats"` instead of `output="edges"`
+- For NVG, always set `limit` parameter (e.g., `limit=5000`)
+- For recurrence networks, use `rule='knn'` with small `k` (10-30) instead of exact all-pairs
+
+**Slow performance:**
+- Install Numba: `pip install numba` (100-180x speedup for visibility graphs)
+- Use `output="degrees"` if you don't need full edge lists
+- For multivariate, use `n_jobs=-1` for parallel distance computation
+
+**Import errors:**
+- Ensure you're using Python 3.12+
+- If Rust extension fails to build, install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- For development, run `maturin develop --release` after installing Rust
+
+**NetworkX conversion refused:**
+- For very large graphs (n > 200k), NetworkX conversion is disabled by default
+- Use `force=True` to override: `hvg.as_networkx(force=True)`
+- Consider using `output="degrees"` or `output="stats"` instead
+
+### Getting Help
+
+- 📖 [Full Documentation](https://ts2net.readthedocs.io)
+- 💬 [Open an Issue](https://github.com/kylejones200/ts2net/issues)
+- 📝 [Examples](https://github.com/kylejones200/ts2net/tree/main/examples)
+
 ## Citation
 
 Multivariate methods based on:
 
 Ferreira, L.N. (2024). From time series to networks in R with the ts2net package. *Applied Network Science*, 9(1), 32. https://doi.org/10.1007/s41109-024-00642-2
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
