@@ -16,7 +16,7 @@ build:
     post_install:
       # Install the package with maturin
       - $READTHEDOCS_VIRTUALENV_PATH/bin/pip install maturin
-      - source $HOME/.cargo/env && cd $READTHEDOCS_PROJECT_DIR && $READTHEDOCS_VIRTUALENV_PATH/bin/maturin develop --release -m ts2net_rs/Cargo.toml
+      - . $HOME/.cargo/env && cd $READTHEDOCS_PROJECT_DIR && $READTHEDOCS_VIRTUALENV_PATH/bin/maturin develop --release -m ts2net_rs/Cargo.toml
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
