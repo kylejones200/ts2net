@@ -181,3 +181,5 @@ yarn-error.log*
 
 # Documentation build
 docs/_build/
+
+simple_cnn.md

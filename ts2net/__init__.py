@@ -72,3 +72,10 @@ try:
     __all__ = __all__ + ['decompose', 'BSTSSpec', 'features']
 except ImportError:
     pass
+
+# Temporal CNN embeddings (optional - requires torch)
+try:
+    from .temporal_cnn import temporal_cnn_embeddings
+    __all__.append('temporal_cnn_embeddings')
+except ImportError:
+    pass
