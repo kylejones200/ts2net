@@ -15,6 +15,9 @@ from .plots import (
     plot_recurrence_matrix,
 )
 
+from .graph import TSGraph, build_visibility_graph
+from .draw import draw_tsgraph
+
 __all__ = [
     'plot_series_with_events',
     'plot_degree_profile',
@@ -23,4 +26,7 @@ __all__ = [
     'plot_window_feature_map',
     'plot_hvg_small',
     'plot_recurrence_matrix',
+    'TSGraph',
+    'build_visibility_graph',
+    'draw_tsgraph',
 ]
