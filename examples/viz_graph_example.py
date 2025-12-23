@@ -7,6 +7,8 @@ publication-quality visualizations of time-series-derived graphs.
 
 import sys
 import os
+import logging
+from pathlib import Path
 # Add parent directory to path for development
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -14,10 +16,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ts2net.viz import build_visibility_graph, draw_tsgraph
 
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
+
 
 def example_basic_hvg():
     """Basic HVG visualization."""
-    print("Example 1: Basic HVG")
+    logger.info("Example 1: Basic HVG")
     
     # Create a simple time series
     t = np.linspace(0, 4*np.pi, 100)
@@ -29,16 +34,18 @@ def example_basic_hvg():
     # Draw with default settings (colored by time)
     fig, ax = draw_tsgraph(tsgraph, show=False, node_size=20)
     ax.set_title('HVG: Sine Wave (colored by time)', fontsize=12)
-    plt.savefig('hvg_basic.png', dpi=150, bbox_inches='tight')
+    output_path = Path(__file__).parent / 'images' / 'hvg_basic.png'
+    output_path.parent.mkdir(exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  Created graph with {tsgraph.graph.number_of_nodes()} nodes, "
-          f"{tsgraph.graph.number_of_edges()} edges")
+    logger.info(f"Created graph with {tsgraph.graph.number_of_nodes()} nodes, "
+                f"{tsgraph.graph.number_of_edges()} edges")
 
 
 def example_directed_hvg():
     """Directed HVG for irreversibility analysis."""
-    print("\nExample 2: Directed HVG")
+    logger.info("Example 2: Directed HVG")
     
     # Create asymmetric signal (ramp up, then drop)
     x = np.concatenate([
@@ -58,15 +65,17 @@ def example_directed_hvg():
         cmap='plasma'
     )
     ax.set_title('Directed HVG: Ramp + Drop (colored by degree)', fontsize=12)
-    plt.savefig('hvg_directed.png', dpi=150, bbox_inches='tight')
+    output_path = Path(__file__).parent / 'images' / 'hvg_directed.png'
+    output_path.parent.mkdir(exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  Created directed graph with {tsgraph.graph.number_of_edges()} edges")
+    logger.info(f"Created directed graph with {tsgraph.graph.number_of_edges()} edges")
 
 
 def example_weight_modes():
     """Different weight modes for edge weights."""
-    print("\nExample 3: Weight Modes")
+    logger.info("Example 3: Weight Modes")
     
     x = np.sin(np.linspace(0, 4*np.pi, 80)) + 0.1 * np.random.randn(80)
     
@@ -94,15 +103,17 @@ def example_weight_modes():
     
     plt.suptitle('HVG with Different Weight Modes', fontsize=13)
     plt.tight_layout()
-    plt.savefig('hvg_weights.png', dpi=150, bbox_inches='tight')
+    output_path = Path(__file__).parent / 'images' / 'hvg_weights.png'
+    output_path.parent.mkdir(exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  Created graphs with {len(weight_modes)} different weight modes")
+    logger.info(f"Created graphs with {len(weight_modes)} different weight modes")
 
 
 def example_nvg_vs_hvg():
     """Compare NVG vs HVG."""
-    print("\nExample 4: NVG vs HVG Comparison")
+    logger.info("Example 4: NVG vs HVG Comparison")
     
     x = np.sin(np.linspace(0, 4*np.pi, 100)) + 0.1 * np.random.randn(100)
     
@@ -120,16 +131,18 @@ def example_nvg_vs_hvg():
     
     plt.suptitle('HVG vs NVG Comparison', fontsize=13)
     plt.tight_layout()
-    plt.savefig('hvg_vs_nvg.png', dpi=150, bbox_inches='tight')
+    output_path = Path(__file__).parent / 'images' / 'hvg_vs_nvg.png'
+    output_path.parent.mkdir(exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  HVG: {tsgraph_hvg.graph.number_of_edges()} edges")
-    print(f"  NVG: {tsgraph_nvg.graph.number_of_edges()} edges")
+    logger.info(f"HVG: {tsgraph_hvg.graph.number_of_edges()} edges")
+    logger.info(f"NVG: {tsgraph_nvg.graph.number_of_edges()} edges")
 
 
 def example_epsilon_sweep_style():
     """Epsilon sweep style visualization (multiple graphs)."""
-    print("\nExample 5: Multiple Graphs (Epsilon Sweep Style)")
+    logger.info("Example 5: Multiple Graphs (Epsilon Sweep Style)")
     
     x = np.sin(np.linspace(0, 4*np.pi, 60)) + 0.2 * np.random.randn(60)
     
@@ -160,16 +173,16 @@ def example_epsilon_sweep_style():
     
     plt.suptitle('HVG with Different Temporal Limits', fontsize=13)
     plt.tight_layout()
-    plt.savefig('hvg_limits.png', dpi=150, bbox_inches='tight')
+    output_path = Path(__file__).parent / 'images' / 'hvg_limits.png'
+    output_path.parent.mkdir(exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  Created {len(limits)} graphs with different limits")
+    logger.info(f"Created {len(limits)} graphs with different limits")
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Unified Graph Visualization API Examples")
-    print("=" * 60)
+    logger.info("Unified Graph Visualization API Examples")
     
     example_basic_hvg()
     example_directed_hvg()
@@ -177,7 +190,5 @@ if __name__ == "__main__":
     example_nvg_vs_hvg()
     example_epsilon_sweep_style()
     
-    print("\n" + "=" * 60)
-    print("All examples completed!")
-    print("Check the generated PNG files for visualizations.")
-    print("=" * 60)
+    logger.info("All examples completed!")
+    logger.info("Check examples/images/ for generated PNG files.")

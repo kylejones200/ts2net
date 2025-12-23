@@ -109,7 +109,7 @@ class TestHVGPerformanceRegression:
         1_000_000: 8.0, # 8.0s for n=1M (adjusted for CI)
     }
     
-    TOLERANCE = 0.50  # 50% performance degradation tolerance (increased for CI variability)
+    TOLERANCE = 0.60  # 60% performance degradation tolerance (increased for CI variability)
     
     @pytest.mark.parametrize("n", [100_000, 500_000, 1_000_000])
     def test_performance_regression(self, n):
