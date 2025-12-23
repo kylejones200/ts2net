@@ -11,8 +11,8 @@
 - **YAML Config Pipeline**: Full pipeline with config validation
 
 ### Needs Enhancement 🔧
-- **Weighted Visibility**: Only supports `absdiff` currently. `_vis_weights()` function exists but needs integration with more modes (minimum clearance, time gap)
-- **Directed Visibility Graphs**: Not implemented
+- **Weighted Visibility**: Only supports `absdiff` currently. `_vis_weights()` function exists but needs integration with more modes (minimum clearance, time gap, slope)
+- **Directed Visibility Graphs**: ✅ **COMPLETED** - Implemented with `directed` parameter, in/out degree sequences, and irreversibility_score
 - **Null Models & Significance**: No surrogate testing or z-score reporting
 
 ## Recommended Priority: Smart Meters
@@ -25,27 +25,19 @@
 
 ## Top 3 Immediate Additions
 
-### 1. Directed HVG/NVG (Priority: High)
+### 1. Directed HVG/NVG (Priority: High) ✅ **COMPLETED**
 
 **Why:** Asymmetry in consumption patterns (ramp up vs ramp down) provides irreversibility metrics useful for fault onset detection.
 
-**Implementation:**
-- Add `directed: bool` parameter to HVG/NVG
+**Status:** ✅ Fully implemented
+- `directed: bool` parameter added to HVG/NVG
 - Forward edges: `i → j` where `i < j` (time-forward only)
-- Compute in-degree and out-degree separately
-- Add `irreversibility_score` = `abs(in_degree - out_degree) / total_degree`
-- Update config schemas: `HVGConfig.directed: bool = False`
-- Update factory to handle directed mode
-
-**Outputs:**
-- `in_degree_sequence()` and `out_degree_sequence()` methods
-- `stats()` includes: `avg_in_degree`, `avg_out_degree`, `irreversibility_score`
-- Same O(n) complexity for HVG, O(n×limit) for NVG
-
-**Tests:**
-- Reversible signal (sine wave) → irreversibility ≈ 0
-- Asymmetric signal (ramp up/down) → irreversibility > 0
-- Constant signal → irreversibility = 0
+- In-degree and out-degree computation implemented
+- `irreversibility_score` = `abs(in_degree - out_degree) / total_degree` added to stats
+- Config schemas updated: `HVGConfig.directed: bool = False`
+- Factory updated to handle directed mode
+- `in_degree_sequence()` and `out_degree_sequence()` methods available
+- Comprehensive tests added (15 tests in `test_directed_hvg.py`)
 
 ---
 

@@ -36,20 +36,11 @@ jobs:
         run: |
           # Install the package in editable mode for testing
           # This ensures Python finds the code and the Rust extension
-          pip install -e .
-          # Install optional dependencies for testing
+          pip install -e .[test]
+          # Install other optional dependencies for testing
           pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
-          
-      - name: Install optional dependencies for testing
-        run: |
-          # Install BSTS dependencies for BSTS tests (required for CI)
-          pip install statsmodels
-          # Install Polars and pyarrow for Parquet tests (required for CI)
-          pip install polars pyarrow
-          # Verify installations
-          python -c "import statsmodels; print(f'statsmodels {statsmodels.__version__}')"
-          python -c "import polars; import pyarrow; print(f'polars {polars.__version__}, pyarrow {pyarrow.__version__}')"
-        continue-on-error: false
+          # Verify test dependencies are installed
+          python -c "import statsmodels; import pyarrow; import polars; print('✓ All test dependencies installed')"
 
       - name: Run tests
         run: |

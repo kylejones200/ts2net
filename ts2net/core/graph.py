@@ -340,6 +340,28 @@ class Graph:
             triangles = self._count_triangles()
             stats['triangles'] = triangles
         
+        # Add weight statistics if graph is weighted
+        if self.weighted and len(self.edges) > 0:
+            weights = []
+            for edge in self.edges:
+                if len(edge) == 3:
+                    w = edge[2]
+                    # Skip inf and nan values for statistics
+                    if np.isfinite(w):
+                        weights.append(w)
+            
+            if weights:
+                weights_array = np.array(weights)
+                stats['min_weight'] = float(np.min(weights_array))
+                stats['max_weight'] = float(np.max(weights_array))
+                stats['mean_weight'] = float(np.mean(weights_array))
+                stats['std_weight'] = float(np.std(weights_array)) if len(weights_array) > 1 else 0.0
+                # Count inf/nan weights separately
+                inf_count = sum(1 for edge in self.edges 
+                              if len(edge) == 3 and not np.isfinite(edge[2]))
+                if inf_count > 0:
+                    stats['inf_weight_count'] = inf_count
+        
         return stats
     
     def _count_triangles(self) -> int:

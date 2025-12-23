@@ -18,6 +18,7 @@ def create_hvg_builder(config: HVGConfig) -> HVG:
     """Create HVG builder from configuration."""
     return HVG(
         weighted=config.weighted,
+        weight_mode=config.weight_mode,
         limit=config.limit,
         output=config.output,
         directed=config.directed
@@ -28,6 +29,7 @@ def create_nvg_builder(config: NVGConfig) -> NVG:
     """Create NVG builder from configuration."""
     return NVG(
         weighted=config.weighted,
+        weight_mode=config.weight_mode,
         limit=config.limit,
         max_edges=config.max_edges,
         max_edges_per_node=config.max_edges_per_node,

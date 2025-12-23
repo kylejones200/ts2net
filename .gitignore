@@ -150,6 +150,11 @@ $RECYCLE.BIN/
 *.pkl
 *.pickle
 
+# Generated images (should be in examples/images/)
+/*.png
+/*.jpg
+/*.jpeg
+
 # Logs and databases
 *.log
 *.sql

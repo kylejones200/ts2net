@@ -52,6 +52,7 @@ class HVGConfig:
     enabled: bool = False
     output: str = "stats"
     weighted: bool = False
+    weight_mode: Optional[str] = None
     limit: Optional[int] = None
     directed: bool = False
     
@@ -60,6 +61,10 @@ class HVGConfig:
         valid_output = {"edges", "degrees", "stats"}
         if self.output not in valid_output:
             raise ValueError(f"output must be one of {valid_output}, got {self.output}")
+        
+        valid_weight_modes = {"absdiff", "time_gap", "slope", "min_clearance"}
+        if self.weight_mode is not None and self.weight_mode not in valid_weight_modes:
+            raise ValueError(f"weight_mode must be one of {valid_weight_modes}, got {self.weight_mode}")
 
 
 @dataclass
@@ -68,6 +73,7 @@ class NVGConfig:
     enabled: bool = False
     output: str = "stats"
     weighted: bool = False
+    weight_mode: Optional[str] = None
     limit: Optional[int] = None
     max_edges: Optional[int] = None
     max_edges_per_node: Optional[int] = None
@@ -78,6 +84,10 @@ class NVGConfig:
         valid_output = {"edges", "degrees", "stats"}
         if self.output not in valid_output:
             raise ValueError(f"output must be one of {valid_output}, got {self.output}")
+        
+        valid_weight_modes = {"absdiff", "time_gap", "slope", "min_clearance"}
+        if self.weight_mode is not None and self.weight_mode not in valid_weight_modes:
+            raise ValueError(f"weight_mode must be one of {valid_weight_modes}, got {self.weight_mode}")
 
 
 @dataclass

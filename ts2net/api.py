@@ -5,8 +5,9 @@ All old functionality preserved via .fit_transform().
 
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Literal
 from .core.graph import Graph
+from .core.visibility.weights import compute_weight, WeightMode
 
 # Import existing implementations from ts2net.core
 from .core.visibility import HVG as _HVG_Old
@@ -108,13 +109,18 @@ class HVG:
     >>> G_nx = hvg.as_networkx()  # Optional
     """
     
-    def __init__(self, weighted: bool = False, limit: Optional[int] = None, 
-                 only_degrees: bool = False, output: str = "edges", directed: bool = False):
+    def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None, 
+                 only_degrees: bool = False, output: str = "edges", directed: bool = False,
+                 weight_mode: Optional[str] = None):
         """
         Parameters
         ----------
-        weighted : bool
-            Edge weights = abs(y_i - y_j)
+        weighted : bool or str, default False
+            If True, use "absdiff" weight mode. If str, use that weight mode.
+            Valid modes: "absdiff", "time_gap", "slope", "min_clearance"
+        weight_mode : str, optional
+            Explicit weight mode (overrides weighted if provided).
+            Valid modes: "absdiff", "time_gap", "slope", "min_clearance"
         limit : int, optional
             Maximum temporal distance
         only_degrees : bool
@@ -126,7 +132,19 @@ class HVG:
             If True, create directed graph with edges forward in time (i → j where i < j).
             Enables irreversibility analysis useful for fault detection in time series.
         """
-        self.weighted = weighted
+        # Resolve weight mode
+        if weight_mode is not None:
+            self.weight_mode = weight_mode
+            self.weighted = True
+        elif isinstance(weighted, str):
+            self.weight_mode = weighted
+            self.weighted = True
+        elif weighted is True:
+            self.weight_mode = "absdiff"  # Default mode
+            self.weighted = True
+        else:
+            self.weight_mode = None
+            self.weighted = False
         self.limit = limit
         self.directed = directed
         # Backward compatibility
@@ -134,13 +152,18 @@ class HVG:
             self.output = "degrees"
         else:
             self.output = output
-        self._impl = _HVG_Old(weighted=weighted, limit=limit, directed=directed)
+        # For _HVG_Old, use bool weighted (it only supports absdiff)
+        # We'll recompute weights after if needed
+        self._impl = _HVG_Old(weighted=(self.weighted and self.weight_mode == "absdiff"), 
+                             limit=limit, directed=directed)
         self._graph = None
+        self._x = None  # Store series for weight recomputation
     
     def build(self, x: NDArray[np.float64]):
         """Build HVG from time series."""
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "HVG")
+        self._x = x.copy()  # Store for weight recomputation
         
         # Use old implementation
         G_nx, A = self._impl.fit_transform(x)
@@ -195,7 +218,16 @@ class HVG:
         else:  # output == "edges"
             # Full edge list mode
             edges = list(G_nx.edges(data='weight' if self.weighted else False))
-            if self.weighted:
+            
+            # Recompute weights if needed (if weight_mode is not "absdiff")
+            if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
+                # Extract edge pairs
+                edge_pairs = [(u, v) for u, v, _ in edges] if self.weighted else [(u, v) for u, v in edges]
+                # Recompute weights using the specified mode
+                edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) 
+                        for u, v in edge_pairs]
+            elif self.weighted:
+                # Use existing weights (absdiff mode)
                 edges = [(u, v, w) for u, v, w in edges]
             else:
                 edges = [(u, v) for u, v in edges]
@@ -283,15 +315,19 @@ class HVG:
 class NVG:
     """Natural Visibility Graph"""
     
-    def __init__(self, weighted: bool = False, limit: Optional[int] = None,
+    def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None,
                  only_degrees: bool = False, output: str = "edges",
                  max_edges: Optional[int] = None, max_edges_per_node: Optional[int] = None,
-                 max_memory_mb: Optional[float] = None):
+                 max_memory_mb: Optional[float] = None, weight_mode: Optional[str] = None):
         """
         Parameters
         ----------
-        weighted : bool
-            Edge weights = abs(y_i - y_j)
+        weighted : bool or str, default False
+            If True, use "absdiff" weight mode. If str, use that weight mode.
+            Valid modes: "absdiff", "time_gap", "slope", "min_clearance"
+        weight_mode : str, optional
+            Explicit weight mode (overrides weighted if provided).
+            Valid modes: "absdiff", "time_gap", "slope", "min_clearance"
         limit : int, optional
             Maximum temporal distance (horizon limit, critical scale control)
         only_degrees : bool
@@ -305,23 +341,39 @@ class NVG:
         max_memory_mb : float, optional
             Maximum memory in MB (converted to max_edges estimate)
         """
-        self.weighted = weighted
+        # Resolve weight mode (same logic as HVG)
+        if weight_mode is not None:
+            self.weight_mode = weight_mode
+            self.weighted = True
+        elif isinstance(weighted, str):
+            self.weight_mode = weighted
+            self.weighted = True
+        elif weighted is True:
+            self.weight_mode = "absdiff"  # Default mode
+            self.weighted = True
+        else:
+            self.weight_mode = None
+            self.weighted = False
+        
         self.limit = limit
         if only_degrees:
             self.output = "degrees"
         else:
             self.output = output
+        # For _NVG_Old, use bool weighted (it only supports absdiff)
         self._impl = _NVG_Old(
-            weighted=weighted, limit=limit,
+            weighted=(self.weighted and self.weight_mode == "absdiff"), limit=limit,
             max_edges=max_edges, max_edges_per_node=max_edges_per_node,
             max_memory_mb=max_memory_mb
         )
         self._graph = None
+        self._x = None  # Store series for weight recomputation
     
     def build(self, x: NDArray[np.float64]):
         """Build NVG from time series."""
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "NVG")
+        self._x = x.copy()  # Store for weight recomputation
         
         G_nx, A = self._impl.fit_transform(x)
         
@@ -350,8 +402,19 @@ class NVG:
             self._graph._n_edges_cached = n_edges
         else:  # output == "edges"
             edges = list(G_nx.edges(data='weight' if self.weighted else False))
-            if self.weighted:
+            
+            # Recompute weights if needed (if weight_mode is not "absdiff")
+            if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
+                # Extract edge pairs
+                edge_pairs = [(u, v) for u, v, _ in edges] if self.weighted else [(u, v) for u, v in edges]
+                # Recompute weights using the specified mode
+                edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) 
+                        for u, v in edge_pairs]
+            elif self.weighted:
+                # Use existing weights (absdiff mode)
                 edges = [(u, v, w) for u, v, w in edges]
+            else:
+                edges = [(u, v) for u, v in edges]
             
             self._graph = Graph(
                 edges=edges,
