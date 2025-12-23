@@ -21,10 +21,11 @@ jobs:
       - name: Install
         run: |
           pip install -U pip maturin
-          pip install -e .
+          pip install -e .[dev]
           # Install optional dependencies
           pip install numba tslearn pynndescent pyreadr || true
-          pip install pytest pytest-cov PyYAML
+          # Verify torch is installed
+          python -c "import torch; print(f'✓ PyTorch {torch.__version__} installed')"
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
