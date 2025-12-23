@@ -61,6 +61,11 @@ except ImportError:
 from .api_windows import build_windows
 __all__.append('build_windows')
 
+# Configuration and factory modules
+from .config import PipelineConfig
+from .factory import create_graph_builder, build_graph_from_config
+__all__.extend(['PipelineConfig', 'create_graph_builder', 'build_graph_from_config'])
+
 # BSTS decomposition and features (optional - requires statsmodels)
 try:
     from .bsts import decompose, BSTSSpec, features

@@ -38,21 +38,6 @@ This example demonstrates:
 
 Generated visualizations are saved to ``examples/images/``.
 
-R API Parity Example
---------------------
-
-Demonstrates R ts2net API parity for multivariate analysis:
-
-.. code-block:: bash
-
-   python examples/example_r_parity.py
-
-Shows:
-- Multiple time series → network
-- Distance functions (correlation, DTW, NMI, VOI, etc.)
-- Network builders (k-NN, ε-NN, weighted)
-- Window-based proximity networks
-
 Performance Benchmarks
 ----------------------
 
@@ -95,5 +80,6 @@ All visualization functions are available in the `ts2net.viz` module:
    )
 
 For more details, see the `examples/README.md <https://github.com/kylejones200/ts2net/tree/main/examples>`_ file.
+
 
 

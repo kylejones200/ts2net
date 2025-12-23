@@ -16,7 +16,7 @@ test-ci:
 	PYTHONHASHSEED=0 pytest -q
 
 check: test-ci
-	@echo "✅ All checks passed!"
+	@echo "All checks passed!"
 
 docs:
 	pip install mkdocs-material

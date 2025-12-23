@@ -4,25 +4,25 @@
 
 set -e
 
-echo "🧪 Running local tests (mimicking CI)..."
+echo "Running local tests (mimicking CI)..."
 echo ""
 
 # Check if we're in the right directory
 if [ ! -f "pyproject.toml" ]; then
-    echo "❌ Error: Must run from project root"
+    echo "Error: Must run from project root"
     exit 1
 fi
 
 # Install dependencies (same as CI)
-echo "📦 Installing dependencies..."
+echo "Installing dependencies..."
 pip install -U pip maturin pytest pytest-cov PyYAML || true
 pip install -e . || true
 pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
 
 # Run tests (same as CI)
 echo ""
-echo "🔍 Running tests..."
+echo "Running tests..."
 PYTHONHASHSEED=0 pytest -q
 
 echo ""
-echo "✅ All tests passed! Safe to push."
+echo "All tests passed! Safe to push."

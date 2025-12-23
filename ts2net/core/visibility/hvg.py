@@ -143,9 +143,13 @@ class HVG(SKMixin):
     
     The HVG is constructed by connecting each point to its horizontal
     neighbors that can be seen by a horizontal line of sight.
+    
+    For directed graphs, edges point forward in time (i → j where i < j),
+    enabling irreversibility analysis useful for fault detection.
     """
     
-    def __init__(self, weighted: bool = False, sparse: bool = False, limit: Optional[int] = None):
+    def __init__(self, weighted: bool = False, sparse: bool = False, limit: Optional[int] = None,
+                 directed: bool = False):
         """Initialize the HVG converter.
         
         Args:
@@ -154,10 +158,13 @@ class HVG(SKMixin):
             sparse: If True, use sparse matrices for the adjacency matrix.
             limit: If provided, only connect points within temporal distance ≤ limit.
                    (R ts2net compatibility parameter)
+            directed: If True, create directed graph with edges forward in time.
+                     Enables irreversibility analysis for fault detection.
         """
         self.weighted = weighted
         self.sparse = sparse
         self.limit = limit
+        self.directed = directed
     
     def fit(self, x: np.ndarray) -> 'HVG':
         """Fit the HVG model to the input time series.
@@ -192,8 +199,11 @@ class HVG(SKMixin):
             limit_val = self.limit if self.limit is not None else -1
             rows, cols, weights = _hvg_edges_numba(self.x_, self.weighted, limit_val)
             
-            # Build NetworkX graph from edges
-            G = nx.Graph()
+            # Build NetworkX graph from edges (directed or undirected)
+            if self.directed:
+                G = nx.DiGraph()
+            else:
+                G = nx.Graph()
             G.add_nodes_from(range(n))
             
             if self.weighted and weights is not None:
@@ -206,23 +216,28 @@ class HVG(SKMixin):
             # Build sparse matrix from edges (never dense)
             if weights is not None:
                 A = sparse.csr_matrix((weights, (rows, cols)), shape=(n, n))
-                # Make symmetric for undirected graph
-                A = A + A.T
             else:
                 data = np.ones(len(rows), dtype=float)
                 A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
+            
+            # Make symmetric for undirected graph
+            if not self.directed:
                 A = A + A.T
             
             return G, A
         
         # Fallback to original implementation if Numba not available
         # Always use sparse to avoid memory blowup
-        G = nx.Graph()
+        if self.directed:
+            G = nx.DiGraph()
+        else:
+            G = nx.Graph()
         G.add_nodes_from(range(n))
         
         rows, cols, data = [], [], []
         
         # Build the HVG by checking horizontal visibility between all pairs
+        # For directed graphs, only create edges forward in time (i → j where i < j)
         for i in range(n):
             for j in range(i + 1, n):
                 # Apply limit if specified
@@ -246,7 +261,8 @@ class HVG(SKMixin):
         # Build sparse matrix (never dense)
         A = sparse.csr_matrix((data, (rows, cols)), shape=(n, n))
         # Make symmetric for undirected graph
-        A = A + A.T
+        if not self.directed:
+            A = A + A.T
         
         return G, A
     

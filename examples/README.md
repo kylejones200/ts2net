@@ -33,7 +33,7 @@ Basic introduction to ts2net with synthetic data. Shows:
 python examples/quick_start.py
 ```
 
-### `example_fred_data.py` ⭐ **NEW - Real Economic Data**
+### `example_fred_data.py` **NEW - Real Economic Data**
 Comprehensive example using real economic data from FRED (Federal Reserve Economic Data). Demonstrates:
 - Fetching correlated economic indicators (GDP, Unemployment, CPI)
 - Univariate analysis with visibility graphs
@@ -68,7 +68,7 @@ These series are naturally correlated and demonstrate how ts2net can reveal rela
 
 
 
-### `viz_gallery.py` ⭐ **NEW - Visualization Gallery**
+### `viz_gallery.py` **NEW - Visualization Gallery**
 Demonstrates all five flagship visualization functions on the same dataset:
 - **Figure 1**: Time series with change points and window boundaries
 - **Figure 2**: Degree profile across time (local complexity proxy)
@@ -88,7 +88,7 @@ python examples/viz_gallery.py
 - All functions return `(fig, ax)` for customization
 - Designed for structure, stability, and comparison (not hairballs)
 
-### `bsts_features.py` ⭐ **NEW - BSTS Decomposition & Residual Topology**
+### `bsts_features.py` **NEW - BSTS Decomposition & Residual Topology**
 Demonstrates structural time series decomposition and residual network analysis:
 - Decompose series into level, trend, and seasonal components
 - Analyze residual with visibility and transition graphs
@@ -111,7 +111,7 @@ python examples/bsts_features.py
 pip install ts2net[bsts]  # Installs statsmodels
 ```
 
-### `polars_spain_windows.py` ⭐ **NEW - Polars Ingestion & Windowing**
+### `polars_spain_windows.py` **NEW - Polars Ingestion & Windowing**
 Demonstrates Polars-based Parquet ingestion and windowed analysis:
 - Lazy-loading time series from Parquet using Polars
 - Building window-level series per meter or region

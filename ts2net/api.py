@@ -109,7 +109,7 @@ class HVG:
     """
     
     def __init__(self, weighted: bool = False, limit: Optional[int] = None, 
-                 only_degrees: bool = False, output: str = "edges"):
+                 only_degrees: bool = False, output: str = "edges", directed: bool = False):
         """
         Parameters
         ----------
@@ -122,15 +122,19 @@ class HVG:
         output : str, default "edges"
             Output mode: "edges" (full edge list), "degrees" (degree sequence only),
             or "stats" (summary statistics only, most memory efficient)
+        directed : bool, default False
+            If True, create directed graph with edges forward in time (i → j where i < j).
+            Enables irreversibility analysis useful for fault detection in time series.
         """
         self.weighted = weighted
         self.limit = limit
+        self.directed = directed
         # Backward compatibility
         if only_degrees:
             self.output = "degrees"
         else:
             self.output = output
-        self._impl = _HVG_Old(weighted=weighted, limit=limit)
+        self._impl = _HVG_Old(weighted=weighted, limit=limit, directed=directed)
         self._graph = None
     
     def build(self, x: NDArray[np.float64]):
@@ -144,26 +148,47 @@ class HVG:
         # Convert to new Graph object based on output mode
         if self.output == "degrees":
             # Degrees-only mode: compute degrees, skip edges
-            degrees = np.array([d for _, d in G_nx.degree()])
+            if self.directed:
+                # For directed graphs, compute both in and out degrees
+                out_degrees = np.array([d for _, d in G_nx.out_degree()])
+                in_degrees = np.array([d for _, d in G_nx.in_degree()])
+                # For backward compatibility, use out_degrees as primary
+                degrees = out_degrees
+            else:
+                degrees = np.array([d for _, d in G_nx.degree()])
+                in_degrees = None
+                out_degrees = None
             self._graph = Graph(
                 edges=[],
                 n_nodes=len(x),
-                directed=False,
+                directed=self.directed,
                 weighted=self.weighted,
                 _adjacency=None,  # Don't store sparse matrix either
-                _degrees=degrees
+                _degrees=degrees,
+                _in_degrees=in_degrees,
+                _out_degrees=out_degrees
             )
         elif self.output == "stats":
             # Stats-only mode: compute degrees and basic stats, skip edges
-            degrees = np.array([d for _, d in G_nx.degree()])
+            if self.directed:
+                out_degrees = np.array([d for _, d in G_nx.out_degree()])
+                in_degrees = np.array([d for _, d in G_nx.in_degree()])
+                # For backward compatibility, use out_degrees as primary
+                degrees = out_degrees
+            else:
+                degrees = np.array([d for _, d in G_nx.degree()])
+                in_degrees = None
+                out_degrees = None
             n_edges = G_nx.number_of_edges()
             self._graph = Graph(
                 edges=[],
                 n_nodes=len(x),
-                directed=False,
+                directed=self.directed,
                 weighted=self.weighted,
                 _adjacency=None,
-                _degrees=degrees
+                _degrees=degrees,
+                _in_degrees=in_degrees,
+                _out_degrees=out_degrees
             )
             # Store edge count separately since we don't have edges
             self._graph._n_edges_cached = n_edges
@@ -172,11 +197,13 @@ class HVG:
             edges = list(G_nx.edges(data='weight' if self.weighted else False))
             if self.weighted:
                 edges = [(u, v, w) for u, v, w in edges]
+            else:
+                edges = [(u, v) for u, v in edges]
             
             self._graph = Graph(
                 edges=edges,
                 n_nodes=len(x),
-                directed=False,
+                directed=self.directed,
                 weighted=self.weighted,
                 _adjacency=None  # Build sparse lazily if needed
             )
@@ -207,10 +234,26 @@ class HVG:
         return self._graph.n_edges
     
     def degree_sequence(self):
-        """Degree sequence"""
+        """Degree sequence (out-degree for directed graphs, total degree for undirected)"""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
+    
+    def in_degree_sequence(self):
+        """In-degree sequence (only valid for directed graphs)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        if not self.directed:
+            raise ValueError("in_degree_sequence() only valid for directed graphs")
+        return self._graph.in_degree_sequence()
+    
+    def out_degree_sequence(self):
+        """Out-degree sequence (only valid for directed graphs)"""
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        if not self.directed:
+            raise ValueError("out_degree_sequence() only valid for directed graphs")
+        return self._graph.out_degree_sequence()
     
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (memory efficient, no dense matrix)"""
