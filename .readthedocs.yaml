@@ -12,10 +12,8 @@ build:
     post_create_environment:
       # Install Rust for building the Rust extension
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      - echo 'source $HOME/.cargo/env' >> $READTHEDOCS_VIRTUALENV_PATH/bin/activate
-    post_install:
-      # Rust extension is already built by pip install step above
-      # No need for separate maturin develop since pip install builds the wheel
+      - echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $READTHEDOCS_VIRTUALENV_PATH/bin/activate
+      - export PATH="$HOME/.cargo/bin:$PATH"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
