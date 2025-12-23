@@ -3,6 +3,19 @@ Examples
 
 The `examples/` directory contains comprehensive examples demonstrating ts2net functionality.
 
+Notebooks
+---------
+
+Interactive Jupyter notebooks are available for hands-on learning:
+
+.. toctree::
+   :maxdepth: 1
+   
+   ../examples/quick_start.ipynb
+
+Scripts
+-------
+
 Quick Start Example
 -------------------
 

@@ -24,6 +24,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "nbsphinx",
 ]
 
 autodoc_default_options = {
@@ -39,7 +40,11 @@ napoleon_numpy_docstring = True
 
 # Templates path
 templates_path = ["_templates"]
-exclude_patterns: list[str] = []
+exclude_patterns: list[str] = ["**.ipynb_checkpoints"]
+
+# nbsphinx configuration
+nbsphinx_execute = "never"  # Don't execute notebooks during build (use pre-executed)
+nbsphinx_allow_errors = False
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_rtd_theme"

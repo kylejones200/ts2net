@@ -1,6 +1,8 @@
 sphinx>=7.0
 sphinx-rtd-theme>=2.0
+nbsphinx>=0.9
 numpy>=1.23
 networkx>=3.0
 pandas>=1.5
 matplotlib>=3.8
+ipython>=8.0
