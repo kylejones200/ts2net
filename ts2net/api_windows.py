@@ -7,12 +7,13 @@ storing only time series of stats (not full graphs).
 
 from __future__ import annotations
 
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, List, Union, Callable
 import numpy as np
 from numpy.typing import NDArray
 
 from .multivariate.windows import ts_to_windows
-from .api import HVG, NVG, RecurrenceNetwork, TransitionNetwork
+from .factory import create_graph_builder, aggregate_stats
+from .config import HVGConfig, NVGConfig, RecurrenceConfig, TransitionConfig
 
 
 def build_windows(
@@ -82,44 +83,72 @@ def build_windows(
             'std_degree': np.zeros(n_windows, dtype=np.float64),
         }
     
+    # Create config from method and kwargs using dispatch pattern
+    def _create_hvg_config():
+        return HVGConfig(
+            enabled=True,
+            output=output,
+            weighted=method_kwargs.get('weighted', False),
+            limit=method_kwargs.get('limit'),
+            directed=method_kwargs.get('directed', False)
+        )
+    
+    def _create_nvg_config():
+        return NVGConfig(
+            enabled=True,
+            output=output,
+            weighted=method_kwargs.get('weighted', False),
+            limit=method_kwargs.get('limit', min(100, window)),
+            max_edges=method_kwargs.get('max_edges'),
+            max_edges_per_node=method_kwargs.get('max_edges_per_node'),
+            max_memory_mb=method_kwargs.get('max_memory_mb')
+        )
+    
+    def _create_recurrence_config():
+        return RecurrenceConfig(
+            enabled=True,
+            output=output,
+            m=method_kwargs.get('m', 3),
+            rule='knn',
+            k=method_kwargs.get('k', 5),
+            tau=method_kwargs.get('tau', 1),
+            epsilon=method_kwargs.get('epsilon', 0.1),
+            metric=method_kwargs.get('metric', 'euclidean')
+        )
+    
+    def _create_transition_config():
+        return TransitionConfig(
+            enabled=True,
+            output=output,
+            symbolizer=method_kwargs.get('symbolizer', 'ordinal'),
+            order=method_kwargs.get('order', 3),
+            n_states=method_kwargs.get('n_states')
+        )
+    
+    config_map = {
+        'hvg': _create_hvg_config,
+        'nvg': _create_nvg_config,
+        'recurrence': _create_recurrence_config,
+        'transition': _create_transition_config,
+    }
+    
+    config_factory = config_map.get(method.lower())
+    if config_factory is None:
+        raise ValueError(f"Unknown method: {method}. Must be one of {list(config_map.keys())}")
+    
+    config = config_factory()
+    
     # Build network for each window
     for i, window_data in enumerate(windows):
         try:
-            # Build network based on method
-            if method == 'hvg':
-                builder = HVG(output=output, **method_kwargs)
-            elif method == 'nvg':
-                builder = NVG(output=output, limit=min(100, window), **method_kwargs)
-            elif method == 'recurrence':
-                builder = RecurrenceNetwork(
-                    m=method_kwargs.get('m', 3),
-                    rule='knn',
-                    k=method_kwargs.get('k', 5),
-                    output=output
-                )
-            elif method == 'transition':
-                builder = TransitionNetwork(
-                    order=method_kwargs.get('order', 3),
-                    output=output
-                )
-            else:
-                raise ValueError(f"Unknown method: {method}")
-            
+            # Create builder using factory
+            builder = create_graph_builder(method, config, n_points=len(window_data))
             builder.build(window_data)
             stats = builder.stats()
             
             if aggregate:
-                # Store aggregated stat
-                if aggregate == 'mean':
-                    result[i] = stats['avg_degree']
-                elif aggregate == 'std':
-                    result[i] = stats.get('std_degree', 0.0)
-                elif aggregate == 'min':
-                    result[i] = stats.get('min_degree', 0)
-                elif aggregate == 'max':
-                    result[i] = stats.get('max_degree', 0)
-                else:
-                    result[i] = stats.get(aggregate, 0.0)
+                # Store aggregated stat using dispatch
+                result[i] = aggregate_stats(stats, aggregate)
             else:
                 # Store all stats
                 result['n_nodes'][i] = stats['n_nodes']

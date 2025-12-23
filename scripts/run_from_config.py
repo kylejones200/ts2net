@@ -8,7 +8,6 @@ Keeps "what" in YAML, "how" in Python.
 
 import sys
 import os
-import yaml
 import json
 import logging
 from pathlib import Path
@@ -26,7 +25,8 @@ except ImportError:
 
 try:
     from ts2net.io_polars import load_series_from_parquet_polars
-    from ts2net import HVG, NVG, RecurrenceNetwork, TransitionNetwork
+    from ts2net.config import PipelineConfig
+    from ts2net.factory import build_graph_from_config
 except ImportError as e:
     logging.error(f"Import error: {e}")
     sys.exit(1)
@@ -35,24 +35,10 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
-    """Load and validate YAML configuration."""
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    # Validate required sections
-    required = ['dataset', 'graphs', 'output']
-    for section in required:
-        if section not in config:
-            raise ValueError(f"Missing required section: {section}")
-    
-    return config
-
-
-def load_series(config: Dict[str, Any]) -> Dict[str, np.ndarray]:
+def load_series(config: PipelineConfig) -> Dict[str, np.ndarray]:
     """Load time series from dataset configuration."""
-    dataset = config['dataset']
-    path = dataset['path']
+    dataset = config.dataset
+    path = dataset.path
     
     if not Path(path).exists():
         raise FileNotFoundError(f"Dataset file not found: {path}")
@@ -62,14 +48,14 @@ def load_series(config: Dict[str, Any]) -> Dict[str, np.ndarray]:
         logger.info(f"Loading series from {path} using Polars...")
         series = load_series_from_parquet_polars(
             path=path,
-            time_col=dataset['time_col'],
-            value_col=dataset['value_col'],
-            id_col=dataset.get('id_col'),
-            start=dataset.get('start'),
-            end=dataset.get('end'),
-            freq=config.get('sampling', {}).get('frequency'),
-            agg=config.get('sampling', {}).get('agg', 'mean'),
-            tz=dataset.get('tz')
+            time_col=dataset.time_col,
+            value_col=dataset.value_col,
+            id_col=dataset.id_col,
+            start=dataset.start,
+            end=dataset.end,
+            freq=config.sampling.frequency,
+            agg=config.sampling.agg,
+            tz=dataset.tz
         )
     else:
         # Fallback to pandas (would need to implement)
@@ -79,113 +65,45 @@ def load_series(config: Dict[str, Any]) -> Dict[str, np.ndarray]:
     return series
 
 
-def build_graph(series: np.ndarray, graph_type: str, graph_config: Dict[str, Any], 
-                output_mode: str = "stats") -> Dict[str, Any]:
-    """Build a single graph and return statistics."""
-    # Safety check: refuse dense adjacency unless explicitly forced
-    if graph_config.get('force_dense', False) and len(series) > 50_000:
-        raise ValueError(
-            f"Refusing dense adjacency for n={len(series)}. "
-            f"This would require ~{len(series)**2 * 8 / 1e9:.1f} GB. "
-            f"Use sparse matrices or output='stats' instead."
-        )
-    
-    # Determine output mode (only_degrees is deprecated, use output instead)
-    output_mode = graph_config.get('output', output_mode)
-    
-    try:
-        if graph_type == 'hvg':
-            builder = HVG(
-                weighted=graph_config.get('weighted', False),
-                limit=graph_config.get('limit'),
-                output=output_mode
-            )
-            g = builder.build(series)
-            
-        elif graph_type == 'nvg':
-            builder = NVG(
-                weighted=graph_config.get('weighted', False),
-                limit=graph_config.get('limit'),
-                max_edges=graph_config.get('max_edges'),
-                max_edges_per_node=graph_config.get('max_edges_per_node'),
-                max_memory_mb=graph_config.get('max_memory_mb'),
-                output=output_mode
-            )
-            g = builder.build(series)
-            
-        elif graph_type == 'recurrence':
-            # Safety check: refuse exact all-pairs for large n
-            n = len(series)
-            rule = graph_config.get('rule', 'knn')
-            if rule == 'epsilon' and n > 50_000:
-                raise ValueError(
-                    f"Refusing exact all-pairs recurrence for n={n}. "
-                    f"Use rule='knn' with small k instead."
-                )
-            
-            builder = RecurrenceNetwork(
-                m=graph_config.get('m', 3),
-                tau=graph_config.get('tau', 1),
-                rule=rule,
-                k=graph_config.get('k', 10),
-                epsilon=graph_config.get('epsilon', 0.1),
-                metric=graph_config.get('metric', 'euclidean'),
-                output=output_mode
-            )
-            g = builder.build(series)
-            
-        elif graph_type == 'transition':
-            builder = TransitionNetwork(
-                symbolizer=graph_config.get('symbolizer', 'ordinal'),
-                order=graph_config.get('order', 3),
-                n_states=graph_config.get('n_states'),
-                output=output_mode
-            )
-            g = builder.build(series)
-            
-        else:
-            raise ValueError(f"Unknown graph type: {graph_type}")
-        
-        # Get statistics
-        stats = g.stats(include_triangles=graph_config.get('include_triangles', False))
-        return stats
-        
-    except Exception as e:
-        logger.warning(f"Error building {graph_type}: {e}")
-        raise
+# build_graph function removed - using factory.build_graph_from_config instead
 
 
-def process_series(series_id: str, series_data: np.ndarray, config: Dict[str, Any]) -> Dict[str, Any]:
+def process_series(series_id: str, series_data: np.ndarray, config: PipelineConfig) -> Dict[str, Any]:
     """Process a single series with all enabled graph types."""
     result = {'series_id': series_id, 'n_points': len(series_data)}
     
     # Handle BSTS decomposition if enabled
-    bsts_config = config.get('bsts', {})
+    bsts_config = config.bsts
     series_to_analyze = series_data
     bsts_enabled = False
     
-    if bsts_config.get('enabled', False):
+    if bsts_config.enabled:
         try:
             from ts2net.bsts import features, BSTSSpec
             
             # Build BSTS spec from config
             bsts_spec = BSTSSpec(
-                level=bsts_config.get('level', True),
-                trend=bsts_config.get('trend', False),
-                seasonal_periods=bsts_config.get('seasonal_periods'),
-                robust=bsts_config.get('robust', False),
-                standardize_residual=bsts_config.get('standardize_residual', True)
+                level=bsts_config.level,
+                trend=bsts_config.trend,
+                seasonal_periods=bsts_config.seasonal_periods,
+                robust=bsts_config.robust,
+                standardize_residual=bsts_config.standardize_residual
             )
             
             # Determine window mode if series is too long
-            max_points = bsts_config.get('max_points', 10_000)
-            window = bsts_config.get('window')
-            if window is None and len(series_data) > max_points:
-                window = max_points  # Auto-enable windowing for long series
+            window = bsts_config.window
+            if window is None and len(series_data) > bsts_config.max_points:
+                window = bsts_config.max_points  # Auto-enable windowing for long series
             
             # Get enabled graph methods
-            enabled_methods = [k for k, v in config.get('graphs', {}).items() 
-                             if v.get('enabled', False)]
+            graphs = config.graphs
+            enabled_methods = [
+                'hvg' if graphs.hvg.enabled else None,
+                'nvg' if graphs.nvg.enabled else None,
+                'recurrence' if graphs.recurrence.enabled else None,
+                'transition' if graphs.transition.enabled else None,
+            ]
+            enabled_methods = [m for m in enabled_methods if m is not None]
             if not enabled_methods:
                 enabled_methods = ['hvg', 'transition']  # Default
             
@@ -195,7 +113,7 @@ def process_series(series_id: str, series_data: np.ndarray, config: Dict[str, An
                 methods=enabled_methods,
                 bsts=bsts_spec,
                 window=window,
-                nvg_limit=config.get('graphs', {}).get('nvg', {}).get('limit', 3000)
+                nvg_limit=graphs.nvg.limit if graphs.nvg.limit else 3000
             )
             
             # Add structural and residual stats to result
@@ -209,36 +127,46 @@ def process_series(series_id: str, series_data: np.ndarray, config: Dict[str, An
             logger.warning(f"{series_id}: statsmodels not available, skipping BSTS")
         except Exception as e:
             logger.warning(f"{series_id} BSTS: {e}")
-            if config.get('logging', {}).get('log_errors', True):
+            if config.logging.log_errors:
                 result['bsts_error'] = str(e)
     
     # Standard graph analysis (only if BSTS not enabled)
     # If BSTS is enabled, residual network stats are already computed
     if not bsts_enabled:
-        graphs_config = config['graphs']
+        graphs = config.graphs
         
-        for graph_type in ['hvg', 'nvg', 'recurrence', 'transition']:
-            graph_config = graphs_config.get(graph_type, {})
-            if not graph_config.get('enabled', False):
+        # Dispatch dictionary for graph processing
+        graph_configs = {
+            'hvg': (graphs.hvg, graphs.hvg.enabled),
+            'nvg': (graphs.nvg, graphs.nvg.enabled),
+            'recurrence': (graphs.recurrence, graphs.recurrence.enabled),
+            'transition': (graphs.transition, graphs.transition.enabled),
+        }
+        
+        for graph_type, (graph_config, enabled) in graph_configs.items():
+            if not enabled:
                 continue
             
             try:
-                stats = build_graph(series_to_analyze, graph_type, graph_config, 
-                                  output_mode=config.get('output', {}).get('mode', 'stats'))
+                stats = build_graph_from_config(
+                    series_to_analyze,
+                    graph_type,
+                    graph_config
+                )
                 result[graph_type] = stats
             except Exception as e:
                 logger.warning(f"{series_id} {graph_type}: {e}")
-                if config.get('logging', {}).get('log_errors', True):
+                if config.logging.log_errors:
                     result[f'{graph_type}_error'] = str(e)
     
     return result
 
 
-def process_windowed(series_id: str, series_data: np.ndarray, config: Dict[str, Any]) -> list:
+def process_windowed(series_id: str, series_data: np.ndarray, config: PipelineConfig) -> list:
     """Process series with sliding windows."""
-    windows_config = config.get('windows', {})
-    window_size = windows_config.get('size')
-    step = windows_config.get('step', 1)
+    windows_config = config.windows
+    window_size = windows_config.size
+    step = windows_config.step if windows_config.step else 1
     
     if window_size is None:
         # Process full series
@@ -266,47 +194,66 @@ def process_windowed(series_id: str, series_data: np.ndarray, config: Dict[str, 
     return results
 
 
-def write_output(results: list, config: Dict[str, Any]):
+def write_output(results: list, config: PipelineConfig):
     """Write results to output file."""
-    output_config = config['output']
-    output_path = output_config['path']
-    output_format = output_config.get('format', 'parquet')
+    output_config = config.output
+    output_path = output_config.path
+    output_format = output_config.format
     
     # Create output directory
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     
-    if output_format == 'parquet':
-        if HAS_POLARS:
-            df = pl.DataFrame(results)
-            df.write_parquet(output_path)
-            logger.info(f"Results written to {output_path}: {len(results)} rows")
-        else:
-            raise ImportError("Polars required for Parquet output")
-    elif output_format == 'json':
-        with open(output_path, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        logger.info(f"Results written to {output_path}: {len(results)} rows")
-    else:
-        raise ValueError(f"Unknown output format: {output_format}")
+    # Dispatch dictionary for output formats
+    output_writers = {
+        'parquet': lambda: _write_parquet(results, output_path),
+        'json': lambda: _write_json(results, output_path),
+        'csv': lambda: _write_csv(results, output_path),
+    }
+    
+    writer = output_writers.get(output_format.lower())
+    if writer is None:
+        raise ValueError(f"Unknown output format: {output_format}. Must be one of {list(output_writers.keys())}")
+    
+    writer()
+    logger.info(f"Results written to {output_path}: {len(results)} rows")
 
 
-def write_errors(errors: list, config: Dict[str, Any]):
+def _write_parquet(results: list, output_path: str):
+    """Write results to Parquet format."""
+    if not HAS_POLARS:
+        raise ImportError("Polars required for Parquet output")
+    df = pl.DataFrame(results)
+    df.write_parquet(output_path)
+
+
+def _write_json(results: list, output_path: str):
+    """Write results to JSON format."""
+    with open(output_path, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+
+
+def _write_csv(results: list, output_path: str):
+    """Write results to CSV format."""
+    import pandas as pd
+    df = pd.DataFrame(results)
+    df.to_csv(output_path, index=False)
+
+
+def write_errors(errors: list, config: PipelineConfig):
     """Write error log if configured."""
-    logging_config = config.get('logging', {})
-    if logging_config.get('log_errors', False):
-        error_path = logging_config.get('error_path')
-        if error_path:
-            with open(error_path, 'w') as f:
-                json.dump(errors, f, indent=2)
-            logger.info(f"Error log written to {error_path}")
+    logging_config = config.logging
+    if logging_config.log_errors and logging_config.error_path:
+        with open(logging_config.error_path, 'w') as f:
+            json.dump(errors, f, indent=2)
+        logger.info(f"Error log written to {logging_config.error_path}")
 
 
 def main(config_path: str):
     """Main pipeline execution."""
     logger.info(f"Loading configuration from {config_path}")
-    config = load_config(config_path)
+    config = PipelineConfig.from_yaml(config_path)
     
-    dataset_name = config['dataset'].get('name', 'unknown')
+    dataset_name = config.dataset.name
     logger.info(f"Dataset: {dataset_name}")
     
     # Load series
@@ -316,7 +263,7 @@ def main(config_path: str):
     all_results = []
     errors = []
     
-    windows_enabled = config.get('windows', {}).get('enabled', False)
+    windows_enabled = config.windows.enabled
     
     for series_id, series_data in series_dict.items():
         try:

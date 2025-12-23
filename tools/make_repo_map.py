@@ -2,8 +2,12 @@
 """Generate REPO_MAP.md for ts2net."""
 
 import os
+import logging
 from pathlib import Path
 from collections import defaultdict
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 def get_tree(root, max_depth=3, prefix="", depth=0):
     """Generate tree structure."""
@@ -198,7 +202,6 @@ def main():
     content.append("**Structure:**")
     content.append("- `tests/unit/` - Unit tests for core functions")
     content.append("- `tests/integration/` - Integration tests")
-    content.append("- `tests/parity/` - R package parity tests")
     content.append("- `tests/test_numba_acceleration.py` - Numba-specific tests")
     content.append("**Fixtures:** `tests/conftest.py` with seeded random data")
     content.append("")
@@ -268,8 +271,8 @@ def main():
     # Write file
     output = root / "REPO_MAP.md"
     output.write_text("\n".join(content))
-    print(f"Generated {output}")
-    print(f"Lines: {len(content)}")
+    logger.info(f"Generated {output}")
+    logger.info(f"Lines: {len(content)}")
 
 if __name__ == "__main__":
     main()
