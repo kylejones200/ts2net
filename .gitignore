@@ -118,8 +118,9 @@ data/
 # Python virtual environment
 /.venv/
 
-# Jupyter notebooks
+# Jupyter notebooks (but allow example notebooks)
 *.ipynb
+!examples/*.ipynb
 
 # VS Code
 .vscode/

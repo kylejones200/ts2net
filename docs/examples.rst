@@ -12,6 +12,8 @@ Interactive Jupyter notebooks are available for hands-on learning:
    :maxdepth: 1
    
    ../examples/quick_start.ipynb
+   ../examples/unified_graphs_example.ipynb
+   ../examples/temporal_cnn_example.ipynb
 
 Scripts
 -------
