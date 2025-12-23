@@ -136,70 +136,72 @@ def temporal_cnn_embeddings(
     return embeddings.astype(np.float64)
 
 
-class _TemporalCNN(nn.Module):
-    """1D Temporal CNN with dilations and causal padding."""
-    
-    def __init__(
-        self,
-        in_channels: int,
-        channels: Tuple[int, ...],
-        kernel_size: int,
-        dilations: Tuple[int, ...],
-        dropout: float = 0.1,
-    ):
-        super().__init__()
+# Only define the class when PyTorch is available
+if HAS_TORCH:
+    class _TemporalCNN(nn.Module):
+        """1D Temporal CNN with dilations and causal padding."""
         
-        self.in_channels = in_channels
-        self.channels = channels
-        self.kernel_size = kernel_size
-        self.dilations = dilations
-        
-        # Build conv blocks
-        layers = []
-        prev_channels = in_channels
-        
-        for out_channels, dilation in zip(channels, dilations):
-            # Causal padding: (kernel_size - 1) * dilation
-            padding = (kernel_size - 1) * dilation
+        def __init__(
+            self,
+            in_channels: int,
+            channels: Tuple[int, ...],
+            kernel_size: int,
+            dilations: Tuple[int, ...],
+            dropout: float = 0.1,
+        ):
+            super().__init__()
             
-            layers.append(
-                nn.Conv1d(
-                    in_channels=prev_channels,
-                    out_channels=out_channels,
-                    kernel_size=kernel_size,
-                    dilation=dilation,
-                    padding=padding,
-                    bias=True,
+            self.in_channels = in_channels
+            self.channels = channels
+            self.kernel_size = kernel_size
+            self.dilations = dilations
+            
+            # Build conv blocks
+            layers = []
+            prev_channels = in_channels
+            
+            for out_channels, dilation in zip(channels, dilations):
+                # Causal padding: (kernel_size - 1) * dilation
+                padding = (kernel_size - 1) * dilation
+                
+                layers.append(
+                    nn.Conv1d(
+                        in_channels=prev_channels,
+                        out_channels=out_channels,
+                        kernel_size=kernel_size,
+                        dilation=dilation,
+                        padding=padding,
+                        bias=True,
+                    )
                 )
-            )
-            layers.append(nn.ReLU())
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
+                layers.append(nn.ReLU())
+                if dropout > 0:
+                    layers.append(nn.Dropout(dropout))
+                
+                prev_channels = out_channels
             
-            prev_channels = out_channels
-        
-        self.conv_blocks = nn.Sequential(*layers)
-        
-        # Global average pooling
-        self.pool = nn.AdaptiveAvgPool1d(1)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass.
-        
-        Args:
-            x: Input tensor of shape (batch, in_channels, length)
+            self.conv_blocks = nn.Sequential(*layers)
             
-        Returns:
-            Embeddings of shape (batch, channels[-1])
-        """
-        # Apply conv blocks
-        x = self.conv_blocks(x)
+            # Global average pooling
+            self.pool = nn.AdaptiveAvgPool1d(1)
         
-        # Global average pooling: (batch, channels[-1], length) -> (batch, channels[-1], 1)
-        x = self.pool(x)
-        
-        # Squeeze: (batch, channels[-1], 1) -> (batch, channels[-1])
-        x = x.squeeze(-1)
-        
-        return x
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """
+            Forward pass.
+            
+            Args:
+                x: Input tensor of shape (batch, in_channels, length)
+                
+            Returns:
+                Embeddings of shape (batch, channels[-1])
+            """
+            # Apply conv blocks
+            x = self.conv_blocks(x)
+            
+            # Global average pooling: (batch, channels[-1], length) -> (batch, channels[-1], 1)
+            x = self.pool(x)
+            
+            # Squeeze: (batch, channels[-1], 1) -> (batch, channels[-1])
+            x = x.squeeze(-1)
+            
+            return x
