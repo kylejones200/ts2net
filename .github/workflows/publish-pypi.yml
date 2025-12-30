@@ -73,9 +73,57 @@ jobs:
     environment: pypi  # Use PyPI environment for deployment protection
     permissions:
       id-token: write  # Required for trusted publishing
+      contents: read  # Required for deployment tracking
+      deployments: write  # Required for creating deployment records
     
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Create deployment
+        id: deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.ref,
+              environment: 'pypi',
+              description: `Deploying version ${{ steps.version.outputs.VERSION }} to PyPI`,
+              auto_merge: false,
+              required_contexts: []
+            });
+            return deployment.id;
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set deployment status (in_progress)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentId = ${{ steps.deployment.outputs.result }};
+            if (deploymentId) {
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentId,
+                state: 'in_progress',
+                description: 'Building and publishing to PyPI'
+              });
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -84,6 +132,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish to PyPI
+        id: publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           print-hash: true
@@ -93,4 +142,41 @@ jobs:
         # 2. Select "GitHub Actions" as publisher
         # 3. Enter: Owner: kylejones200, Repository: ts2net, Workflow filename: publish-pypi.yml
         # 4. Environment name: pypi (must match the environment in this workflow)
+      
+      - name: Set deployment status (success)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentId = ${{ steps.deployment.outputs.result }};
+            if (deploymentId) {
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentId,
+                state: 'success',
+                description: `Successfully published version ${{ steps.version.outputs.VERSION }} to PyPI`,
+                environment_url: 'https://pypi.org/project/ts2net/'
+              });
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set deployment status (failure)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentId = ${{ steps.deployment.outputs.result }};
+            if (deploymentId) {
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentId,
+                state: 'failure',
+                description: 'Failed to publish to PyPI'
+              });
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
