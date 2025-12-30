@@ -24,7 +24,7 @@ num-complex = "0.4"  # Complex number support
 approx = "0.5"  # Approximate equality comparisons
 
 [features]
-default = ["python"]
+default = []
 python = ["pyo3/auto-initialize"]
 
 [dev-dependencies]
