@@ -39,7 +39,10 @@ The **multivariate functionality** in this Python package is directly inspired b
 ## Acknowledgments
 
 ### Multivariate Analysis (Multiple Time Series → Graph)
-The distance functions (`tsdist_*`) and network construction methods (`net_knn`, `net_enn`, `net_weighted`) implement the API designed by Leonardo N. Ferreira in the R ts2net package. This Python implementation:
+The distance functions (`tsdist_*`) and network construction methods (`net_knn`, `net_enn`, `net_weighted`) implement the API designed by Leonardo N. Ferreira in the R ts2net package. 
+
+
+This Python implementation:
 
 - Matches the R API for distance functions and network builders
 - Adds Numba acceleration for performance (10-200x speedups)

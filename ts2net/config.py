@@ -130,6 +130,7 @@ class TransitionConfig:
     symbolizer: str = "ordinal"
     order: int = 3
     n_states: Optional[int] = None
+    partition_mode: bool = False  # Enable partition-based analysis (entropy, motifs)
     
     def __post_init__(self):
         """Validate transition configuration."""

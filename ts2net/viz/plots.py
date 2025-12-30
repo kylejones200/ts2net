@@ -521,3 +521,4 @@ def plot_recurrence_matrix(
     
     plt.tight_layout()
     return fig, ax
+

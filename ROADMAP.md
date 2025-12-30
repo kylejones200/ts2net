@@ -41,52 +41,42 @@
 
 ---
 
-### 2. Enhanced Weighted Visibility Graphs (Priority: High)
+### 2. Enhanced Weighted Visibility Graphs (Priority: High) ✅ **COMPLETED**
 
 **Why:** Current implementation only supports `absdiff`. Adding minimum clearance and time gap weights enables stronger anomaly detection.
 
-**Implementation:**
-- Expand `weighted` parameter: `weighted: bool | str = False`
+**Status:** ✅ Fully implemented
+- `weighted` parameter accepts `bool | str`: `False`, `True` (defaults to "absdiff"), or string mode
 - String modes: `"absdiff"`, `"time_gap"`, `"min_clearance"`, `"slope"`
-- `"absdiff"`: Current behavior (absolute height difference)
+- `"absdiff"`: Absolute height difference (default when `weighted=True`)
 - `"time_gap"`: Weight by temporal distance `|j - i|`
 - `"min_clearance"`: Weight by minimum clearance above intermediate points
 - `"slope"`: Weight by slope `(x[j] - x[i]) / (j - i)`
-- Update both HVG and NVG to support all modes
-- Integrate existing `_vis_weights()` function properly
-
-**Outputs:**
+- Both HVG and NVG support all modes
+- `compute_weight()` function in `ts2net/core/visibility/weights.py` handles all modes
 - Weight statistics in `stats()`: `min_weight`, `max_weight`, `mean_weight`, `std_weight`
-- Weight distributions useful for anomaly detection
-
-**Tests:**
-- Different weight modes produce expected weight ranges
-- Anomalies show weight distribution shifts
+- Config schemas updated: `HVGConfig.weight_mode` and `NVGConfig.weight_mode` support all modes
+- Comprehensive tests added (`tests/test_weight_modes.py`)
+- Works with directed graphs
 - Memory footprint same as unweighted (only edge storage increases)
 
 ---
 
-### 3. Ordinal Partition Networks (Priority: Medium-High)
+### 3. Ordinal Partition Networks (Priority: Medium-High) ✅ **COMPLETED**
 
 **Why:** TransitionNetwork already has ordinal patterns, but can be enhanced for partition-based analysis with entropy and motif counts.
 
-**Implementation:**
-- Enhance `TransitionNetwork` with partition mode
-- Add `partition_mode: bool = False` parameter
-- When enabled: Build Markov graph over ordinal patterns, compute entropy rate
-- Add `entropy_rate()` method
-- Add `pattern_motifs()` for motif counting
-- Tiny graphs, stable memory (already O(n) complexity)
-
-**Outputs:**
-- `entropy_rate`: Measure of pattern complexity
-- `pattern_distribution`: Frequency of each ordinal pattern
-- `motif_counts`: Counts of 3-node and 4-node motifs
-
-**Tests:**
-- White noise → high entropy rate
-- Periodic signal → low entropy rate
-- Chaos → medium-high entropy rate
+**Status:** ✅ Fully implemented
+- `partition_mode: bool = False` parameter added to TransitionNetwork
+- When enabled with `symbolizer="ordinal"`: Builds Markov graph over ordinal patterns
+- `entropy_rate()` method computes Shannon entropy of transition probabilities
+- `pattern_distribution()` method returns frequency distribution of ordinal patterns
+- `pattern_motifs()` method counts 3-node and 4-node motifs in the network
+- `stats()` method includes all partition mode metrics when enabled
+- Config schema updated: `TransitionConfig.partition_mode: bool = False`
+- Comprehensive tests added (`tests/test_ordinal_partition.py`)
+- Tiny graphs, stable memory (O(n) complexity maintained)
+- Backward compatible: partition_mode defaults to False
 
 ---
 

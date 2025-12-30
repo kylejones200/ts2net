@@ -135,3 +135,4 @@ spec = BSTSSpec(level=True, seasonal_periods=[24, 168])
 result = features(x, methods=['hvg'], bsts=spec)
 ```
 
+

@@ -15,6 +15,9 @@ class TransitionNetwork:
     """A class representing a transition network.
     
     This class provides methods to create and analyze transition networks from time series data.
+    
+    For ordinal partition networks, set partition_mode=True and symbolizer="ordinal" to enable
+    entropy rate computation and pattern motif counting.
     """
     
     n_bins: int = 10
@@ -24,6 +27,7 @@ class TransitionNetwork:
     bins: int = None  # alias for n_bins
     delay: int = None  # time delay
     tie_rule: str = "stable"  # how to handle ties
+    partition_mode: bool = False  # Enable partition-based analysis (entropy, motifs)
     
     def __post_init__(self):
         """Validate parameters after initialization."""
@@ -110,6 +114,8 @@ class TransitionNetwork:
             self: Returns the instance itself
         """
         self.X_ = X
+        self._G = None  # Cache for graph
+        self._pattern_distribution = None  # Cache for pattern distribution
         return self
     
     def transform(self) -> nx.DiGraph:
@@ -149,6 +155,7 @@ class TransitionNetwork:
             for target, weight in targets.items():
                 G.add_edge(source, target, weight=weight)
         
+        self._G = G  # Cache graph for partition mode methods
         return G
     
     def fit_transform(self, X: np.ndarray) -> Tuple[nx.DiGraph, np.ndarray]:
@@ -163,10 +170,160 @@ class TransitionNetwork:
         """
         from scipy import sparse as sp
         G = self.fit(X).transform()
+        self._G = G  # Cache graph for partition mode methods
         # Return sparse matrix, never dense
         A = nx.adjacency_matrix(G)
         # Convert to CSR if not already
-        from scipy import sparse as sp
         if not isinstance(A, sp.csr_matrix):
             A = A.tocsr()
         return G, A
+    
+    def entropy_rate(self) -> float:
+        """Compute entropy rate of the transition network.
+        
+        The entropy rate measures the complexity of pattern transitions.
+        Higher values indicate more complex/random patterns.
+        
+        Returns:
+            float: Entropy rate in bits
+        """
+        if not hasattr(self, '_G') or self._G is None:
+            raise ValueError("Must call fit_transform() or transform() first")
+        
+        if not self.partition_mode or self.symbolizer != "ordinal":
+            raise ValueError(
+                "entropy_rate() requires partition_mode=True and symbolizer='ordinal'"
+            )
+        
+        # Compute transition probabilities
+        total_out_weight = {}
+        for node in self._G.nodes():
+            total_out_weight[node] = sum(
+                data.get('weight', 1) for _, _, data in self._G.out_edges(node, data=True)
+            )
+        
+        # Compute entropy rate: H = -sum(p_i * sum(p_ij * log2(p_ij)))
+        entropy = 0.0
+        for node in self._G.nodes():
+            out_weight = total_out_weight.get(node, 0)
+            if out_weight == 0:
+                continue
+            
+            # Stationary probability of being at this node (proportional to in-degree weight)
+            in_weight = sum(
+                data.get('weight', 1) for _, _, data in self._G.in_edges(node, data=True)
+            )
+            total_weight = sum(
+                data.get('weight', 1) for _, _, data in self._G.edges(data=True)
+            )
+            if total_weight == 0:
+                continue
+            
+            pi = in_weight / total_weight if total_weight > 0 else 0
+            
+            # Conditional entropy from this node
+            node_entropy = 0.0
+            for _, target, data in self._G.out_edges(node, data=True):
+                weight = data.get('weight', 1)
+                p_ij = weight / out_weight if out_weight > 0 else 0
+                if p_ij > 0:
+                    node_entropy -= p_ij * np.log2(p_ij)
+            
+            entropy += pi * node_entropy
+        
+        return float(entropy)
+    
+    def pattern_distribution(self) -> dict:
+        """Get frequency distribution of ordinal patterns.
+        
+        Returns:
+            dict: Dictionary mapping pattern indices to frequencies
+        """
+        if not hasattr(self, 'X_'):
+            raise ValueError("Must call fit() first")
+        
+        if not self.partition_mode or self.symbolizer != "ordinal":
+            raise ValueError(
+                "pattern_distribution() requires partition_mode=True and symbolizer='ordinal'"
+            )
+        
+        if self._pattern_distribution is None:
+            # Get ordinal patterns
+            patterns = self._ordinal_patterns(self.X_)
+            
+            # Count frequencies
+            unique, counts = np.unique(patterns, return_counts=True)
+            total = len(patterns)
+            self._pattern_distribution = {
+                int(idx): float(count / total) for idx, count in zip(unique, counts)
+            }
+        
+        return self._pattern_distribution.copy()
+    
+    def pattern_motifs(self, motif_type: str = '3node') -> dict:
+        """Count motifs in the ordinal partition network.
+        
+        Args:
+            motif_type: Type of motifs to count ('3node' or '4node')
+            
+        Returns:
+            dict: Dictionary of motif counts
+        """
+        if not hasattr(self, '_G') or self._G is None:
+            raise ValueError("Must call fit_transform() or transform() first")
+        
+        if not self.partition_mode or self.symbolizer != "ordinal":
+            raise ValueError(
+                "pattern_motifs() requires partition_mode=True and symbolizer='ordinal'"
+            )
+        
+        # Import motif counting functions
+        from ts2net.networks.motifs import directed_3node_motifs, undirected_4node_motifs
+        
+        if motif_type == '3node':
+            # For directed graphs, use directed 3-node motifs
+            return directed_3node_motifs(self._G)
+        elif motif_type == '4node':
+            # Convert to undirected for 4-node motifs
+            G_und = self._G.to_undirected()
+            return undirected_4node_motifs(G_und)
+        else:
+            raise ValueError(f"motif_type must be '3node' or '4node', got {motif_type}")
+    
+    def stats(self) -> dict:
+        """Get summary statistics including partition mode metrics.
+        
+        Returns:
+            dict: Dictionary of statistics including entropy_rate, pattern_distribution,
+                  and motif_counts if partition_mode is enabled
+        """
+        if not hasattr(self, '_G') or self._G is None:
+            raise ValueError("Must call fit_transform() or transform() first")
+        
+        stats = {
+            'n_nodes': self._G.number_of_nodes(),
+            'n_edges': self._G.number_of_edges(),
+            'density': nx.density(self._G),
+        }
+        
+        # Add partition mode statistics
+        if self.partition_mode and self.symbolizer == "ordinal":
+            try:
+                stats['entropy_rate'] = self.entropy_rate()
+                stats['pattern_distribution'] = self.pattern_distribution()
+                
+                # Add motif counts
+                try:
+                    stats['motif_counts_3node'] = self.pattern_motifs('3node')
+                except Exception:
+                    stats['motif_counts_3node'] = {}
+                
+                try:
+                    stats['motif_counts_4node'] = self.pattern_motifs('4node')
+                except Exception:
+                    stats['motif_counts_4node'] = {}
+            except Exception as e:
+                # If partition mode metrics fail, still return basic stats
+                stats['partition_mode_error'] = str(e)
+        
+        return stats

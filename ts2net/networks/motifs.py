@@ -1,4 +1,5 @@
 from itertools import combinations
+import networkx as nx
 
 
 def directed_3node_motifs(G: nx.DiGraph) -> dict:
