@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ts2net"
-version = "0.7.0"
+version = "0.7.1"
 description = "Time series to network conversion and analysis"
 readme = "README.md"
 requires-python = ">=3.12"
