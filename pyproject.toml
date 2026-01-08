@@ -8,7 +8,7 @@ version = "0.7.0"
 description = "Time series to network conversion and analysis"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
     {name = "Kyle T. Jones", email = "kyle@kyletjones.com"},
 ]
@@ -78,3 +78,5 @@ manifest-path = "./ts2net_rs/Cargo.toml"
 release = true
 # Strip the binary to reduce size
 strip = true
+# Include LICENSE file in source distribution
+sdist-include = ["LICENSE", "README.md", "CITATION.md", "CHANGELOG.md"]
