@@ -61,6 +61,10 @@ except ImportError:
 from .api_windows import build_windows
 __all__.append('build_windows')
 
+# Multiscale graphs API
+from .multiscale import MultiscaleGraphs, coarse_grain
+__all__.extend(['MultiscaleGraphs', 'coarse_grain'])
+
 # Configuration and factory modules
 from .config import PipelineConfig
 from .factory import create_graph_builder, build_graph_from_config
@@ -77,5 +81,12 @@ except ImportError:
 try:
     from .temporal_cnn import temporal_cnn_embeddings
     __all__.append('temporal_cnn_embeddings')
+except ImportError:
+    pass
+
+# Neural network-based network inference (optional - requires torch)
+try:
+    from .inference import NeuralNetworkInference, DynamicsModel, KuramotoModel, LinearDynamicsModel
+    __all__.extend(['NeuralNetworkInference', 'DynamicsModel', 'KuramotoModel', 'LinearDynamicsModel'])
 except ImportError:
     pass

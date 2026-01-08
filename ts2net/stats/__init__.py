@@ -23,6 +23,14 @@ from .stats import (
     partial_corr_sig,
 )
 
+from .null_models import (
+    generate_surrogate,
+    compute_network_metric_significance,
+    compute_multiple_metrics_significance,
+    compute_zscore,
+    NetworkSignificanceResult,
+)
+
 __all__ = [
     'permutation_entropy',
     'cao_e1_e2', 
@@ -38,4 +46,10 @@ __all__ = [
     'rqa_measures',
     'partial_corr',
     'partial_corr_sig',
+    # Null models and significance testing
+    'generate_surrogate',
+    'compute_network_metric_significance',
+    'compute_multiple_metrics_significance',
+    'compute_zscore',
+    'NetworkSignificanceResult',
 ]

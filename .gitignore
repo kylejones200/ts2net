@@ -184,3 +184,7 @@ yarn-error.log*
 docs/_build/
 
 simple_cnn.md
+
+wip/
+
+.cursor/

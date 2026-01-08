@@ -80,56 +80,84 @@ class RecurrenceNetwork:
         if self.rule == 'knn' or (self.rule is None and self.k is not None):
             k = self.k if self.k is not None else 5
             
-            # For large n, use approximate kNN
-            if n > 10_000:
-                # Try to use approximate kNN if available
-                try:
-                    from ts2net.multivariate.builders import net_knn_approx
-                    # Use embedding directly (not distance matrix)
-                    G, A = net_knn_approx(
-                        self.X_, 
-                        k=k, 
-                        metric=self.metric,
-                        weighted=False,
-                        directed=False
-                    )
-                    return G
-                except ImportError:
-                    # Fall back to exact kNN for smaller n, or raise error
-                    if n > 50_000:
-                        raise ValueError(
-                            f"Approximate kNN required for n={n}. "
-                            f"Install pynndescent: pip install ts2net[approx]"
+            # Try optimized spatial indexing first (faster for large n)
+            try:
+                from .recurrence_optimized import knn_recurrence_optimized
+                # Use optimized k-NN with spatial indexing
+                G, A = knn_recurrence_optimized(
+                    self.X_,
+                    k=k,
+                    metric=self.metric,
+                    index_type="auto"
+                )
+                return G
+            except (ImportError, ValueError):
+                # Fall back to other methods
+                # For large n, use approximate kNN
+                if n > 10_000:
+                    # Try to use approximate kNN if available
+                    try:
+                        from ts2net.multivariate.builders import net_knn_approx
+                        # Use embedding directly (not distance matrix)
+                        G, A = net_knn_approx(
+                            self.X_, 
+                            k=k, 
+                            metric=self.metric,
+                            weighted=False,
+                            directed=False
                         )
-                    # Use exact kNN (build edges per node, no full distance matrix)
+                        return G
+                    except ImportError:
+                        # Fall back to exact kNN for smaller n, or raise error
+                        if n > 50_000:
+                            raise ValueError(
+                                f"Approximate kNN required for n={n}. "
+                                f"Install pynndescent: pip install ts2net[approx]"
+                            )
+                        # Use exact kNN (build edges per node, no full distance matrix)
+                        return self._build_knn_exact(k)
+                else:
+                    # Small n: use exact kNN
                     return self._build_knn_exact(k)
-            else:
-                # Small n: use exact kNN
-                return self._build_knn_exact(k)
         
         # Epsilon/radius rule (exact all-pairs - only for small n)
         if self.rule == 'epsilon' or self.rule is None:
-            # Safety guardrail: refuse exact all-pairs for large n
-            if n > 50_000:
-                raise ValueError(
-                    f"Refusing exact all-pairs recurrence for n={n} nodes. "
-                    f"This would require ~{n**2 * 8 / 1e9:.1f} GB for distance matrix. "
-                    f"Use rule='knn' with small k (e.g., k=10-30) instead, or resample the series."
+            # Try optimized spatial indexing first (much faster for large n)
+            try:
+                from .recurrence_optimized import epsilon_recurrence_optimized
+                # Use optimized epsilon recurrence with spatial indexing
+                G, A = epsilon_recurrence_optimized(
+                    self.X_,
+                    epsilon=self.threshold,
+                    metric=self.metric,
+                    index_type="auto",
+                    approximate=(n > 10_000)  # Use approximate for very large n
                 )
-            
-            # Build edges directly without full distance matrix
-            edges = []
-            for i in range(n):
-                for j in range(i + 1, n):
-                    dist = np.linalg.norm(self.X_[i] - self.X_[j])
-                    if dist <= self.threshold:
-                        edges.append((i, j))
-            
-            # Convert to networkx graph
-            G = nx.Graph()
-            G.add_nodes_from(range(n))
-            G.add_edges_from(edges)
-            return G
+                return G
+            except (ImportError, ValueError):
+                # Fall back to exact method
+                # Safety guardrail: refuse exact all-pairs for very large n
+                if n > 50_000:
+                    raise ValueError(
+                        f"Refusing exact all-pairs recurrence for n={n} nodes. "
+                        f"This would require ~{n**2 * 8 / 1e9:.1f} GB for distance matrix. "
+                        f"Use rule='knn' with small k (e.g., k=10-30) instead, or resample the series. "
+                        f"Or install scipy for optimized spatial indexing."
+                    )
+                
+                # Build edges directly without full distance matrix
+                edges = []
+                for i in range(n):
+                    for j in range(i + 1, n):
+                        dist = np.linalg.norm(self.X_[i] - self.X_[j])
+                        if dist <= self.threshold:
+                            edges.append((i, j))
+                
+                # Convert to networkx graph
+                G = nx.Graph()
+                G.add_nodes_from(range(n))
+                G.add_edges_from(edges)
+                return G
         
         raise ValueError(f"Unknown rule: {self.rule}. Use 'knn' or 'epsilon'")
     

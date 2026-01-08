@@ -9,7 +9,7 @@ If you use this Python implementation in your research, please cite:
   title = {ts2net: Time Series to Networks in Python},
   author = {Jones, K.},
   year = {2025},
-  url = {https://github.com/yourusername/ts2net},
+  url = {https://github.com/kylejones200/ts2net},
   note = {Python implementation with univariate and multivariate analysis}
 }
 ```

@@ -17,6 +17,22 @@ Examples
 from .distances import ts_dist, ts_dist_part
 from .builders import net_knn, net_enn, net_weighted, net_knn_approx, net_enn_approx
 from .windows import ts_to_windows, ts_to_windows_list, ts_to_windows_labeled, ts_window_stats
+from .joint_cross import (
+    joint_recurrence_network,
+    cross_visibility_graph,
+    coupling_strength,
+    network_comparison_metrics,
+)
+
+try:
+    from .feature_comparison import (
+        compute_network_features,
+        compare_network_features,
+        cluster_series_by_features,
+    )
+    HAS_FEATURE_COMPARISON = True
+except ImportError:
+    HAS_FEATURE_COMPARISON = False
 
 __all__ = [
     # Distance calculation
@@ -33,5 +49,17 @@ __all__ = [
     'ts_to_windows_list',
     'ts_to_windows_labeled',
     'ts_window_stats',
+    # Joint and cross methods
+    'joint_recurrence_network',
+    'cross_visibility_graph',
+    'coupling_strength',
+    'network_comparison_metrics',
 ]
+
+if HAS_FEATURE_COMPARISON:
+    __all__.extend([
+        'compute_network_features',
+        'compare_network_features',
+        'cluster_series_by_features',
+    ])
 

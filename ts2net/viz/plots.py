@@ -4,7 +4,7 @@ Core plotting functions for ts2net.
 All functions follow the contract:
 - Accept raw series and derived arrays
 - Return (fig, ax) tuple
-- Use consistent Matplotlib styling
+- Use signalplot for consistent, minimalist styling
 - Scale well to large datasets
 """
 
@@ -16,27 +16,18 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import LinearSegmentedColormap
 
-# Consistent styling constants
-FONT_FAMILY = 'DejaVu Sans'
+try:
+    import signalplot as sp
+    HAS_SIGNALPLOT = True
+except ImportError:
+    HAS_SIGNALPLOT = False
+    # Fallback if signalplot not available
+    import warnings
+    warnings.warn("signalplot not available. Install with: pip install signalplot")
+
+# Default figure sizes (signalplot uses constrained_layout by default)
 FIG_WIDTH = 10
 FIG_HEIGHT = 6
-DPI = 100
-GRID_ALPHA = 0.3
-SPINE_COLOR = '#333333'
-
-
-def _setup_style(ax, grid: bool = False):
-    """Apply consistent styling to an axis."""
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color(SPINE_COLOR)
-    ax.spines['bottom'].set_color(SPINE_COLOR)
-    
-    if grid:
-        ax.grid(True, alpha=GRID_ALPHA, linestyle='-', linewidth=0.5)
-        ax.set_axisbelow(True)
-    
-    ax.tick_params(colors=SPINE_COLOR)
 
 
 def plot_series_with_events(
@@ -82,36 +73,46 @@ def plot_series_with_events(
     if figsize is None:
         figsize = (FIG_WIDTH, FIG_HEIGHT)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
     # Plot main series
-    ax.plot(time_index, x, 'k-', linewidth=1.5, alpha=0.8, label='Series')
+    ax.plot(time_index, x, 'k-', linewidth=1.2, alpha=0.8)
     
     # Add window boundaries as faint bands
     if window_bounds:
         for start, end in window_bounds:
-            ax.axvspan(start, end, alpha=0.1, color='blue', zorder=0)
+            ax.axvspan(start, end, alpha=0.1, color='0.8', zorder=0)
     elif window:
         start, end = window
-        ax.axvspan(start, end, alpha=0.1, color='blue', zorder=0)
+        ax.axvspan(start, end, alpha=0.1, color='0.8', zorder=0)
     
-    # Add change points as thin vertical lines
+    # Add change points as thin vertical lines using signalplot's event_line if available
     if events is not None:
         for event_idx in events:
             if 0 <= event_idx < len(time_index):
-                ax.axvline(time_index[event_idx], color='red', 
-                          linewidth=1, alpha=0.6, linestyle='--', zorder=2)
+                if HAS_SIGNALPLOT:
+                    sp.event_line(ax, time_index[event_idx])
+                else:
+                    ax.axvline(time_index[event_idx], color='#d62728', 
+                              linewidth=1, alpha=0.6, linestyle='--', zorder=2)
     
-    # Styling
-    _setup_style(ax, grid=True)
-    ax.set_xlabel('Time Index', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('Value', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.style_line_plot(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    ax.set_xlabel('Time Index')
+    ax.set_ylabel('Value')
     
     if title:
-        ax.set_title(title, fontfamily=FONT_FAMILY, fontsize=13, pad=10)
+        ax.set_title(title)
     
-    plt.tight_layout()
     return fig, ax
 
 
@@ -149,32 +150,48 @@ def plot_degree_profile(
     if figsize is None:
         figsize = (FIG_WIDTH, FIG_HEIGHT)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
     # Plot degree profile
-    ax.plot(time_index, degrees, 'b-', linewidth=1.5, alpha=0.7)
+    ax.plot(time_index, degrees, linewidth=1.2, alpha=0.7)
     
     # Add mean line
     mean_deg = np.mean(degrees)
-    ax.axhline(mean_deg, color='red', linewidth=1, alpha=0.5, 
-              linestyle='--', label=f'Mean: {mean_deg:.2f}')
+    ax.axhline(mean_deg, color=sp.ACCENT if HAS_SIGNALPLOT else '#d62728', 
+              linewidth=1, alpha=0.5, linestyle='--')
     
-    # Styling
-    _setup_style(ax, grid=True)
-    ax.set_xlabel('Time Index', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('Degree', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.style_line_plot(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    ax.set_xlabel('Time Index')
+    ax.set_ylabel('Degree')
     
     if title:
-        ax.set_title(title, fontfamily=FONT_FAMILY, fontsize=13, pad=10)
+        ax.set_title(title)
     
-    # Annotation instead of legend
-    ax.text(0.02, 0.98, f'Mean: {mean_deg:.2f}', 
-           transform=ax.transAxes, fontsize=10,
-           verticalalignment='top', fontfamily=FONT_FAMILY,
-           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    # Use signalplot's direct_label for annotation (positioned at top-left)
+    if HAS_SIGNALPLOT:
+        # Get axis limits for positioning
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        x_pos = xlim[0] + 0.02 * (xlim[1] - xlim[0])
+        y_pos = ylim[0] + 0.98 * (ylim[1] - ylim[0])
+        sp.direct_label(ax, x_pos, y_pos, f'Mean: {mean_deg:.2f}', 
+                       ha='left', va='top')
+    else:
+        ax.text(0.02, 0.98, f'Mean: {mean_deg:.2f}', 
+               transform=ax.transAxes, fontsize=10,
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    plt.tight_layout()
     return fig, ax
 
 
@@ -207,8 +224,11 @@ def plot_degree_ccdf(
     if figsize is None:
         figsize = (FIG_WIDTH, FIG_HEIGHT)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
     # Compute CCDF
     unique_degrees, counts = np.unique(degrees, return_counts=True)
@@ -218,17 +238,21 @@ def plot_degree_ccdf(
     
     # Plot on log scale
     ax.semilogy(unique_degrees, ccdf, 'o-', markersize=4, 
-               linewidth=1.5, alpha=0.7, color='blue')
+               linewidth=1.2, alpha=0.7)
     
-    # Styling
-    _setup_style(ax, grid=True)
-    ax.set_xlabel('Degree', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('CCDF (log scale)', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.style_line_plot(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    ax.set_xlabel('Degree')
+    ax.set_ylabel('CCDF (log scale)')
     
     if title:
-        ax.set_title(title, fontfamily=FONT_FAMILY, fontsize=13, pad=10)
+        ax.set_title(title)
     
-    plt.tight_layout()
     return fig, ax
 
 
@@ -274,8 +298,16 @@ def plot_method_comparison(
     if figsize is None:
         figsize = (12, 6)
     
-    fig, axes = plt.subplots(1, 3, figsize=figsize, dpi=DPI, sharey=True)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, axes = sp.figure(ncols=3, figsize=figsize, sharey=True)
+        # Convert to list if needed (signalplot may return array)
+        if not isinstance(axes, (list, tuple)):
+            axes = [axes] if hasattr(axes, 'scatter') else list(axes)
+        axes = list(axes)  # Ensure it's a list
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=figsize, sharey=True)
+        axes = list(axes)  # Ensure it's a list
     
     # Extract metrics
     n_edges = [m.get('n_edges', 0) for m in metrics_list]
@@ -291,26 +323,37 @@ def plot_method_comparison(
     y_pos = np.arange(len(methods))
     
     # Plot 1: Edge count
-    axes[0].scatter(n_edges, y_pos, s=100, alpha=0.7, color='blue')
-    axes[0].set_xlabel('Edge Count', fontfamily=FONT_FAMILY, fontsize=11)
-    axes[0].set_ylabel('Method', fontfamily=FONT_FAMILY, fontsize=11)
-    _setup_style(axes[0], grid=True)
+    axes[0].scatter(n_edges, y_pos, s=100, alpha=0.7)
+    axes[0].set_xlabel('Edge Count')
+    axes[0].set_ylabel('Method')
+    if HAS_SIGNALPLOT:
+        sp.style_scatter_plot(axes[0])
+    else:
+        axes[0].spines['top'].set_visible(False)
+        axes[0].spines['right'].set_visible(False)
     
     # Plot 2: Average degree
-    axes[1].scatter(avg_degrees, y_pos, s=100, alpha=0.7, color='green')
-    axes[1].set_xlabel('Avg Degree', fontfamily=FONT_FAMILY, fontsize=11)
-    _setup_style(axes[1], grid=True)
+    axes[1].scatter(avg_degrees, y_pos, s=100, alpha=0.7)
+    axes[1].set_xlabel('Avg Degree')
+    if HAS_SIGNALPLOT:
+        sp.style_scatter_plot(axes[1])
+    else:
+        axes[1].spines['top'].set_visible(False)
+        axes[1].spines['right'].set_visible(False)
     
     # Plot 3: Density
-    axes[2].scatter(densities, y_pos, s=100, alpha=0.7, color='red')
-    axes[2].set_xlabel('Density', fontfamily=FONT_FAMILY, fontsize=11)
-    _setup_style(axes[2], grid=True)
+    axes[2].scatter(densities, y_pos, s=100, alpha=0.7)
+    axes[2].set_xlabel('Density')
+    if HAS_SIGNALPLOT:
+        sp.style_scatter_plot(axes[2])
+    else:
+        axes[2].spines['top'].set_visible(False)
+        axes[2].spines['right'].set_visible(False)
     
     # Set y-axis labels
     axes[0].set_yticks(y_pos)
-    axes[0].set_yticklabels(methods, fontfamily=FONT_FAMILY, fontsize=10)
+    axes[0].set_yticklabels(methods)
     
-    plt.tight_layout()
     return fig, axes
 
 
@@ -365,8 +408,11 @@ def plot_window_feature_map(
     if figsize is None:
         figsize = (12, 8)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
     # Normalize each feature for better visualization
     data_normalized = np.zeros_like(data_matrix)
@@ -377,27 +423,30 @@ def plot_window_feature_map(
         else:
             data_normalized[i, :] = col
     
-    # Create heatmap
+    # Create heatmap with neutral colormap
     im = ax.imshow(data_normalized, aspect='auto', cmap='RdYlBu_r', 
                    interpolation='nearest')
     
     # Set ticks
     ax.set_xticks(np.arange(n_windows))
-    ax.set_xticklabels(time_labels, rotation=45, ha='right', 
-                      fontfamily=FONT_FAMILY, fontsize=9)
+    ax.set_xticklabels(time_labels, rotation=45, ha='right')
     ax.set_yticks(np.arange(n_features))
-    ax.set_yticklabels(feature_names, fontfamily=FONT_FAMILY, fontsize=10)
+    ax.set_yticklabels(feature_names)
     
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Normalized Feature Value', fontfamily=FONT_FAMILY, fontsize=10)
+    cbar.set_label('Normalized Feature Value')
     
-    # Styling
-    _setup_style(ax, grid=False)
-    ax.set_xlabel('Time Window', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('Feature', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.tidy_axes(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
     
-    plt.tight_layout()
+    ax.set_xlabel('Time Window')
+    ax.set_ylabel('Feature')
+    
     return fig, ax
 
 
@@ -441,8 +490,11 @@ def plot_hvg_small(
     if figsize is None:
         figsize = (FIG_WIDTH, FIG_HEIGHT)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
     # Normalize values for y-position
     x_norm = (x - np.min(x)) / (np.max(x) - np.min(x) + 1e-10)
@@ -451,24 +503,29 @@ def plot_hvg_small(
     for i, j in edges:
         ax.plot([time_index[i], time_index[j]], 
                [x_norm[i], x_norm[j]], 
-               'b-', alpha=0.2, linewidth=0.5, zorder=1)
+               color='0.7', alpha=0.2, linewidth=0.5, zorder=1)
     
     # Plot nodes
-    ax.scatter(time_index, x_norm, s=30, c='red', 
-             alpha=0.8, zorder=2, edgecolors='black', linewidths=0.5)
+    ax.scatter(time_index, x_norm, s=30, 
+             alpha=0.8, zorder=2, edgecolors='black', linewidths=0.5,
+             facecolors=sp.ACCENT if HAS_SIGNALPLOT else '#d62728')
     
     # Plot series line
-    ax.plot(time_index, x_norm, 'k-', linewidth=1.5, alpha=0.5, zorder=0)
+    ax.plot(time_index, x_norm, 'k-', linewidth=1.2, alpha=0.5, zorder=0)
     
-    # Styling
-    _setup_style(ax, grid=True)
-    ax.set_xlabel('Time Index', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('Normalized Value', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.style_scatter_plot(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    ax.set_xlabel('Time Index')
+    ax.set_ylabel('Normalized Value')
     
     if title:
-        ax.set_title(title, fontfamily=FONT_FAMILY, fontsize=13, pad=10)
+        ax.set_title(title)
     
-    plt.tight_layout()
     return fig, ax
 
 
@@ -500,25 +557,34 @@ def plot_recurrence_matrix(
     if figsize is None:
         figsize = (8, 8)
     
-    fig, ax = plt.subplots(figsize=figsize, dpi=DPI)
-    fig.patch.set_facecolor('white')
+    # Use signalplot figure creation
+    if HAS_SIGNALPLOT:
+        fig, ax = sp.figure(figsize=figsize)
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
     
-    # Plot as image
+    # Plot as image with neutral colormap
     im = ax.imshow(recurrence_matrix, cmap='binary', origin='lower', 
                    interpolation='nearest', aspect='auto')
     
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Recurrence', fontfamily=FONT_FAMILY, fontsize=10)
+    cbar.set_label('Recurrence')
     
-    # Styling
-    _setup_style(ax, grid=False)
-    ax.set_xlabel('Time Index', fontfamily=FONT_FAMILY, fontsize=11)
-    ax.set_ylabel('Time Index', fontfamily=FONT_FAMILY, fontsize=11)
+    # Apply signalplot styling
+    if HAS_SIGNALPLOT:
+        sp.tidy_axes(ax)
+    else:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+    
+    ax.set_xlabel('Time Index')
+    ax.set_ylabel('Time Index')
     
     if title:
-        ax.set_title(title, fontfamily=FONT_FAMILY, fontsize=13, pad=10)
+        ax.set_title(title)
     
-    plt.tight_layout()
     return fig, ax
+
+
 

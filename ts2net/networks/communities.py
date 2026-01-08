@@ -22,6 +22,11 @@ def _nx_to_igraph(G: nx.Graph) -> ig.Graph:
     return H, mapping
 
 
+def _community_labels_from_sets(comms) -> Dict:
+    """Convert community sets to node->community_id mapping."""
+    return {u: cid for cid, C in enumerate(comms) for u in C}
+
+
 def detect_communities(
     G: nx.Graph,
     method: Literal["louvain", "leiden", "label_propagation", "greedy"] = "louvain",
@@ -29,30 +34,23 @@ def detect_communities(
     seed: Optional[int] = 3363,
 ) -> Dict:
     H = G.to_undirected()
-    if method == "louvain":
+    
+    def _louvain():
         try:
-            import community as community_louvain  # python-louvain
+            import community as community_louvain
         except Exception:
             raise RuntimeError("Install python-louvain.")
-        part = community_louvain.best_partition(H, weight=weight, random_state=seed)
-        return part
-    if method == "label_propagation":
-        comms = nx.algorithms.community.asyn_lpa_communities(
-            H, weight=weight, seed=seed
-        )
-        labels = {}
-        for cid, C in enumerate(comms):
-            for u in C:
-                labels[u] = cid
-        return labels
-    if method == "greedy":
+        return community_louvain.best_partition(H, weight=weight, random_state=seed)
+    
+    def _label_propagation():
+        comms = nx.algorithms.community.asyn_lpa_communities(H, weight=weight, seed=seed)
+        return _community_labels_from_sets(comms)
+    
+    def _greedy():
         comms = nx.algorithms.community.greedy_modularity_communities(H, weight=weight)
-        labels = {}
-        for cid, C in enumerate(comms):
-            for u in C:
-                labels[u] = cid
-        return labels
-    if method == "leiden":
+        return _community_labels_from_sets(comms)
+    
+    def _leiden():
         if ig is None or la is None:
             raise RuntimeError("Install python-igraph and leidenalg.")
         Gi, mapping = _nx_to_igraph(H)
@@ -64,12 +62,20 @@ def detect_communities(
             Gi, la.RBConfigurationVertexPartition, weights="w" if w else None, seed=seed
         )
         inv = {i: n for n, i in mapping.items()}
-        labels = {}
-        for cid, C in enumerate(part):
-            for i in C:
-                labels[inv[i]] = cid
-        return labels
-    raise ValueError("Unknown method.")
+        return {inv[i]: cid for cid, C in enumerate(part) for i in C}
+    
+    method_handlers = {
+        "louvain": _louvain,
+        "label_propagation": _label_propagation,
+        "greedy": _greedy,
+        "leiden": _leiden,
+    }
+    
+    handler = method_handlers.get(method)
+    if handler is None:
+        raise ValueError(f"Unknown method: {method}")
+    
+    return handler()
 
 
 def _role_features_basic(G: nx.Graph) -> np.ndarray:

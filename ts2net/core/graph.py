@@ -9,6 +9,14 @@ from numpy.typing import NDArray
 from typing import Optional, List, Tuple, Union
 from dataclasses import dataclass
 
+# Import for type hints only
+try:
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        import networkx as nx
+except ImportError:
+    pass
+
 
 @dataclass
 class Graph:
@@ -281,6 +289,52 @@ class Graph:
             G.add_edges_from(self.edges)
         
         return G
+    
+    def network_metrics(
+        self,
+        include: Optional[List[str]] = None,
+        sample_size: Optional[int] = None,
+        **kwargs
+    ) -> dict:
+        """
+        Compute advanced network metrics (clustering, path lengths, modularity).
+        
+        Parameters
+        ----------
+        include : list, optional
+            Metrics to include: ["clustering", "path_lengths", "modularity"]
+            If None, includes all metrics
+        sample_size : int, optional
+            For large graphs, sample nodes/pairs for expensive computations
+        **kwargs
+            Additional arguments passed to metric functions
+        
+        Returns
+        -------
+        dict
+            Dictionary with network metrics
+        
+        Examples
+        --------
+        >>> from ts2net import HVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> hvg = HVG()
+        >>> hvg.build(x)
+        >>> metrics = hvg._graph.network_metrics()
+        >>> print(f"Clustering: {metrics['avg_clustering']:.3f}")
+        >>> print(f"Avg path length: {metrics['avg_path_length']:.3f}")
+        >>> print(f"Modularity: {metrics['modularity']:.3f}")
+        """
+        try:
+            from ..networks.metrics import network_metrics
+        except ImportError:
+            raise ImportError(
+                "Network metrics require networkx. Install with: pip install networkx"
+            )
+        
+        G = self.as_networkx(force=(self.n_nodes <= 200_000))
+        return network_metrics(G, include=include, sample_size=sample_size, **kwargs)
     
     def summary(self, include_triangles: bool = False) -> dict:
         """

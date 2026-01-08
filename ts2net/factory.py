@@ -60,6 +60,8 @@ def create_recurrence_builder(config: RecurrenceConfig, n_points: Optional[int] 
 
 def create_transition_builder(config: TransitionConfig) -> TransitionNetwork:
     """Create TransitionNetwork builder from configuration."""
+    # Note: TransitionNetwork API doesn't support partition_mode directly
+    # It's handled in the core implementation
     return TransitionNetwork(
         symbolizer=config.symbolizer,
         order=config.order,

@@ -5,7 +5,8 @@ All old functionality preserved via .fit_transform().
 
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Tuple, Union, Literal
+from typing import Optional, Tuple, Union, Literal, List
+import networkx as nx
 from .core.graph import Graph
 from .core.visibility.weights import compute_weight, WeightMode
 
@@ -69,12 +70,38 @@ def _validate_and_clean_series(x, method_name: str = "ts2net") -> NDArray[np.flo
             f"{method_name}: Input must be 1D array, got shape {x.shape}"
         )
     
+    # Enhanced validation with warnings for common issues
+    import warnings
+    
     # Check for constant series (can cause issues in some methods)
     if np.std(x) == 0:
-        import warnings
         warnings.warn(
             f"{method_name}: Constant series detected (std=0). "
             f"Results may be degenerate.",
+            UserWarning
+        )
+    
+    # Check for very short series
+    if len(x) < 3:
+        warnings.warn(
+            f"{method_name}: Very short series (n={len(x)}). "
+            f"Network may be trivial or degenerate. Consider using longer series.",
+            UserWarning
+        )
+    
+    # Check for very long series (may be slow)
+    if len(x) > 100_000:
+        warnings.warn(
+            f"{method_name}: Very long series (n={len(x)}). "
+            f"This may be slow. Consider using limit parameter or resampling.",
+            UserWarning
+        )
+    
+    # Check for potential numerical issues
+    if np.any(np.abs(x) > 1e10):
+        warnings.warn(
+            f"{method_name}: Series contains very large values (max={np.max(np.abs(x)):.2e}). "
+            f"This may cause numerical issues.",
             UserWarning
         )
     
@@ -159,8 +186,157 @@ class HVG:
         self._graph = None
         self._x = None  # Store series for weight recomputation
     
+    def fit(self, x: NDArray[np.float64]) -> 'HVG':
+        """
+        Fit the HVG model to the time series (scikit-learn compatible).
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series (1D array)
+        
+        Returns
+        -------
+        self : HVG
+            Returns self for method chaining
+        
+        Examples
+        --------
+        >>> from ts2net import HVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> hvg = HVG()
+        >>> hvg.fit(x)  # scikit-learn style
+        >>> hvg.transform()  # Get graph
+        """
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "HVG")
+        self._x = x.copy()  # Store for weight recomputation
+        self._fitted = True
+        return self
+    
+    def transform(self) -> nx.Graph:
+        """
+        Transform the fitted time series into a network (scikit-learn compatible).
+        
+        Returns
+        -------
+        G : networkx.Graph or DiGraph
+            The visibility graph
+        
+        Raises
+        ------
+        ValueError
+            If fit() has not been called first
+        
+        Examples
+        --------
+        >>> hvg = HVG()
+        >>> hvg.fit(x)
+        >>> G = hvg.transform()
+        """
+        if not getattr(self, '_fitted', False):
+            raise ValueError("Must call fit() before transform()")
+        if self._graph is None:
+            self.build(self._x)
+        return self.as_networkx(force=True)
+    
+    def fit_transform(self, x: NDArray[np.float64]) -> nx.Graph:
+        """
+        Fit the model and transform in one step (scikit-learn compatible).
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series
+        
+        Returns
+        -------
+        G : networkx.Graph or DiGraph
+            The visibility graph
+        
+        Examples
+        --------
+        >>> hvg = HVG()
+        >>> G = hvg.fit_transform(x)
+        """
+        return self.fit(x).transform()
+    
+    def _compute_degrees(self, G_nx: nx.Graph) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
+        """Compute degree sequences (vectorized)."""
+        if self.directed:
+            out_degrees = np.array([d for _, d in G_nx.out_degree()])
+            in_degrees = np.array([d for _, d in G_nx.in_degree()])
+            return out_degrees, in_degrees, out_degrees
+        degrees = np.array([d for _, d in G_nx.degree()])
+        return degrees, None, None
+    
+    def _build_degrees_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in degrees-only mode."""
+        degrees, in_degrees, out_degrees = self._compute_degrees(G_nx)
+        return Graph(
+            edges=[],
+            n_nodes=len(x),
+            directed=self.directed,
+            weighted=self.weighted,
+            _adjacency=None,
+            _degrees=degrees,
+            _in_degrees=in_degrees,
+            _out_degrees=out_degrees
+        )
+    
+    def _build_stats_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in stats-only mode."""
+        degrees, in_degrees, out_degrees = self._compute_degrees(G_nx)
+        graph = Graph(
+            edges=[],
+            n_nodes=len(x),
+            directed=self.directed,
+            weighted=self.weighted,
+            _adjacency=None,
+            _degrees=degrees,
+            _in_degrees=in_degrees,
+            _out_degrees=out_degrees
+        )
+        graph._n_edges_cached = G_nx.number_of_edges()
+        return graph
+    
+    def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in full edges mode."""
+        edges = list(G_nx.edges(data='weight' if self.weighted else False))
+        
+        if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
+            edge_pairs = [(u, v) for u, v, _ in edges]
+            edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) for u, v in edge_pairs]
+        elif self.weighted:
+            edges = [(u, v, w) for u, v, w in edges]
+        else:
+            edges = [(u, v) for u, v in edges]
+        
+        return Graph(
+            edges=edges,
+            n_nodes=len(x),
+            directed=self.directed,
+            weighted=self.weighted,
+            _adjacency=None
+        )
+    
     def build(self, x: NDArray[np.float64]):
-        """Build HVG from time series."""
+        """
+        Build HVG from time series (legacy method, use fit() for scikit-learn compatibility).
+        
+        .. deprecated:: Use fit() and transform() for scikit-learn compatibility.
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series
+        
+        Returns
+        -------
+        self : HVG
+            Returns self for method chaining
+        """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "HVG")
         self._x = x.copy()  # Store for weight recomputation
@@ -169,77 +345,19 @@ class HVG:
         G_nx, A = self._impl.fit_transform(x)
         
         # Convert to new Graph object based on output mode
-        if self.output == "degrees":
-            # Degrees-only mode: compute degrees, skip edges
-            if self.directed:
-                # For directed graphs, compute both in and out degrees
-                out_degrees = np.array([d for _, d in G_nx.out_degree()])
-                in_degrees = np.array([d for _, d in G_nx.in_degree()])
-                # For backward compatibility, use out_degrees as primary
-                degrees = out_degrees
-            else:
-                degrees = np.array([d for _, d in G_nx.degree()])
-                in_degrees = None
-                out_degrees = None
-            self._graph = Graph(
-                edges=[],
-                n_nodes=len(x),
-                directed=self.directed,
-                weighted=self.weighted,
-                _adjacency=None,  # Don't store sparse matrix either
-                _degrees=degrees,
-                _in_degrees=in_degrees,
-                _out_degrees=out_degrees
-            )
-        elif self.output == "stats":
-            # Stats-only mode: compute degrees and basic stats, skip edges
-            if self.directed:
-                out_degrees = np.array([d for _, d in G_nx.out_degree()])
-                in_degrees = np.array([d for _, d in G_nx.in_degree()])
-                # For backward compatibility, use out_degrees as primary
-                degrees = out_degrees
-            else:
-                degrees = np.array([d for _, d in G_nx.degree()])
-                in_degrees = None
-                out_degrees = None
-            n_edges = G_nx.number_of_edges()
-            self._graph = Graph(
-                edges=[],
-                n_nodes=len(x),
-                directed=self.directed,
-                weighted=self.weighted,
-                _adjacency=None,
-                _degrees=degrees,
-                _in_degrees=in_degrees,
-                _out_degrees=out_degrees
-            )
-            # Store edge count separately since we don't have edges
-            self._graph._n_edges_cached = n_edges
-        else:  # output == "edges"
-            # Full edge list mode
-            edges = list(G_nx.edges(data='weight' if self.weighted else False))
-            
-            # Recompute weights if needed (if weight_mode is not "absdiff")
-            if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
-                # Extract edge pairs
-                edge_pairs = [(u, v) for u, v, _ in edges] if self.weighted else [(u, v) for u, v in edges]
-                # Recompute weights using the specified mode
-                edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) 
-                        for u, v in edge_pairs]
-            elif self.weighted:
-                # Use existing weights (absdiff mode)
-                edges = [(u, v, w) for u, v, w in edges]
-            else:
-                edges = [(u, v) for u, v in edges]
-            
-            self._graph = Graph(
-                edges=edges,
-                n_nodes=len(x),
-                directed=self.directed,
-                weighted=self.weighted,
-                _adjacency=None  # Build sparse lazily if needed
-            )
+        output_handlers = {
+            "degrees": lambda: self._build_degrees_graph(G_nx, x),
+            "stats": lambda: self._build_stats_graph(G_nx, x),
+            "edges": lambda: self._build_edges_graph(G_nx, x),
+        }
         
+        handler = output_handlers.get(self.output)
+        if handler is None:
+            raise ValueError(f"Unknown output mode: {self.output}")
+        
+        self._graph = handler()
+        
+        self._fitted = True
         return self
     
     @property
@@ -292,6 +410,126 @@ class HVG:
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.summary(include_triangles=include_triangles)
+    
+    def network_metrics(
+        self,
+        include: Optional[List[str]] = None,
+        sample_size: Optional[int] = None,
+        **kwargs
+    ) -> dict:
+        """
+        Compute advanced network metrics (clustering, path lengths, modularity).
+        
+        Parameters
+        ----------
+        include : list, optional
+            Metrics to include: ["clustering", "path_lengths", "modularity"]
+            If None, includes all metrics
+        sample_size : int, optional
+            For large graphs, sample nodes/pairs for expensive computations
+        **kwargs
+            Additional arguments passed to metric functions (e.g., method, weight, resolution, seed)
+        
+        Returns
+        -------
+        dict
+            Dictionary with network metrics:
+            - Clustering: avg_clustering, transitivity
+            - Path lengths: avg_path_length, diameter, radius
+            - Modularity: modularity, n_communities
+        
+        Examples
+        --------
+        >>> from ts2net import HVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> hvg = HVG()
+        >>> hvg.build(x)
+        >>> metrics = hvg.network_metrics()
+        >>> print(f"Clustering: {metrics['avg_clustering']:.3f}")
+        >>> print(f"Avg path length: {metrics['avg_path_length']:.3f}")
+        >>> print(f"Modularity: {metrics['modularity']:.3f}")
+        """
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
+    
+    def test_significance(
+        self,
+        metric: str = "density",
+        method: str = "shuffle",
+        n_surrogates: int = 200,
+        alpha: float = 0.05,
+        rng: Optional[np.random.Generator] = None,
+        **kwargs
+    ):
+        """
+        Test significance of a network metric against null distribution.
+        
+        Parameters
+        ----------
+        metric : str, default "density"
+            Metric to test. Options: "density", "deg_mean", "deg_std", 
+            "avg_clustering", "assortativity", or any key from stats()
+        method : str, default "shuffle"
+            Surrogate generation method: "shuffle", "phase", "circular", "iaaft", "block_bootstrap"
+        n_surrogates : int, default 200
+            Number of surrogate series to generate
+        alpha : float, default 0.05
+            Significance level (two-tailed)
+        rng : np.random.Generator, optional
+            Random number generator
+        **kwargs
+            Additional arguments for surrogate generation (e.g., block_size for block_bootstrap)
+        
+        Returns
+        -------
+        result : NetworkSignificanceResult
+            Significance test result
+        
+        Examples
+        --------
+        >>> from ts2net import HVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> hvg = HVG()
+        >>> hvg.build(x)
+        >>> result = hvg.test_significance(metric="density", method="phase", n_surrogates=100)
+        >>> print(result)
+        """
+        from .stats.null_models import compute_network_metric_significance
+        
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        
+        if self._x is None:
+            raise ValueError("Cannot test significance: original time series not stored")
+        
+        # Create metric function
+        def metric_fn(ts):
+            hvg_temp = HVG(
+                weighted=self.weighted,
+                weight_mode=self.weight_mode,
+                limit=self.limit,
+                directed=self.directed,
+                output=self.output
+            )
+            hvg_temp.build(ts)
+            stats = hvg_temp.stats()
+            if metric not in stats:
+                raise ValueError(f"Unknown metric: {metric}. Available: {list(stats.keys())}")
+            return float(stats[metric])
+        
+        return compute_network_metric_significance(
+            self._x,
+            metric_fn,
+            method=method,
+            n_surrogates=n_surrogates,
+            alpha=alpha,
+            metric_name=metric,
+            rng=rng,
+            **kwargs
+        )
     
     def adjacency_matrix(self, format: str = "sparse"):
         """Adjacency matrix (sparse by default)"""
@@ -369,62 +607,163 @@ class NVG:
         self._graph = None
         self._x = None  # Store series for weight recomputation
     
+    def fit(self, x: NDArray[np.float64]) -> 'NVG':
+        """
+        Fit the NVG model to the time series (scikit-learn compatible).
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series (1D array)
+        
+        Returns
+        -------
+        self : NVG
+            Returns self for method chaining
+        
+        Examples
+        --------
+        >>> from ts2net import NVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> nvg = NVG()
+        >>> nvg.fit(x)  # scikit-learn style
+        >>> nvg.transform()  # Get graph
+        """
+        # Validate and clean input (handles dtype contamination)
+        x = _validate_and_clean_series(x, "NVG")
+        self._x = x.copy()  # Store for weight recomputation
+        self._fitted = True
+        return self
+    
+    def transform(self) -> nx.Graph:
+        """
+        Transform the fitted time series into a network (scikit-learn compatible).
+        
+        Returns
+        -------
+        G : networkx.Graph
+            The visibility graph
+        
+        Raises
+        ------
+        ValueError
+            If fit() has not been called first
+        
+        Examples
+        --------
+        >>> nvg = NVG()
+        >>> nvg.fit(x)
+        >>> G = nvg.transform()
+        """
+        if not getattr(self, '_fitted', False):
+            raise ValueError("Must call fit() before transform()")
+        if self._graph is None:
+            self.build(self._x)
+        return self.as_networkx(force=True)
+    
+    def fit_transform(self, x: NDArray[np.float64]) -> nx.Graph:
+        """
+        Fit the model and transform in one step (scikit-learn compatible).
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series
+        
+        Returns
+        -------
+        G : networkx.Graph
+            The visibility graph
+        
+        Examples
+        --------
+        >>> nvg = NVG()
+        >>> G = nvg.fit_transform(x)
+        """
+        return self.fit(x).transform()
+    
     def build(self, x: NDArray[np.float64]):
-        """Build NVG from time series."""
+        """
+        Build NVG from time series (legacy method, use fit() for scikit-learn compatibility).
+        
+        .. deprecated:: Use fit() and transform() for scikit-learn compatibility.
+        
+        Parameters
+        ----------
+        x : array-like
+            Input time series
+        
+        Returns
+        -------
+        self : NVG
+            Returns self for method chaining
+        """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "NVG")
         self._x = x.copy()  # Store for weight recomputation
         
         G_nx, A = self._impl.fit_transform(x)
         
-        # Convert based on output mode (same pattern as HVG)
-        if self.output == "degrees":
-            degrees = np.array([d for _, d in G_nx.degree()])
-            self._graph = Graph(
-                edges=[],
-                n_nodes=len(x),
-                directed=False,
-                weighted=self.weighted,
-                _adjacency=None,
-                _degrees=degrees
-            )
-        elif self.output == "stats":
-            degrees = np.array([d for _, d in G_nx.degree()])
-            n_edges = G_nx.number_of_edges()
-            self._graph = Graph(
-                edges=[],
-                n_nodes=len(x),
-                directed=False,
-                weighted=self.weighted,
-                _adjacency=None,
-                _degrees=degrees
-            )
-            self._graph._n_edges_cached = n_edges
-        else:  # output == "edges"
-            edges = list(G_nx.edges(data='weight' if self.weighted else False))
-            
-            # Recompute weights if needed (if weight_mode is not "absdiff")
-            if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
-                # Extract edge pairs
-                edge_pairs = [(u, v) for u, v, _ in edges] if self.weighted else [(u, v) for u, v in edges]
-                # Recompute weights using the specified mode
-                edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) 
-                        for u, v in edge_pairs]
-            elif self.weighted:
-                # Use existing weights (absdiff mode)
-                edges = [(u, v, w) for u, v, w in edges]
-            else:
-                edges = [(u, v) for u, v in edges]
-            
-            self._graph = Graph(
-                edges=edges,
-                n_nodes=len(x),
-                directed=False,
-                weighted=self.weighted,
-                _adjacency=None
-            )
+        output_handlers = {
+            "degrees": lambda: self._build_degrees_graph(G_nx, x),
+            "stats": lambda: self._build_stats_graph(G_nx, x),
+            "edges": lambda: self._build_edges_graph(G_nx, x),
+        }
         
+        handler = output_handlers.get(self.output)
+        if handler is None:
+            raise ValueError(f"Unknown output mode: {self.output}")
+        
+        self._graph = handler()
+        self._fitted = True
         return self
+    
+    def _build_degrees_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in degrees-only mode."""
+        degrees = np.array([d for _, d in G_nx.degree()])
+        return Graph(
+            edges=[],
+            n_nodes=len(x),
+            directed=False,
+            weighted=self.weighted,
+            _adjacency=None,
+            _degrees=degrees
+        )
+    
+    def _build_stats_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in stats-only mode."""
+        degrees = np.array([d for _, d in G_nx.degree()])
+        graph = Graph(
+            edges=[],
+            n_nodes=len(x),
+            directed=False,
+            weighted=self.weighted,
+            _adjacency=None,
+            _degrees=degrees
+        )
+        graph._n_edges_cached = G_nx.number_of_edges()
+        return graph
+    
+    def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
+        """Build graph in full edges mode."""
+        edges = list(G_nx.edges(data='weight' if self.weighted else False))
+        
+        if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
+            edge_pairs = [(u, v) for u, v, _ in edges]
+            edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) for u, v in edge_pairs]
+        elif self.weighted:
+            edges = [(u, v, w) for u, v, w in edges]
+        else:
+            edges = [(u, v) for u, v in edges]
+        
+        return Graph(
+            edges=edges,
+            n_nodes=len(x),
+            directed=False,
+            weighted=self.weighted,
+            _adjacency=None
+        )
     
     @property
     def edges(self):
@@ -457,6 +796,133 @@ class NVG:
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.summary(include_triangles=include_triangles)
+    
+    def network_metrics(
+        self,
+        include: Optional[List[str]] = None,
+        sample_size: Optional[int] = None,
+        **kwargs
+    ) -> dict:
+        """
+        Compute advanced network metrics (clustering, path lengths, modularity).
+        
+        Parameters
+        ----------
+        include : list, optional
+            Metrics to include: ["clustering", "path_lengths", "modularity"]
+            If None, includes all metrics
+        sample_size : int, optional
+            For large graphs, sample nodes/pairs for expensive computations
+        **kwargs
+            Additional arguments passed to metric functions (e.g., method, weight, resolution, seed)
+        
+        Returns
+        -------
+        dict
+            Dictionary with network metrics:
+            - Clustering: avg_clustering, transitivity
+            - Path lengths: avg_path_length, diameter, radius
+            - Modularity: modularity, n_communities
+        
+        Examples
+        --------
+        >>> from ts2net import HVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> hvg = HVG()
+        >>> hvg.build(x)
+        >>> metrics = hvg.network_metrics()
+        >>> print(f"Clustering: {metrics['avg_clustering']:.3f}")
+        >>> print(f"Avg path length: {metrics['avg_path_length']:.3f}")
+        >>> print(f"Modularity: {metrics['modularity']:.3f}")
+        """
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
+    
+    def test_significance(
+        self,
+        metric: str = "density",
+        method: str = "shuffle",
+        n_surrogates: int = 200,
+        alpha: float = 0.05,
+        rng: Optional[np.random.Generator] = None,
+        **kwargs
+    ):
+        """
+        Test significance of a network metric against null distribution.
+        
+        Parameters
+        ----------
+        metric : str, default "density"
+            Metric to test. Options: "density", "deg_mean", "deg_std", 
+            "avg_clustering", "assortativity", or any key from stats()
+        method : str, default "shuffle"
+            Surrogate generation method: "shuffle", "phase", "circular", "iaaft", "block_bootstrap"
+        n_surrogates : int, default 200
+            Number of surrogate series to generate
+        alpha : float, default 0.05
+            Significance level (two-tailed)
+        rng : np.random.Generator, optional
+            Random number generator
+        **kwargs
+            Additional arguments for surrogate generation (e.g., block_size for block_bootstrap)
+        
+        Returns
+        -------
+        result : NetworkSignificanceResult
+            Significance test result
+        
+        Examples
+        --------
+        >>> from ts2net import NVG
+        >>> import numpy as np
+        >>> x = np.random.randn(100)
+        >>> nvg = NVG()
+        >>> nvg.build(x)
+        >>> result = nvg.test_significance(metric="density", method="phase", n_surrogates=100)
+        >>> print(result)
+        """
+        from .stats.null_models import compute_network_metric_significance
+        
+        if self._graph is None:
+            raise ValueError("Call build() first")
+        
+        if self._x is None:
+            raise ValueError("Cannot test significance: original time series not stored")
+        
+        # Create metric function
+        def metric_fn(ts):
+            # Get parameters from implementation, with safe defaults
+            max_edges = getattr(self._impl, 'max_edges', None)
+            max_edges_per_node = getattr(self._impl, 'max_edges_per_node', None)
+            max_memory_mb = getattr(self._impl, 'max_memory_mb', None)
+            
+            nvg_temp = NVG(
+                weighted=self.weighted,
+                weight_mode=self.weight_mode,
+                limit=self.limit,
+                max_edges=max_edges,
+                max_edges_per_node=max_edges_per_node,
+                max_memory_mb=max_memory_mb,
+                output=self.output
+            )
+            nvg_temp.build(ts)
+            stats = nvg_temp.stats()
+            if metric not in stats:
+                raise ValueError(f"Unknown metric: {metric}. Available: {list(stats.keys())}")
+            return float(stats[metric])
+        
+        return compute_network_metric_significance(
+            self._x,
+            metric_fn,
+            method=method,
+            n_surrogates=n_surrogates,
+            alpha=alpha,
+            metric_name=metric,
+            rng=rng,
+            **kwargs
+        )
     
     def adjacency_matrix(self, format: str = "sparse"):
         """Adjacency matrix (sparse by default)"""
