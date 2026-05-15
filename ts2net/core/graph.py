@@ -127,7 +127,9 @@ class Graph:
             self._out_degrees = out_degrees
         return self._out_degrees
     
-    def adjacency_matrix(self, format: str = "sparse"):
+    def adjacency_matrix(
+        self, format: str = "sparse"
+    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
         """
         Adjacency matrix (lazy, sparse by default).
         

@@ -137,32 +137,48 @@ def tsdist_voi(x: np.ndarray, y: np.ndarray, bins: int = 32) -> float:
     c_x = np.sum(c_xy, axis=1)
     c_y = np.sum(c_xy, axis=0)
 
-    hx = _entropy_from_counts(c_x)
-    hy = _entropy_from_counts(c_y)
+    hx  = _entropy_from_counts(c_x)
+    hy  = _entropy_from_counts(c_y)
     hxy = _entropy_from_counts(c_xy)
 
-    # Variation of information
-    return hx + hy - 2 * hxy
+    # VI(X;Y) = H(X|Y) + H(Y|X)
+    #         = [H(X,Y) - H(Y)] + [H(X,Y) - H(X)]
+    #         = 2·H(X,Y) - H(X) - H(Y)   ≥ 0 always
+    # The previous formula hx + hy - 2*hxy was the negation — mathematically wrong.
+    return max(0.0, 2 * hxy - hx - hy)
 
 
 def tsdist_mic(x: np.ndarray, y: np.ndarray) -> float:
     """
-    Compute Maximal Information Coefficient (MIC) between two time series.
+    Maximal Information Coefficient (MIC) distance between two time series.
+
+    Returns ``1 - MIC(x, y)`` so that 0 means identical dependence and
+    1 means independence (same convention as ``tsdist_nmi``).
+
+    Requires the ``minepy`` package (``pip install minepy``).  Unlike MIC,
+    NMI is **not** a valid substitute — they measure different things and
+    return different values.  An ``ImportError`` is raised rather than
+    silently returning a different metric.
 
     Args:
-        x, y: Input time series
+        x, y: Input time series of equal length.
 
     Returns:
-        MIC distance (0-1 range)
-    """
-    if minepy is not None:
-        # Use minepy if available
-        mic = minepy.MINE()
-        mic.compute_score(x, y)
-        return 1 - mic.mic()
+        MIC distance in [0, 1].
 
-    # Fallback implementation (simplified)
-    return tsdist_nmi(x, y, bins=min(32, int(np.sqrt(len(x)))))
+    Raises:
+        ImportError: If ``minepy`` is not installed.
+    """
+    if minepy is None:
+        raise ImportError(
+            "tsdist_mic requires the 'minepy' package. "
+            "Install it with: pip install minepy\n"
+            "Note: minepy does not currently build on Python 3.12+. "
+            "Consider tsdist_nmi() as an alternative information-theoretic distance."
+        )
+    mic = minepy.MINE()
+    mic.compute_score(x, y)
+    return 1.0 - mic.mic()
 
 
 def tsdist_vr(
