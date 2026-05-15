@@ -12,7 +12,27 @@ Time series to networks. Clean API for visibility graphs, recurrence networks, a
 ### Basic Installation
 
 ```bash
+# Using uv (recommended)
+uv pip install ts2net
+
+# Or using pip
 pip install ts2net
+```
+
+### Development Installation
+
+For development, use uv:
+
+```bash
+# Clone the repository
+git clone https://github.com/kylejones200/ts2net.git
+cd ts2net
+
+# Install with uv (creates virtual environment and installs dependencies)
+uv sync --group dev
+
+# Build Rust extension
+uv run maturin develop --release
 ```
 
 ### Optional Dependencies
@@ -20,20 +40,17 @@ pip install ts2net
 Install with optional features:
 
 ```bash
-# Performance acceleration (Numba)
+# Using uv
+uv pip install "ts2net[speed]"      # Performance acceleration (Numba)
+uv pip install "ts2net[dtw]"         # DTW distance (tslearn)
+uv pip install "ts2net[cnn]"        # Temporal CNN embeddings (PyTorch)
+uv pip install "ts2net[examples]"    # Example dependencies
+
+# Or using pip
 pip install ts2net[speed]
-
-# BSTS decomposition (statsmodels)
-pip install ts2net[bsts]
-
-# Temporal CNN embeddings (PyTorch)
+pip install ts2net[dtw]
 pip install ts2net[cnn]
-
-# All optional features
-pip install ts2net[all]
-
-# Development dependencies
-pip install ts2net[dev]
+pip install ts2net[examples]
 ```
 
 ### Verify Installation
@@ -47,7 +64,7 @@ import numpy as np
 x = np.random.randn(100)
 hvg = HVG()
 hvg.build(x)
-print(f"✓ Installation successful: {hvg.n_nodes} nodes, {hvg.n_edges} edges")
+print(f"Installation successful: {hvg.n_nodes} nodes, {hvg.n_edges} edges")
 ```
 
 ## Quick Start
@@ -111,7 +128,8 @@ residual_network_stats = result.residual_network_stats  # Network features from 
 
 **Installation:**
 ```bash
-pip install ts2net[bsts]  # Installs statsmodels
+uv pip install "ts2net[bsts]"  # Installs statsmodels
+# Or: pip install ts2net[bsts]
 ```
 
 See `examples/bsts_features.py` for complete examples.
@@ -306,7 +324,7 @@ builder.as_networkx()        # optional conversion
 - For recurrence networks, use `rule='knn'` with small `k` (10-30) instead of exact all-pairs
 
 **Slow performance:**
-- Install Numba: `pip install numba` (100-180x speedup for visibility graphs)
+- Install Numba: `uv pip install numba` or `pip install numba` (100-180x speedup for visibility graphs)
 - Use `output="degrees"` if you don't need full edge lists
 - For multivariate, use `n_jobs=-1` for parallel distance computation
 
@@ -322,9 +340,9 @@ builder.as_networkx()        # optional conversion
 
 ### Getting Help
 
-- 📖 [Full Documentation](https://ts2net.readthedocs.io)
-- 💬 [Open an Issue](https://github.com/kylejones200/ts2net/issues)
-- 📝 [Examples](https://github.com/kylejones200/ts2net/tree/main/examples)
+- [Full Documentation](https://ts2net.readthedocs.io)
+- [Open an Issue](https://github.com/kylejones200/ts2net/issues)
+- [Examples](https://github.com/kylejones200/ts2net/tree/main/examples)
 
 ## Citation
 

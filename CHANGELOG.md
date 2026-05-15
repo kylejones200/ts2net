@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-15
+
+### Fixed
+- `cdist_dtw`: `usize::MAX` integer overflow caused all off-diagonal distances to return
+  `inf`. When `band=None`, `i + usize::MAX` wrapped to 0 in release mode, making the
+  inner loop body unreachable. Fix: explicit `match band` sets `jmax = m` directly for
+  the unbounded case, with no arithmetic on `usize::MAX`.
+- `cdist_dtw`: keyword argument `band=2` caused a segfault on Python 3.14 under
+  PyO3 0.19. Root cause: `Option<usize>` keyword extraction was broken in that version.
+
+### Changed
+- Upgraded PyO3 0.19 → 0.28 (adds Python 3.14 support, fixes keyword-arg segfault).
+- Upgraded numpy crate 0.19 → 0.28. Migrated all array return paths to Bound API:
+  `into_pyarray(py).unbind()`, `from_vec(py, v).unbind()`.
+- Removed direct `ndarray` dependency from `ts2net_rs/Cargo.toml`; switched import to
+  `use numpy::ndarray` so lib.rs always uses the same ndarray version as numpy,
+  eliminating the 0.15/0.17 type-split that broke CI on Python 3.12/3.13.
+- `cdist_dtw` `band` parameter type changed from `Option<usize>` to `Option<u64>` at
+  the Python boundary for reliable FFI across all Python versions.
+
+### Added
+- Strengthened `test_dtw_distance`: now asserts off-diagonal values are finite and
+  positive. Previous test only checked shape and symmetry, which passed even when all
+  off-diagonal values were `inf`.
+
 ## [0.6.0] - 2024-12-20
 
 ### Added

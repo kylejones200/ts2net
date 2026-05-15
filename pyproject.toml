@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ts2net"
-version = "0.7.1"
+version = "0.8.0"
 description = "Time series to network conversion and analysis"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -52,17 +52,27 @@ speed = ["numba"]
 dtw = ["tslearn"]
 approx = ["pynndescent"]
 rdata = ["pyreadr"]
-gpu = ["cudtw"]
+gpu = []  # cudtw not available on PyPI; install manually if needed
 mic = ["minepy"]
 examples = ["pandas-datareader", "signalplot"]
 cnn = ["torch>=2.0"]
+
+# Development dependencies (PEP 735 dependency groups)
+[dependency-groups]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-mock>=3.10.0",
+    "pytest-xdist>=2.5.0",
+    "pytest-timeout>=2.0.0",
+    "hypothesis>=6.0.0",
     "black>=23.0",
+    "ruff>=0.1.0",
     "flake8>=6.0",
     "mypy>=1.0",
     "isort>=5.12",
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
     "PyYAML>=6.0",
     "torch>=2.0",
 ]
@@ -80,3 +90,26 @@ release = true
 strip = true
 # Include LICENSE file in source distribution
 sdist-include = ["LICENSE", "README.md", "CITATION.md", "CHANGELOG.md"]
+
+# Pytest configuration
+[tool.pytest.ini_options]
+addopts = "-q"
+filterwarnings = ["ignore::UserWarning"]
+
+# Ruff configuration
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E203", "W503"]  # Compatible with black
+extend-ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["ts2net"]
+
+# Flake8 configuration (for compatibility)
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]

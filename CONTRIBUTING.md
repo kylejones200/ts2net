@@ -14,6 +14,10 @@ Thank you for your interest in contributing to ts2net! This document provides gu
 
 2. **Install development dependencies:**
    ```bash
+   # Using uv (recommended)
+   uv sync --group dev
+   
+   # Or using pip
    pip install -e ".[dev]"
    ```
 
@@ -24,22 +28,30 @@ Thank you for your interest in contributing to ts2net! This document provides gu
 
 4. **Build the Rust extension:**
    ```bash
+   # Using uv
+   uv run maturin develop --release
+   
+   # Or directly
    maturin develop --release
    ```
 
 ### Running Tests
 
 ```bash
-# Run fast tests (default)
+# Using uv (recommended)
+uv run pytest                          # Run fast tests (default)
+uv run pytest -m "not (slow or benchmark)"  # Fast tests only
+uv run pytest -m slow                  # Slow tests
+uv run pytest -m benchmark              # Benchmark tests
+uv run pytest -m hard_validation       # Hard validation tests
+uv run pytest --cov=ts2net --cov-report=html  # With coverage
+
+# Or using pytest directly (if installed)
 pytest
-
-# Run all tests including slow/benchmark
-pytest -m "not (slow or benchmark)"  # Fast tests only
-pytest -m slow                        # Slow tests
-pytest -m benchmark                   # Benchmark tests
-pytest -m hard_validation             # Hard validation tests
-
-# With coverage
+pytest -m "not (slow or benchmark)"
+pytest -m slow
+pytest -m benchmark
+pytest -m hard_validation
 pytest --cov=ts2net --cov-report=html
 ```
 
@@ -48,9 +60,10 @@ pytest --cov=ts2net --cov-report=html
 ### Code Style
 
 - Follow PEP 8 style guidelines
-- Use `black` for code formatting: `black ts2net/ tests/`
-- Use `isort` for import sorting: `isort ts2net/ tests/`
-- Use `flake8` for linting: `flake8 ts2net/ tests/`
+- Use `ruff` for linting and formatting (recommended): `uv run ruff check .` and `uv run ruff format .`
+- Use `black` for code formatting: `uv run black ts2net/ tests/` or `black ts2net/ tests/`
+- Use `isort` for import sorting: `uv run isort ts2net/ tests/` or `isort ts2net/ tests/`
+- Use `flake8` for linting: `uv run flake8 ts2net/ tests/` or `flake8 ts2net/ tests/`
 - Type hints are encouraged but not required
 
 ### Testing
@@ -155,6 +168,7 @@ ts2net/
 - Review the documentation at https://ts2net.readthedocs.io
 
 Thank you for contributing to ts2net!
+
 
 
 

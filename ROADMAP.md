@@ -16,9 +16,9 @@
 
 
 ### Causal Inference & Network-Based Causality
-- **Transfer entropy networks**: Construct directed networks based on information-theoretic causality (transfer entropy between time series pairs)
+- **Transfer entropy networks**: ✅ **COMPLETED** - `transfer_entropy()` computes information-theoretic causality between time series pairs, `transfer_entropy_network()` constructs directed networks based on transfer entropy values. Supports discrete binning and k-NN methods. Exported in `ts2net.causal` module. Comprehensive tests added (`tests/test_transfer_entropy.py`).
+- **Conditional transfer entropy**: ✅ **COMPLETED** - `conditional_transfer_entropy()` accounts for confounding variables in multi-variable causal inference. Exported in `ts2net.causal` module.
 - **Granger causality networks**: Build networks from Granger causality tests (linear and nonlinear variants)
-- **Conditional transfer entropy**: Multi-variable causal inference accounting for confounding variables
 - **Causal network metrics**: Path-based causality measures, causal strength, and directionality indices
 - **Time-lagged network analysis**: Networks with temporal delays to capture causal relationships
 - **Causal discovery algorithms**: PC algorithm, FCI, and constraint-based methods adapted for time series networks

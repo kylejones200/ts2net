@@ -27,24 +27,28 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install maturin pytest pytest-cov PyYAML
-          
-      - name: Build and install package
-        run: |
-          # Install the package in editable mode for testing
-          # This ensures Python finds the code and the Rust extension
-          pip install -e .[dev]
+          uv sync --group dev --frozen
           # Install other optional dependencies for testing
-          pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
+          uv pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
           # Verify test dependencies are installed
-          python -c "import statsmodels; import pyarrow; import polars; import torch; print('✓ All test dependencies installed')"
+          uv run python -c "import statsmodels; import pyarrow; import polars; import torch; print('All test dependencies installed')"
 
       - name: Run tests
         run: |
-          pytest tests/ --cov=ts2net --cov-report=xml --cov-report=term
+          uv run pytest tests/ --cov=ts2net --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

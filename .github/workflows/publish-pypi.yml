@@ -1,9 +1,11 @@
-name: Publish to PyPI
+name: Publish Python Package to PyPI
 
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags (e.g., v0.5.0)
+      - 'v*'  # Trigger on version tags (e.g., v0.7.0)
+  release:
+    types: [published]  # Also trigger on GitHub releases
 
 jobs:
   build-wheels:
@@ -81,7 +83,4 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          print-hash: true
-          verbose: true
 

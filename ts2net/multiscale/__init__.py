@@ -10,3 +10,4 @@ from .core import MultiscaleGraphs, coarse_grain
 __all__ = ["MultiscaleGraphs", "coarse_grain"]
 
 
+

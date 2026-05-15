@@ -247,3 +247,4 @@ class TestMultiscaleGraphs:
         assert len(signature['n_nodes']) == 2
 
 
+

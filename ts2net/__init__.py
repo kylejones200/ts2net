@@ -90,3 +90,7 @@ try:
     __all__.extend(['NeuralNetworkInference', 'DynamicsModel', 'KuramotoModel', 'LinearDynamicsModel'])
 except ImportError:
     pass
+
+# Causal inference (transfer entropy, Granger causality)
+from .causal import transfer_entropy, transfer_entropy_network, conditional_transfer_entropy
+__all__.extend(['transfer_entropy', 'transfer_entropy_network', 'conditional_transfer_entropy'])

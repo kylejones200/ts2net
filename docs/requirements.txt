@@ -1,3 +1,8 @@
+# LEGACY FILE - DO NOT USE
+# This file is kept for reference only. The project now uses uv and pyproject.toml.
+# Documentation dependencies should be installed via: uv sync --group dev
+# See MIGRATION_UV.md for migration instructions.
+
 sphinx>=7.0
 sphinx-rtd-theme>=2.0
 nbsphinx>=0.9
