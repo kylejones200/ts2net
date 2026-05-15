@@ -116,4 +116,4 @@ extend-ignore = ["E203", "W503"]
 
 # uv build dependencies — minepy 1.2.6 requires pkg_resources at build time
 [tool.uv.extra-build-dependencies]
-minepy = ["setuptools"]
+minepy = ["pkg_resources"]
