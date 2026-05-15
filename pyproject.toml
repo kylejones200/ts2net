@@ -53,7 +53,6 @@ dtw = ["tslearn"]
 approx = ["pynndescent"]
 rdata = ["pyreadr"]
 gpu = []  # cudtw not available on PyPI; install manually if needed
-mic = ["minepy"]
 examples = ["pandas-datareader", "signalplot"]
 cnn = ["torch>=2.0"]
 
