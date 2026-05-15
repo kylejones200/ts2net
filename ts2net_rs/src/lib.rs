@@ -13,6 +13,7 @@ use num_complex::Complex;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyAny;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
@@ -106,13 +107,13 @@ fn nvg_edges_sweepline_core(y: &Array1<f64>) -> Array2<i64> {
 #[pyfunction]
 fn hvg_edges(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<PyArray2<i64>>> {
     let v = as_1d(y)?;
-    Ok(hvg_edges_core(&v).into_pyarray(py).to_owned())
+    Ok(hvg_edges_core(&v).into_pyarray(py).unbind())
 }
 
 #[pyfunction]
 fn nvg_edges_sweepline(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<PyArray2<i64>>> {
     let v = as_1d(y)?;
-    Ok(nvg_edges_sweepline_core(&v).into_pyarray(py).to_owned())
+    Ok(nvg_edges_sweepline_core(&v).into_pyarray(py).unbind())
 }
 
 //
@@ -122,17 +123,23 @@ fn nvg_edges_sweepline(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<
 fn dtw_pair(a: &[f64], b: &[f64], band: Option<usize>) -> f64 {
     let n = a.len();
     let m = b.len();
-    let mut w = band.unwrap_or(usize::MAX);
-    let dm = if n > m { n - m } else { m - n };
-    if w < dm {
-        w = dm;
-    }
     let inf = f64::INFINITY;
     let mut dp = vec![vec![inf; m + 1]; n + 1];
     dp[0][0] = 0.0;
     for i in 1..=n {
-        let jmin = 1usize.max(i.saturating_sub(w));
-        let jmax = m.min(i + w);
+        // When no band is given use the full row (jmin=1, jmax=m).
+        // Previously `band.unwrap_or(usize::MAX)` then `i + w` wrapped
+        // to 0 in release mode, making jmax=0 and leaving every cell at inf.
+        let (jmin, jmax) = match band {
+            None => (1, m),
+            Some(mut w) => {
+                let dm = if n > m { n - m } else { m - n };
+                if w < dm {
+                    w = dm;
+                }
+                (1usize.max(i.saturating_sub(w)), m.min(i.saturating_add(w)))
+            }
+        };
         for j in jmin..=jmax {
             let cost = (a[i - 1] - b[j - 1]).powi(2);
             let v = dp[i - 1][j].min(dp[i][j - 1]).min(dp[i - 1][j - 1]);
@@ -173,13 +180,17 @@ fn cdist_dtw_core(x: &Array2<f64>, band: Option<usize>) -> Array2<f64> {
 }
 
 #[pyfunction]
+#[pyo3(signature = (x, band=None))]
 fn cdist_dtw(
     py: Python<'_>,
     x: PyReadonlyArray2<f64>,
-    band: Option<usize>,
+    band: Option<u64>,
 ) -> PyResult<Py<PyArray2<f64>>> {
     let a = as_2d(x)?;
-    Ok(cdist_dtw_core(&a, band).into_pyarray(py).to_owned())
+    // Use u64 at the Python boundary (usize is platform-dependent and causes
+    // a segfault with keyword args under PyO3 0.19 + Python 3.14).
+    let band_usize = band.map(|b| b as usize);
+    Ok(cdist_dtw_core(&a, band_usize).into_pyarray(py).unbind())
 }
 
 // ---- KD-tree (kiddo) for k-NN and radius queries ----
@@ -261,13 +272,13 @@ fn knn(
         _ => return Err(PyValueError::new_err("dimension up to 6 is supported")),
     };
     Ok((
-        idx.into_pyarray(py).to_owned(),
-        dst.into_pyarray(py).to_owned(),
+        idx.into_pyarray(py).unbind(),
+        dst.into_pyarray(py).unbind(),
     ))
 }
 
 #[pyfunction]
-fn radius(_py: Python<'_>, x: PyReadonlyArray2<f64>, eps: f64) -> PyResult<PyObject> {
+fn radius(py: Python<'_>, x: PyReadonlyArray2<f64>, eps: f64) -> PyResult<Py<PyAny>> {
     let a = as_2d(x)?;
     let m = a.len_of(Axis(1));
     let neighs = match m {
@@ -279,7 +290,7 @@ fn radius(_py: Python<'_>, x: PyReadonlyArray2<f64>, eps: f64) -> PyResult<PyObj
         6 => radius_impl::<6>(&a, eps),
         _ => return Err(PyValueError::new_err("dimension up to 6 is supported")),
     };
-    Python::with_gil(|py| Ok(neighs.into_py(py)))
+    Ok(neighs.into_pyobject(py)?.unbind())
 }
 
 //
@@ -327,7 +338,7 @@ fn rn_adj_epsilon(
             }
         }
     }
-    Ok(A.into_pyarray(py).to_owned())
+    Ok(A.into_pyarray(py).unbind())
 }
 
 //
@@ -396,7 +407,7 @@ fn event_sync(
     };
     let mut out = vec![c12, c21, ties, q12, q21, q, delays.len() as f64];
     out.extend(delays);
-    Ok(PyArray1::from_vec(py, out).to_owned())
+    Ok(PyArray1::from_vec(py,out).unbind())
 }
 
 //
@@ -464,12 +475,12 @@ fn false_nearest_neighbors(
         }
         out.push(fnn / (L as f64));
     }
-    Ok(PyArray1::from_vec(py, out).to_owned())
+    Ok(PyArray1::from_vec(py,out).unbind())
 }
 
 #[pyfunction]
 fn cao_e1_e2(
-    _py: Python<'_>,
+    py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     m_max: usize,
     tau: usize,
@@ -535,12 +546,10 @@ fn cao_e1_e2(
             E2.push(diffs.iter().sum::<f64>() / (diffs.len() as f64));
         }
     }
-    Python::with_gil(|py| {
-        Ok((
-            PyArray1::from_vec(py, E1).to_owned(),
-            PyArray1::from_vec(py, E2).to_owned(),
-        ))
-    })
+    Ok((
+        PyArray1::from_vec(py,E1).unbind(),
+        PyArray1::from_vec(py,E2).unbind(),
+    ))
 }
 
 //
@@ -621,7 +630,7 @@ fn triangles_per_node(
             tri[v] += c;
         }
     }
-    Ok(PyArray1::from_vec(py, tri).to_owned())
+    Ok(PyArray1::from_vec(py,tri).unbind())
 }
 
 #[pyfunction]
@@ -723,7 +732,7 @@ fn mean_shortest_path(
 
 #[pyfunction]
 fn surrogate_phase(
-    _py: Python<'_>,
+    py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     seed: u64,
 ) -> PyResult<Py<PyArray1<f64>>> {
@@ -758,12 +767,12 @@ fn surrogate_phase(
     }
     ifft.process(&mut spec);
     let out: Vec<f64> = spec.iter().map(|c| c.re / (n as f64)).collect();
-    Python::with_gil(|py| Ok(PyArray1::from_vec(py, out).to_owned()))
+    Ok(PyArray1::from_vec(py,out).unbind())
 }
 
 #[pyfunction]
 fn iaaft(
-    _py: Python<'_>,
+    py: Python<'_>,
     x: PyReadonlyArray1<f64>,
     iters: usize,
     seed: u64,
@@ -812,7 +821,7 @@ fn iaaft(
         }
         y = out;
     }
-    Python::with_gil(|py| Ok(PyArray1::from_vec(py, y).to_owned()))
+    Ok(PyArray1::from_vec(py,y).unbind())
 }
 
 //
@@ -902,7 +911,7 @@ fn moran_i(
 //
 
 #[pymodule]
-fn ts2net_rs(_py: Python, m: &PyModule) -> PyResult<()> {
+fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hvg_edges, m)?)?;
     m.add_function(wrap_pyfunction!(nvg_edges_sweepline, m)?)?;
     m.add_function(wrap_pyfunction!(cdist_dtw, m)?)?;

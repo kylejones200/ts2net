@@ -12,8 +12,8 @@ name = "ts2net_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.19", features = ["extension-module"] }
-numpy = "0.19"
+pyo3 = { version = "0.28", features = ["extension-module"] }
+numpy = "0.28"
 ndarray = { version = "0.15", features = ["rayon"] }
 rayon = "1.10"
 kiddo = "4"   # Fast k-d tree with constant dimension support
