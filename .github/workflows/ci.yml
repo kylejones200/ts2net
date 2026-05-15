@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles("pyproject.toml") }}
+          key: uv-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         run: |
           uv sync --group dev
