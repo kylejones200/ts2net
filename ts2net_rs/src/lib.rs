@@ -8,7 +8,7 @@
 #![allow(clippy::too_many_arguments)]
 
 // External crates
-use ndarray::{s, Array1, Array2, ArrayView1, Axis};
+use numpy::ndarray::{s, Array1, Array2, ArrayView1, Axis};
 use num_complex::Complex;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;

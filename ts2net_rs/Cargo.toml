@@ -14,7 +14,8 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.28", features = ["extension-module"] }
 numpy = "0.28"
-ndarray = { version = "0.15", features = ["rayon"] }
+# ndarray is provided transitively via numpy — use numpy::ndarray throughout lib.rs
+# to guarantee type compatibility regardless of which version Cargo resolves
 rayon = "1.10"
 kiddo = "4"   # Fast k-d tree with constant dimension support
 rand = "0.8"  # Random number generation
