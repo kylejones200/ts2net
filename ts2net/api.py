@@ -321,21 +321,20 @@ class HVG:
             _adjacency=None
         )
     
-    def build(self, x: NDArray[np.float64]):
+    def build(self, x: NDArray[np.float64]) -> "HVG":
         """
-        Build HVG from time series (legacy method, use fit() for scikit-learn compatibility).
-        
-        .. deprecated:: Use fit() and transform() for scikit-learn compatibility.
-        
+        Build HVG from time series.
+
+        Equivalent to ``fit(x)``; returns ``self`` for method chaining.
+
         Parameters
         ----------
-        x : array-like
-            Input time series
-        
+        x : array-like of shape (n,)
+            Input time series.
+
         Returns
         -------
         self : HVG
-            Returns self for method chaining
         """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "HVG")
@@ -683,21 +682,20 @@ class NVG:
         """
         return self.fit(x).transform()
     
-    def build(self, x: NDArray[np.float64]):
+    def build(self, x: NDArray[np.float64]) -> "NVG":
         """
-        Build NVG from time series (legacy method, use fit() for scikit-learn compatibility).
-        
-        .. deprecated:: Use fit() and transform() for scikit-learn compatibility.
-        
+        Build NVG from time series.
+
+        Equivalent to ``fit(x)``; returns ``self`` for method chaining.
+
         Parameters
         ----------
-        x : array-like
-            Input time series
-        
+        x : array-like of shape (n,)
+            Input time series.
+
         Returns
         -------
         self : NVG
-            Returns self for method chaining
         """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "NVG")
@@ -985,8 +983,19 @@ class RecurrenceNetwork:
         self._impl = _RN_Old(m=m, tau=tau, rule=rule, k=k, metric=metric, threshold=threshold)
         self._graph = None
     
-    def build(self, x: NDArray[np.float64]):
-        """Build recurrence network from time series."""
+    def build(self, x: NDArray[np.float64]) -> "RecurrenceNetwork":
+        """
+        Build recurrence network from time series.
+
+        Parameters
+        ----------
+        x : array-like of shape (n,)
+            Input time series.
+
+        Returns
+        -------
+        self : RecurrenceNetwork
+        """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "RecurrenceNetwork")
         
@@ -1126,8 +1135,19 @@ class TransitionNetwork:
         )
         self._graph = None
     
-    def build(self, x: NDArray[np.float64]):
-        """Build transition network from time series."""
+    def build(self, x: NDArray[np.float64]) -> "TransitionNetwork":
+        """
+        Build transition network from time series.
+
+        Parameters
+        ----------
+        x : array-like of shape (n,)
+            Input time series.
+
+        Returns
+        -------
+        self : TransitionNetwork
+        """
         # Validate and clean input (handles dtype contamination)
         x = _validate_and_clean_series(x, "TransitionNetwork")
         

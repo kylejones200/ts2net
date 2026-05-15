@@ -11,11 +11,8 @@ from scipy import stats
 from scipy.spatial.distance import squareform, pdist
 from scipy.signal import correlate
 
-# Optional deps
-try:
-    from tslearn.metrics import cdist_dtw as _cdist_dtw
-except ImportError:
-    _cdist_dtw = None
+# DTW backend — imported from the canonical module so there is one source of truth
+from .dtw import cdist_dtw as _cdist_dtw_fn
 
 try:
     import minepy
@@ -77,32 +74,22 @@ def tsdist_ccf(X: np.ndarray, max_lag: int = 10) -> np.ndarray:
     return D
 
 
-def tsdist_dtw(X: np.ndarray) -> np.ndarray:
+def tsdist_dtw(X: np.ndarray, band: Optional[int] = None) -> np.ndarray:
     """
-    Compute Dynamic Time Warping (DTW) distance matrix.
+    Pairwise DTW distance matrix.
 
     Args:
         X: Input time series array of shape (n_series, n_timesteps)
+        band: Sakoe-Chiba bandwidth; None = unconstrained (Rust backend only)
 
     Returns:
-        Distance matrix of shape (n_series, n_series)
+        Symmetric distance matrix of shape (n_series, n_series)
+
+    Notes:
+        Backend priority: Rust (ts2net_rs) → tslearn → pure Python.
+        Check ``ts2net.distances.dtw._BACKEND`` to see which is active.
     """
-    if _cdist_dtw is not None:
-        # Use optimized tslearn implementation if available
-        return _cdist_dtw(X)
-
-    # Fallback implementation
-    from .dtw import dtw_distance
-
-    n = len(X)
-    D = np.zeros((n, n))
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = dtw_distance(X[i], X[j])
-            D[i, j] = D[j, i] = d
-
-    return D
+    return _cdist_dtw_fn(np.asarray(X, dtype=np.float64), band=band)
 
 
 def _entropy_from_counts(c: np.ndarray) -> float:
