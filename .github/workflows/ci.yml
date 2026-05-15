@@ -24,7 +24,7 @@ jobs:
           key: uv-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         run: |
-          uv sync --group dev
+          uv sync --group dev --no-extra mic --no-extra examples --no-extra rdata
           # Install CPU-only PyTorch (much smaller, ~200MB vs ~3GB with CUDA)
           uv pip install torch --index-url https://download.pytorch.org/whl/cpu
           # Install optional dependencies

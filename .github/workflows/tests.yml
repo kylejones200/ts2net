@@ -40,7 +40,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group dev
+          uv sync --group dev --no-extra mic --no-extra examples --no-extra rdata
           # Install other optional dependencies for testing
           uv pip install numba tslearn pynndescent pyreadr || echo "Some optional deps failed, continuing..."
           # Verify test dependencies are installed
