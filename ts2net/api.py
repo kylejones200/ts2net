@@ -1,6 +1,17 @@
 """
-Wraps existing implementations with new lightweight Graph interface.
-All old functionality preserved via .fit_transform().
+ts2net public API — four graph builders and a factory function.
+
+Primary interface:  ``builder.build(x)`` — builds and returns self.
+Sklearn interface:  ``builder.fit_transform(x)`` — returns NetworkX graph.
+Split interface:    ``builder.fit(x).transform()`` — deprecated; prefer build().
+
+All builders share the same output methods after build():
+  .n_nodes              int
+  .n_edges              int
+  .degree_sequence()    NDArray[int64]
+  .adjacency_matrix()   sparse CSR (default) or dense
+  .stats()              dict of summary metrics
+  .as_networkx()        nx.Graph (optional; large graphs refused unless force=True)
 """
 
 import numpy as np
@@ -110,29 +121,50 @@ def _validate_and_clean_series(x, method_name: str = "ts2net") -> NDArray[np.flo
 
 class HVG:
     """
-    Horizontal Visibility Graph.
-    
-    
-    
+    Horizontal Visibility Graph (HVG).
+
+    Two nodes i < j are connected if every intermediate value is strictly
+    below the lower of the two endpoints::
+
+        x[k] < min(x[i], x[j])  for all i < k < j
+
+    Complexity: O(n) time and space (monotone stack algorithm).
+
+    Key invariants (random i.i.d. series):
+    - Mean degree → 4 as n → ∞  (Luque et al. 2009)
+    - Degree distribution follows P(k) ~ (1/3)(2/3)^(k-2) for k ≥ 2
+
     Parameters
     ----------
     weighted : bool
         Edge weights = abs(y_i - y_j)
     limit : int, optional
-        Maximum temporal distance
-    only_degrees : bool
-        Performance mode - skip edge storage
-    
+        Maximum temporal distance between connected nodes.  ``None`` means
+        unconstrained (default).  Useful for very long series where distant
+        connections are not meaningful.
+    output : {"edges", "degrees", "stats"}, default "edges"
+        ``"edges"`` stores the full edge list; ``"degrees"`` stores only the
+        degree sequence (fast, low memory); ``"stats"`` stores only summary
+        statistics (lowest memory).
+    directed : bool, default False
+        Produce a directed graph with edges pointing forward in time
+        (i → j for i < j).  Enables irreversibility analysis.
+
+    References
+    ----------
+    Luque, B., Lacasa, L., Ballesteros, F., & Luque, J. (2009). Horizontal
+    visibility graphs: Exact results for random time series. *Physical Review
+    E*, 80(4), 046103. https://doi.org/10.1103/PhysRevE.80.046103
+
     Examples
     --------
     >>> import numpy as np
     >>> from ts2net import HVG
     >>> x = np.random.randn(1000)
-    >>> hvg = HVG()
-    >>> hvg.build(x)
+    >>> hvg = HVG().build(x)          # build() returns self for chaining
     >>> print(hvg.n_nodes, hvg.n_edges)
-    >>> degrees = hvg.degree_sequence()
-    >>> A = hvg.adjacency_matrix()
+    >>> degrees = hvg.degree_sequence
+    >>> A = hvg.adjacency_matrix()    # sparse CSR by default
     >>> G_nx = hvg.as_networkx()  # Optional
     """
     
@@ -382,8 +414,15 @@ class HVG:
             raise ValueError("Call build() first")
         return self._graph.n_edges
     
-    def degree_sequence(self):
-        """Degree sequence (out-degree for directed graphs, total degree for undirected)"""
+    def degree_sequence(self) -> NDArray[np.int64]:
+        """
+        Node degree sequence.
+
+        Returns
+        -------
+        d : NDArray[int64] of shape (n_nodes,)
+            Out-degree for directed graphs; total degree for undirected.
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
@@ -530,28 +569,102 @@ class HVG:
             **kwargs
         )
     
-    def adjacency_matrix(self, format: str = "sparse"):
-        """Adjacency matrix (sparse by default)"""
+    def adjacency_matrix(
+        self, format: str = "sparse"
+    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+        """
+        Adjacency matrix.
+
+        Parameters
+        ----------
+        format : {"sparse", "coo", "dense"}, default "sparse"
+            ``"sparse"`` returns a SciPy CSR matrix.
+            ``"coo"`` returns a SciPy COO matrix.
+            ``"dense"`` returns a NumPy array; **refused** for n > 50 000
+            nodes (would require ≥ 20 GB RAM).
+
+        Returns
+        -------
+        A : csr_matrix | coo_matrix | ndarray
+            Symmetric adjacency matrix of shape (n_nodes, n_nodes).
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def edges_coo(self):
-        """Return edges in COO format (src, dst, weight arrays)"""
+    def edges_coo(
+        self,
+    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+        """
+        Edge list in COO (coordinate) format.
+
+        Returns
+        -------
+        rows : NDArray[int64]  — source node indices
+        cols : NDArray[int64]  — target node indices
+        weights : NDArray[float64] or None — edge weights (None if unweighted)
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.edges_coo()
     
-    def as_networkx(self, force: bool = False):
-        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+    def as_networkx(self, force: bool = False) -> nx.Graph:
+        """
+        Convert to a NetworkX graph.
+
+        Parameters
+        ----------
+        force : bool, default False
+            If False, raises for n > 200 000 nodes to prevent accidental
+            allocation of very large objects.
+
+        Returns
+        -------
+        G : nx.Graph or nx.DiGraph
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.as_networkx(force=force)
 
 
 class NVG:
-    """Natural Visibility Graph"""
-    
+    """
+    Natural Visibility Graph (NVG).
+
+    Two nodes i < j are connected if the straight line between (i, x[i]) and
+    (j, x[j]) lies strictly above all intermediate data points::
+
+        x[k] < x[i] + (x[j] - x[i]) * (k - i) / (j - i)  for all i < k < j
+
+    NVG is a superset of HVG: every HVG edge is also an NVG edge.
+
+    Complexity: O(n log n) average (sweep-line algorithm).
+
+    Parameters
+    ----------
+    weighted : bool or str, default False
+        See HVG for weight mode options.
+    limit : int, optional
+        Horizon limit — maximum temporal distance between connected nodes.
+        **Recommended for series > 10 000 points** (2 000–5 000 suggested).
+    output : {"edges", "degrees", "stats"}, default "edges"
+        Controls what is stored after build().
+
+    References
+    ----------
+    Lacasa, L., Luque, B., Ballesteros, F., Luque, J., & Nuño, J. C. (2008).
+    From time series to complex networks: The visibility graph. *PNAS*,
+    105(13), 4972–4975. https://doi.org/10.1073/pnas.0709247105
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ts2net import NVG
+    >>> x = np.random.randn(500)
+    >>> nvg = NVG(limit=500).build(x)
+    >>> print(nvg.n_nodes, nvg.n_edges)
+    """
+
     def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None,
                  only_degrees: bool = False, output: str = "edges",
                  max_edges: Optional[int] = None, max_edges_per_node: Optional[int] = None,
@@ -772,25 +885,27 @@ class NVG:
         return self._graph.edges
     
     @property
-    def n_nodes(self):
+    def n_nodes(self) -> int:
+        """Number of nodes (equals length of input series)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_nodes
-    
+
     @property
-    def n_edges(self):
+    def n_edges(self) -> int:
+        """Number of edges."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_edges
     
-    def degree_sequence(self):
-        """Degree sequence"""
+    def degree_sequence(self) -> NDArray[np.int64]:
+        """Node degree sequence — shape (n_nodes,)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
-    
+
     def stats(self, include_triangles: bool = False) -> dict:
-        """Summary statistics (memory efficient, no dense matrix)"""
+        """Summary statistics (no dense matrix required)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.summary(include_triangles=include_triangles)
@@ -922,28 +1037,109 @@ class NVG:
             **kwargs
         )
     
-    def adjacency_matrix(self, format: str = "sparse"):
-        """Adjacency matrix (sparse by default)"""
+    def adjacency_matrix(
+        self, format: str = "sparse"
+    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+        """
+        Adjacency matrix.
+
+        Parameters
+        ----------
+        format : {"sparse", "coo", "dense"}, default "sparse"
+            ``"sparse"`` returns a SciPy CSR matrix.
+            ``"coo"`` returns a SciPy COO matrix.
+            ``"dense"`` returns a NumPy array; **refused** for n > 50 000
+            nodes (would require ≥ 20 GB RAM).
+
+        Returns
+        -------
+        A : csr_matrix | coo_matrix | ndarray
+            Symmetric adjacency matrix of shape (n_nodes, n_nodes).
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def edges_coo(self):
-        """Return edges in COO format (src, dst, weight arrays)"""
+    def edges_coo(
+        self,
+    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+        """
+        Edge list in COO (coordinate) format.
+
+        Returns
+        -------
+        rows : NDArray[int64]  — source node indices
+        cols : NDArray[int64]  — target node indices
+        weights : NDArray[float64] or None — edge weights (None if unweighted)
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.edges_coo()
     
-    def as_networkx(self, force: bool = False):
-        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+    def as_networkx(self, force: bool = False) -> nx.Graph:
+        """
+        Convert to a NetworkX graph.
+
+        Parameters
+        ----------
+        force : bool, default False
+            If False, raises for n > 200 000 nodes to prevent accidental
+            allocation of very large objects.
+
+        Returns
+        -------
+        G : nx.Graph or nx.DiGraph
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.as_networkx(force=force)
 
 
 class RecurrenceNetwork:
-    """Recurrence Network"""
-    
+    """
+    Recurrence Network.
+
+    A recurrence network is derived from a recurrence plot.  After
+    delay-embedding the series into an m-dimensional phase space, two
+    states i, j are connected if their distance falls below a threshold
+    (``rule="epsilon"``) or if one is among the other's k nearest neighbours
+    (``rule="knn"``).
+
+    Parameters
+    ----------
+    m : int, optional
+        Embedding dimension.  ``None`` means no embedding (1-D, i.e., the
+        raw series is used as the phase-space trajectory).
+    tau : int, default 1
+        Time delay for Takens embedding.
+    rule : {"knn", "epsilon"}, default "knn"
+        ``"knn"`` connects each point to its *k* nearest neighbours.
+        ``"epsilon"`` connects all pairs closer than *epsilon*.
+    k : int, default 5
+        Number of nearest neighbours (``rule="knn"`` only).
+    epsilon : float, default 0.1
+        Recurrence threshold (``rule="epsilon"`` only).
+    metric : str, default "euclidean"
+        Distance metric for phase-space proximity.
+    output : {"edges", "degrees", "stats"}, default "edges"
+        Controls what is stored after build().
+
+    References
+    ----------
+    Marwan, N., Donges, J. F., Zou, Y., Donner, R. V., & Kurths, J. (2009).
+    Complex network approach for recurrence analysis of time series.
+    *Physics Letters A*, 373(46), 4246–4254.
+    https://doi.org/10.1016/j.physleta.2009.09.042
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ts2net import RecurrenceNetwork
+    >>> x = np.sin(np.linspace(0, 8*np.pi, 300)) + 0.1*np.random.randn(300)
+    >>> rn = RecurrenceNetwork(rule="epsilon", epsilon=0.3).build(x)
+    >>> print(rn.n_nodes, rn.n_edges)
+    """
+
     def __init__(self, m: Optional[int] = None, tau: int = 1, rule: str = 'knn',
                  k: int = 5, epsilon: float = 0.1, metric: str = 'euclidean',
                  only_degrees: bool = False, output: str = "edges"):
@@ -1047,51 +1243,133 @@ class RecurrenceNetwork:
         return self._graph.edges
     
     @property
-    def n_nodes(self):
+    def n_nodes(self) -> int:
+        """Number of nodes (equals length of input series)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_nodes
-    
+
     @property
-    def n_edges(self):
+    def n_edges(self) -> int:
+        """Number of edges."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_edges
     
-    def degree_sequence(self):
-        """Degree sequence"""
+    def degree_sequence(self) -> NDArray[np.int64]:
+        """Node degree sequence — shape (n_nodes,)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
-    
+
     def stats(self, include_triangles: bool = False) -> dict:
-        """Summary statistics (memory efficient, no dense matrix)"""
+        """Summary statistics (no dense matrix required)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.summary(include_triangles=include_triangles)
     
-    def adjacency_matrix(self, format: str = "sparse"):
-        """Adjacency matrix (sparse by default)"""
+    def adjacency_matrix(
+        self, format: str = "sparse"
+    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+        """
+        Adjacency matrix.
+
+        Parameters
+        ----------
+        format : {"sparse", "coo", "dense"}, default "sparse"
+            ``"sparse"`` returns a SciPy CSR matrix.
+            ``"coo"`` returns a SciPy COO matrix.
+            ``"dense"`` returns a NumPy array; **refused** for n > 50 000
+            nodes (would require ≥ 20 GB RAM).
+
+        Returns
+        -------
+        A : csr_matrix | coo_matrix | ndarray
+            Symmetric adjacency matrix of shape (n_nodes, n_nodes).
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def edges_coo(self):
-        """Return edges in COO format (src, dst, weight arrays)"""
+    def edges_coo(
+        self,
+    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+        """
+        Edge list in COO (coordinate) format.
+
+        Returns
+        -------
+        rows : NDArray[int64]  — source node indices
+        cols : NDArray[int64]  — target node indices
+        weights : NDArray[float64] or None — edge weights (None if unweighted)
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.edges_coo()
     
-    def as_networkx(self, force: bool = False):
-        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+    def as_networkx(self, force: bool = False) -> nx.Graph:
+        """
+        Convert to a NetworkX graph.
+
+        Parameters
+        ----------
+        force : bool, default False
+            If False, raises for n > 200 000 nodes to prevent accidental
+            allocation of very large objects.
+
+        Returns
+        -------
+        G : nx.Graph or nx.DiGraph
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.as_networkx(force=force)
 
 
 class TransitionNetwork:
-    """Transition Network"""
-    
+    """
+    Transition Network (Ordinal Partition Network).
+
+    The time series is symbolised — each subsequence of length ``order+1``
+    is mapped to its rank-order pattern (an ordinal pattern).  A directed
+    graph is then built where nodes are distinct patterns and a weighted
+    edge (i → j) records how often pattern i is immediately followed by
+    pattern j.
+
+    The resulting graph captures the Markov-like transition dynamics of the
+    series and is sensitive to nonlinear structure invisible to linear
+    methods.
+
+    Parameters
+    ----------
+    symbolizer : {"ordinal", "equal_width", "equal_freq", "kmeans"}
+        How to discretise the series into symbolic states.
+        ``"ordinal"`` (default) uses rank-order patterns — invariant to
+        monotone transformations and well-studied analytically.
+    order : int, default 3
+        Pattern length = ``order + 1``.  ``order=3`` gives 3! = 6 possible
+        patterns.  Larger values capture longer-range dependencies at the
+        cost of sparsity (and needing longer series).
+    delay : int, default 1
+        Sampling delay for pattern extraction.
+    output : {"edges", "degrees", "stats"}, default "edges"
+        Controls what is stored after build().
+
+    References
+    ----------
+    Small, M. (2013). Complex networks from time series: Capturing
+    nonlinear dynamics. *Chaos*, 23(3), 033127.
+    https://doi.org/10.1063/1.4818261
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ts2net import TransitionNetwork
+    >>> x = np.random.randn(500)
+    >>> tn = TransitionNetwork(order=3).build(x)
+    >>> print(tn.n_nodes, tn.n_edges)   # nodes = distinct patterns, directed
+    """
+
     def __init__(self, symbolizer: str = 'ordinal', order: int = 3, delay: int = 1,
                  tie_rule: str = 'stable', bins: int = 5, normalize: bool = True,
                  sparse: bool = False, only_degrees: bool = False, output: str = "edges"):
@@ -1199,43 +1477,84 @@ class TransitionNetwork:
         return self._graph.edges
     
     @property
-    def n_nodes(self):
+    def n_nodes(self) -> int:
+        """Number of nodes (equals length of input series)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_nodes
-    
+
     @property
-    def n_edges(self):
+    def n_edges(self) -> int:
+        """Number of edges."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.n_edges
     
-    def degree_sequence(self):
-        """Degree sequence"""
+    def degree_sequence(self) -> NDArray[np.int64]:
+        """Node degree sequence — shape (n_nodes,)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.degree_sequence()
-    
+
     def stats(self, include_triangles: bool = False) -> dict:
-        """Summary statistics (memory efficient, no dense matrix)"""
+        """Summary statistics (no dense matrix required)."""
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.summary(include_triangles=include_triangles)
     
-    def adjacency_matrix(self, format: str = "sparse"):
-        """Adjacency matrix (sparse by default)"""
+    def adjacency_matrix(
+        self, format: str = "sparse"
+    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+        """
+        Adjacency matrix.
+
+        Parameters
+        ----------
+        format : {"sparse", "coo", "dense"}, default "sparse"
+            ``"sparse"`` returns a SciPy CSR matrix.
+            ``"coo"`` returns a SciPy COO matrix.
+            ``"dense"`` returns a NumPy array; **refused** for n > 50 000
+            nodes (would require ≥ 20 GB RAM).
+
+        Returns
+        -------
+        A : csr_matrix | coo_matrix | ndarray
+            Symmetric adjacency matrix of shape (n_nodes, n_nodes).
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.adjacency_matrix(format=format)
     
-    def edges_coo(self):
-        """Return edges in COO format (src, dst, weight arrays)"""
+    def edges_coo(
+        self,
+    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+        """
+        Edge list in COO (coordinate) format.
+
+        Returns
+        -------
+        rows : NDArray[int64]  — source node indices
+        cols : NDArray[int64]  — target node indices
+        weights : NDArray[float64] or None — edge weights (None if unweighted)
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.edges_coo()
     
-    def as_networkx(self, force: bool = False):
-        """Convert to NetworkX (refuses for n > 200k unless force=True)"""
+    def as_networkx(self, force: bool = False) -> nx.Graph:
+        """
+        Convert to a NetworkX graph.
+
+        Parameters
+        ----------
+        force : bool, default False
+            If False, raises for n > 200 000 nodes to prevent accidental
+            allocation of very large objects.
+
+        Returns
+        -------
+        G : nx.Graph or nx.DiGraph
+        """
         if self._graph is None:
             raise ValueError("Call build() first")
         return self._graph.as_networkx(force=force)

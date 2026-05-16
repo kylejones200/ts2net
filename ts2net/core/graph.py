@@ -64,65 +64,87 @@ class Graph:
             return self._n_edges_cached
         return len(self.edges)
     
+    def _node_index_map(self) -> "dict | None":
+        """
+        Build a {node_id: int_index} mapping when node IDs are non-integer
+        (e.g. TransitionNetwork uses tuple node IDs).  Returns None when all
+        node IDs are already plain integers — the fast path.
+        """
+        if not self.edges:
+            return None
+        sample = self.edges[0][0]
+        if isinstance(sample, (int, np.integer)):
+            return None  # Fast path: IDs are already integer indices
+        # Collect all unique node IDs from the edge list
+        node_set: set = set()
+        for edge in self.edges:
+            node_set.add(edge[0])
+            node_set.add(edge[1])
+        try:
+            nodes = sorted(node_set)
+        except TypeError:
+            nodes = sorted(node_set, key=str)
+        return {node: idx for idx, node in enumerate(nodes)}
+
     def degree_sequence(self) -> NDArray[np.int64]:
         """
         Degree sequence (cached).
-        
-        For undirected graphs, returns total degree.
-        For directed graphs, returns out-degree (for backward compatibility).
-        
+
+        For undirected graphs returns total degree; for directed graphs returns
+        out-degree (for backward compatibility).
+
         Returns
         -------
-        degrees : array (n_nodes,)
-            Degree of each node (total for undirected, out-degree for directed)
+        degrees : NDArray[int64] of shape (n_nodes,)
         """
         if self.directed:
             return self.out_degree_sequence()
-        else:
-            if self._degrees is None:
-                degrees = np.zeros(self.n_nodes, dtype=np.int64)
-                for edge in self.edges:
-                    i, j = edge[0], edge[1]
-                    degrees[i] += 1
-                    if i != j:
-                        degrees[j] += 1
-                self._degrees = degrees
-            return self._degrees
-    
+        if self._degrees is None:
+            degrees = np.zeros(self.n_nodes, dtype=np.int64)
+            nmap = self._node_index_map()
+            for edge in self.edges:
+                i = nmap[edge[0]] if nmap else int(edge[0])
+                j = nmap[edge[1]] if nmap else int(edge[1])
+                degrees[i] += 1
+                if i != j:
+                    degrees[j] += 1
+            self._degrees = degrees
+        return self._degrees
+
     def in_degree_sequence(self) -> NDArray[np.int64]:
         """
         In-degree sequence for directed graphs (cached).
-        
+
         Returns
         -------
-        in_degrees : array (n_nodes,)
-            In-degree of each node (number of incoming edges)
+        in_degrees : NDArray[int64] of shape (n_nodes,)
         """
         if not self.directed:
             raise ValueError("in_degree_sequence() only valid for directed graphs")
         if self._in_degrees is None:
             in_degrees = np.zeros(self.n_nodes, dtype=np.int64)
+            nmap = self._node_index_map()
             for edge in self.edges:
-                j = edge[1]  # Destination node
+                j = nmap[edge[1]] if nmap else int(edge[1])
                 in_degrees[j] += 1
             self._in_degrees = in_degrees
         return self._in_degrees
-    
+
     def out_degree_sequence(self) -> NDArray[np.int64]:
         """
         Out-degree sequence for directed graphs (cached).
-        
+
         Returns
         -------
-        out_degrees : array (n_nodes,)
-            Out-degree of each node (number of outgoing edges)
+        out_degrees : NDArray[int64] of shape (n_nodes,)
         """
         if not self.directed:
             raise ValueError("out_degree_sequence() only valid for directed graphs")
         if self._out_degrees is None:
             out_degrees = np.zeros(self.n_nodes, dtype=np.int64)
+            nmap = self._node_index_map()
             for edge in self.edges:
-                i = edge[0]  # Source node
+                i = nmap[edge[0]] if nmap else int(edge[0])
                 out_degrees[i] += 1
             self._out_degrees = out_degrees
         return self._out_degrees
