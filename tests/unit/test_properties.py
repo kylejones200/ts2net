@@ -31,28 +31,36 @@ from ts2net.distances.core import tsdist_dtw, tsdist_nmi, tsdist_voi
 
 # ── Hypothesis strategies ──────────────────────────────────────────────────────
 
-# A 1-D float64 array with finite values, length 2 to 200
-finite_series = arrays(
-    dtype=np.float64,
-    shape=st.integers(min_value=2, max_value=200),
-    elements=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False),
+# Hypothesis float strategy shared by all series generators.
+# allow_subnormal=False excludes denormal numbers (e.g. 5e-324).
+# Denormals cause a class of float64 precision failures in invariant tests:
+# multiplying a denormal by s<1 can underflow to exactly 0, and adding a
+# large constant can make a tiny-but-nonzero value round to the constant,
+# both of which collapse distinct values to ties and change graph structure.
+# That is correct IEEE 754 behaviour — the mathematical invariant holds in
+# exact arithmetic — so we simply exclude the pathological inputs.
+_floats = st.floats(
+    min_value=-1e6, max_value=1e6,
+    allow_nan=False, allow_infinity=False,
+    allow_subnormal=False,
 )
 
+# A 1-D float64 array with finite, non-subnormal values, length 2–200
+finite_series = arrays(dtype=np.float64,
+                       shape=st.integers(min_value=2, max_value=200),
+                       elements=_floats)
+
 # Same but longer (for statistical tests)
-long_finite_series = arrays(
-    dtype=np.float64,
-    shape=st.integers(min_value=50, max_value=300),
-    elements=st.floats(min_value=-1e3, max_value=1e3, allow_nan=False, allow_infinity=False),
-)
+long_finite_series = arrays(dtype=np.float64,
+                            shape=st.integers(min_value=50, max_value=300),
+                            elements=_floats)
 
 # Two series of equal length (for pairwise distances)
 @st.composite
 def two_series(draw, min_len=10, max_len=100):
     n = draw(st.integers(min_value=min_len, max_value=max_len))
-    x = draw(arrays(dtype=np.float64, shape=n,
-                    elements=st.floats(-1e3, 1e3, allow_nan=False, allow_infinity=False)))
-    y = draw(arrays(dtype=np.float64, shape=n,
-                    elements=st.floats(-1e3, 1e3, allow_nan=False, allow_infinity=False)))
+    x = draw(arrays(dtype=np.float64, shape=n, elements=_floats))
+    y = draw(arrays(dtype=np.float64, shape=n, elements=_floats))
     return x, y
 
 
@@ -104,10 +112,12 @@ class TestHVGProperties:
         changing structural ties and therefore the graph.  We skip series where
         any pairwise difference would be erased by the shift.
         """
-        # Skip if any two values are so close that |c| would erase the difference
-        diffs = np.diff(np.sort(x))
-        min_gap = float(np.min(np.abs(diffs[diffs != 0]))) if np.any(diffs != 0) else 0.0
-        assume(min_gap == 0.0 or abs(c) < min_gap * 1e10)
+        # Skip if the shift is so large relative to the smallest gap between
+        # values that float64 rounding would collapse a difference to zero.
+        unique_vals = np.unique(x)
+        if len(unique_vals) > 1:
+            min_gap = float(np.diff(unique_vals).min())
+            assume(min_gap > abs(c) * 1e-10)
 
         r1, c1, _ = HVG().build(x).edges_coo()
         r2, c2, _ = HVG().build(x + c).edges_coo()
