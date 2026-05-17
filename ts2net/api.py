@@ -335,15 +335,15 @@ class HVG:
     
     def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in full edges mode."""
-        edges = list(G_nx.edges(data='weight' if self.weighted else False))
-        
-        if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
-            edge_pairs = [(u, v) for u, v, _ in edges]
-            edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) for u, v in edge_pairs]
-        elif self.weighted:
-            edges = [(u, v, w) for u, v, w in edges]
+        if self.weighted and self.weight_mode:
+            # Always compute weights fresh — the underlying _HVG_Old / _NVG_Old
+            # implementations do not store edge weights reliably.
+            edges = [
+                (u, v, compute_weight(x, u, v, self.weight_mode))
+                for u, v in G_nx.edges()
+            ]
         else:
-            edges = [(u, v) for u, v in edges]
+            edges = [(u, v) for u, v in G_nx.edges()]
         
         return Graph(
             edges=edges,
@@ -858,15 +858,15 @@ class NVG:
     
     def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in full edges mode."""
-        edges = list(G_nx.edges(data='weight' if self.weighted else False))
-        
-        if self.weighted and self.weight_mode and self.weight_mode != "absdiff":
-            edge_pairs = [(u, v) for u, v, _ in edges]
-            edges = [(u, v, compute_weight(x, u, v, self.weight_mode)) for u, v in edge_pairs]
-        elif self.weighted:
-            edges = [(u, v, w) for u, v, w in edges]
+        if self.weighted and self.weight_mode:
+            # Always compute weights fresh — the underlying _HVG_Old / _NVG_Old
+            # implementations do not store edge weights reliably.
+            edges = [
+                (u, v, compute_weight(x, u, v, self.weight_mode))
+                for u, v in G_nx.edges()
+            ]
         else:
-            edges = [(u, v) for u, v in edges]
+            edges = [(u, v) for u, v in G_nx.edges()]
         
         return Graph(
             edges=edges,
