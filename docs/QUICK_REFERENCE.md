@@ -145,6 +145,22 @@ print(result.summary())
 print(result.anomalous_windows(threshold=2.0))
 ```
 
+## Scale and Streaming (0.6)
+
+```python
+from ts2net.scale import iter_windows, build_windows_streaming, get_performance_contract
+from ts2net import build_windows
+
+print(get_performance_contract("hvg").summary())
+
+# Iterator — no (n_windows, window) matrix allocated
+for i, start, stats in build_windows_streaming(x, window=48, step=24, method="hvg"):
+    ...
+
+# Parallel window stats
+stats = build_windows(x, window=48, step=24, method="hvg", n_jobs=-1, streaming=True)
+```
+
 ## ML Integration (0.7)
 
 ```python

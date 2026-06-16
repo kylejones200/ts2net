@@ -51,7 +51,12 @@ DTW_CONFIGS = [
 ]
 
 SKIP_LARGE = os.environ.get("TS2NET_SKIP_LARGE", "0") == "1"
+CI_SMOKE = os.environ.get("TS2NET_CI_SMOKE", "0") == "1"
 LARGE_THRESHOLD = 100_000
+
+if CI_SMOKE:
+    SERIES_LENGTHS = [100, 1_000, 10_000]
+    DTW_CONFIGS = [(10, 100), (20, 500)]
 
 
 # ── timing helpers ─────────────────────────────────────────────────────────────

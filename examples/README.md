@@ -187,6 +187,15 @@ full `run_dynamic_analysis()` workflow on a synthetic multi-regime series.
 python examples/dynamic_analytics_example.py
 ```
 
+### `scale_streaming_example.py` **NEW - Scale & Streaming (0.6)**
+Window iterators, streaming graph stats, parallel `build_windows`, and performance
+contracts for large series.
+
+**Run:**
+```bash
+python examples/scale_streaming_example.py
+```
+
 ### `benchmark_numba.py`
 Performance benchmarks comparing Numba-accelerated vs. pure Python implementations:
 - HVG performance

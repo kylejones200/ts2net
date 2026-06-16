@@ -29,6 +29,12 @@ from .ci_tests import partial_correlation_ci_test, ci_test
 from .lagged_panel import lagged_panel_matrix
 from .pc import pc_algorithm, pc_timeseries_network, PCResult
 from .fci import fci_algorithm, fci_timeseries_network, FCIResult
+from .visibility import (
+    directed_visibility_analysis,
+    visibility_irreversibility,
+    visibility_asymmetry_panel,
+    VisibilityAsymmetryResult,
+)
 
 __all__ = [
     "transfer_entropy",
@@ -60,4 +66,8 @@ __all__ = [
     "fci_algorithm",
     "fci_timeseries_network",
     "FCIResult",
+    "directed_visibility_analysis",
+    "visibility_irreversibility",
+    "visibility_asymmetry_panel",
+    "VisibilityAsymmetryResult",
 ]

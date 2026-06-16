@@ -37,6 +37,11 @@ jobs:
           uv run ruff format --check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
       - name: Type check (public API)
         run: uv run mypy ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
+      - name: Benchmark smoke test
+        env:
+          TS2NET_SKIP_LARGE: "1"
+          TS2NET_CI_SMOKE: "1"
+        run: uv run python benchmarks/run_benchmarks.py --repeats 1
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"

@@ -122,6 +122,9 @@ from .causal import (
     fci_algorithm,
     fci_timeseries_network,
     FCIResult,
+    directed_visibility_analysis,
+    visibility_irreversibility,
+    VisibilityAsymmetryResult,
 )
 __all__.extend([
     'transfer_entropy',
@@ -144,6 +147,9 @@ __all__.extend([
     'fci_algorithm',
     'fci_timeseries_network',
     'FCIResult',
+    'directed_visibility_analysis',
+    'visibility_irreversibility',
+    'VisibilityAsymmetryResult',
 ])
 
 # Core graph expansion (v0.4)
@@ -249,4 +255,32 @@ __all__.extend([
     'run_dynamic_analysis',
     'DynamicWorkflowSpec',
     'DynamicAnalysisResult',
+])
+
+# Scale and performance (0.6)
+from .scale import (
+    PerformanceContract,
+    get_performance_contract,
+    list_performance_contracts,
+    iter_windows,
+    iter_series_chunks,
+    iter_parquet_value_chunks,
+    build_windows_streaming,
+    stream_chunk_stats,
+    estimate_window_job_memory_mb,
+    to_sparse_csr,
+    edges_to_csr,
+)
+__all__.extend([
+    'PerformanceContract',
+    'get_performance_contract',
+    'list_performance_contracts',
+    'iter_windows',
+    'iter_series_chunks',
+    'iter_parquet_value_chunks',
+    'build_windows_streaming',
+    'stream_chunk_stats',
+    'estimate_window_job_memory_mb',
+    'to_sparse_csr',
+    'edges_to_csr',
 ])
