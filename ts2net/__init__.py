@@ -212,3 +212,29 @@ try:
     __all__.extend(['to_pyg_data', 'to_dgl_graph'])
 except ImportError:
     pass
+
+# Dynamic network analytics (0.8)
+from .dynamic import (
+    detect_regime_changes,
+    window_anomaly_scores,
+    edge_transition_anomalies,
+    node_roles,
+    node_role_evolution,
+    community_labels,
+    track_communities,
+    run_dynamic_analysis,
+    DynamicWorkflowSpec,
+    DynamicAnalysisResult,
+)
+__all__.extend([
+    'detect_regime_changes',
+    'window_anomaly_scores',
+    'edge_transition_anomalies',
+    'node_roles',
+    'node_role_evolution',
+    'community_labels',
+    'track_communities',
+    'run_dynamic_analysis',
+    'DynamicWorkflowSpec',
+    'DynamicAnalysisResult',
+])

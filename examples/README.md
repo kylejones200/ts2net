@@ -178,6 +178,15 @@ pip install ts2net[dgl]     # DGL
 pip install ts2net[tsfresh] # tsfresh baseline comparison
 ```
 
+### `dynamic_analytics_example.py` **NEW - Dynamic Analytics (0.8)**
+Regime detection, anomaly scoring, edge persistence, community tracking, and the
+full `run_dynamic_analysis()` workflow on a synthetic multi-regime series.
+
+**Run:**
+```bash
+python examples/dynamic_analytics_example.py
+```
+
 ### `benchmark_numba.py`
 Performance benchmarks comparing Numba-accelerated vs. pure Python implementations:
 - HVG performance

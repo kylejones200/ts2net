@@ -132,6 +132,19 @@ pipe = Pipeline([
 pipe.fit(X_panel, y)  # X_panel shape: (n_series, n_timesteps)
 ```
 
+## Dynamic Analytics (0.8)
+
+```python
+from ts2net.dynamic import run_dynamic_analysis, DynamicWorkflowSpec
+
+result = run_dynamic_analysis(
+    x,
+    DynamicWorkflowSpec(method="hvg", window=48, step=12, regime_metric="avg_degree"),
+)
+print(result.summary())
+print(result.anomalous_windows(threshold=2.0))
+```
+
 ## ML Integration (0.7)
 
 ```python

@@ -54,6 +54,10 @@
 - **Alternative symbolization**: ✅ **COMPLETED** — `sax_symbolize()`, `entropy_max_symbolize()`, `sax_transition_network()`
 - **Event networks**: ✅ **COMPLETED** — `event_sequence_network()`, `event_sync_network()`
 
+### Dynamic analytics (0.8)
+- **Dynamic workflow**: ✅ **COMPLETED** — `run_dynamic_analysis()` with regime detection, anomaly scores, community tracking, node roles, and change attribution. See `examples/dynamic_analytics_example.py`.
+- **Rolling graph sequences**: ✅ **COMPLETED** — `RollingGraphSequence`, `graph_churn()`, `edge_persistence()`
+
 ### Testing, CI, and Quality
 - **Expand test coverage**: Cover all methods and edge cases
 - **Code coverage targets**: Enforce via CI

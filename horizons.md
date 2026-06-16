@@ -100,17 +100,17 @@ This phase makes ts2net practical for industrial workloads.
 
 ## Roadmap Horizon 6: Dynamic Network Analytics
 
-This phase moves ts2net beyond static graph construction.
+**Status: COMPLETED (v0.8 dynamic analytics)**
 
-| Capability                | Description                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Rolling graph builder     | Build graph sequences over sliding, expanding, or event-based windows.                                 |
-| Regime detection          | Detect structural breaks based on graph metrics, edge churn, community changes, and centrality shifts. |
-| Temporal communities      | Track communities across graph windows.                                                                |
-| Node role evolution       | Identify nodes that become hubs, bridges, sinks, sources, or isolates over time.                       |
-| Edge persistence          | Measure which relationships persist, fade, reverse, or spike.                                          |
-| Network anomaly detection | Detect abnormal graphs, abnormal nodes, abnormal edges, and abnormal transitions.                      |
-| Change attribution        | Explain which time series, edges, or windows caused a network-level change.                            |
+| Capability                | Description                                                                                            | Status |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
+| Rolling graph builder     | Build graph sequences over sliding, expanding, or event-based windows.                                 | ✅ `RollingGraphSequence` |
+| Regime detection          | Detect structural breaks based on graph metrics, edge churn, community changes, and centrality shifts. | ✅ `detect_regime_changes()`, `run_dynamic_analysis()` |
+| Temporal communities      | Track communities across graph windows.                                                                | ✅ `track_communities()` |
+| Node role evolution       | Identify nodes that become hubs, bridges, sinks, sources, or isolates over time.                       | ✅ `node_role_evolution()` |
+| Edge persistence          | Measure which relationships persist, fade, reverse, or spike.                                          | ✅ `edge_persistence()`, `graph_churn()` |
+| Network anomaly detection | Detect abnormal graphs, abnormal nodes, abnormal edges, and abnormal transitions.                      | ✅ `window_anomaly_scores()`, `edge_transition_anomalies()` |
+| Change attribution        | Explain which time series, edges, or windows caused a network-level change.                            | ✅ PARTIAL — metric shift attribution at regime breaks |
 
 ## Roadmap Horizon 7: Interpretability and Reporting
 
@@ -177,7 +177,7 @@ This phase makes ts2net a sustainable open-source project.
 | 0.5     | Causal networks      | Full causal workflow with lag search, confidence, confounders, and causal summaries.        | **In progress** — `run_causal_analysis()` workflow shipped; PCMCI/PC/FCI planned for 0.9. |
 | 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              |
 | 0.7     | ML integration       | sklearn, PyG, DGL, feature selection, and benchmark comparisons.                            | ✅ **Completed** — rolling features, selectors, PyG/DGL adapters, baseline benchmarks. See `examples/ml_integration_example.py`. |
-| 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. |
+| 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. | ✅ **Completed** — `run_dynamic_analysis()` workflow. See `examples/dynamic_analytics_example.py`. |
 | 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    |
 | 1.0     | Stable release       | Stable API, mature docs, examples gallery, governance, and production-ready workflows.      |
 

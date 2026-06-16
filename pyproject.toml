@@ -176,6 +176,8 @@ extend-ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "ts2net/sklearn/*.py" = ["N802", "N803", "N806"]  # sklearn API uses X, y
+"ts2net/dynamic/*.py" = ["N803", "N806"]  # networkx convention: G for graphs
+"tests/test_dynamic_analytics.py" = ["N806"]
 
 # Flake8 configuration (for compatibility)
 [tool.flake8]
