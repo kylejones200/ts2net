@@ -59,7 +59,7 @@ def load_series(config: PipelineConfig) -> Dict[str, np.ndarray]:
         )
     else:
         # Fallback to pandas (would need to implement)
-        raise ImportError("Polars required for data loading. Install with: pip install ts2net[polars]")
+        raise ImportError("Polars required for data loading. Install with: pip install ts2net[pipeline]")
     
     logger.info(f"Loaded {len(series)} series")
     return series

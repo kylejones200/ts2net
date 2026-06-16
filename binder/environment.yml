@@ -1,0 +1,16 @@
+name: ts2net-binder
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - rust
+  - pip
+  - numpy>=1.23
+  - pandas>=1.5
+  - matplotlib>=3.8
+  - scikit-learn>=1.0
+  - scipy>=1.9
+  - networkx>=3.0
+  - joblib>=1.0
+  - pip:
+    - maturin>=1.5

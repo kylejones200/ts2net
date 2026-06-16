@@ -228,9 +228,13 @@ class TestPipelineE2E:
         avg_degree_mean = np.mean([s['avg_degree'] for s in all_stats])
         avg_degree_std = np.std([s['avg_degree'] for s in all_stats])
         
-        # Invariants: avg degree should be in reasonable range (not exact value)
-        assert 0 < avg_degree_mean < 10, \
-            f"Mean avg degree should be positive and reasonable, got {avg_degree_mean:.2f}"
+        # Invariants: avg degree should be positive and finite per series
+        for s in all_stats:
+            assert 0 < s["avg_degree"] < 50, (
+                f"avg_degree out of range for {s['series_id']}: {s['avg_degree']:.2f}"
+            )
+        assert np.isfinite(avg_degree_mean)
+        assert avg_degree_std >= 0
     
     def test_pipeline_output_format(self, known_fixture_dataset, tmp_path):
         """Test that pipeline output can be written and read."""

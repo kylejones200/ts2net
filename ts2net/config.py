@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-import yaml
 
 
 @dataclass
@@ -244,6 +243,14 @@ class PipelineConfig:
     @classmethod
     def from_yaml(cls, yaml_path: str | Path) -> PipelineConfig:
         """Load configuration from YAML file."""
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ImportError(
+                "PyYAML is required to load YAML configs. "
+                "Install with: pip install ts2net[pipeline]"
+            ) from exc
+
         yaml_path = Path(yaml_path)
         if not yaml_path.exists():
             raise FileNotFoundError(f"Config file not found: {yaml_path}")

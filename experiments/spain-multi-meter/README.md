@@ -84,7 +84,11 @@ The figure shows:
 
 ## Reproducibility
 
-**Note:** This experiment was run on a specific experimental setup. The script references data files and paths from that environment. To reproduce:
+**Notebook (recommended):** Open `examples/spain_meter_case_study.ipynb` in Binder — uses the bundled CSV, no 633M-row download required.
+
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kylejones200/ts2net/main?filepath=examples%2Fspain_meter_case_study.ipynb)
+
+**Full reproduction** (requires the original dataset):
 
 1. Ensure `ts2net` is installed with all dependencies
 2. Provide the Spain smart meter dataset (633M rows)

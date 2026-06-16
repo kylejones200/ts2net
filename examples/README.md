@@ -108,7 +108,7 @@ python examples/bsts_features.py
 
 **Requirements:**
 ```bash
-pip install ts2net[bsts]  # Installs statsmodels
+pip install ts2net[bsts]
 ```
 
 ### `polars_spain_windows.py` **NEW - Polars Ingestion & Windowing**
@@ -120,7 +120,7 @@ Demonstrates Polars-based Parquet ingestion and windowed analysis:
 
 **Requirements:**
 ```bash
-pip install ts2net[polars]
+pip install ts2net[pipeline]
 # or
 pip install polars pyarrow
 ```
@@ -136,6 +136,47 @@ python examples/polars_spain_windows.py
 - Windowed analysis for large time series
 - Memory-efficient stats-only mode
 - Outputs results to Parquet for downstream analysis
+
+### `network_features_sklearn.py` **NEW - sklearn Pipeline**
+Demonstrates `NetworkFeatureExtractor` in classification workflows:
+- Synthetic smart-meter classification (residential vs commercial patterns)
+- Validation against Spain experiment results (bundled CSV)
+- Optional FRED recession classification with `--fred`
+
+**Run:**
+```bash
+python examples/network_features_sklearn.py
+python examples/network_features_sklearn.py --fred  # needs internet + [examples]
+```
+
+### `spain_meter_case_study.ipynb` **NEW - Case Study (Binder)**
+Interactive case study from the Spain multi-meter experiment:
+- Loads bundled `spain_meter_network_results.csv` (no 633M-row dataset needed)
+- Visualizes HVG/NVG findings and clusters meters by network signature
+- Demonstrates `NetworkFeatureExtractor` in a sklearn pipeline
+
+**Open in Binder:** [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kylejones200/ts2net/main?filepath=examples%2Fspain_meter_case_study.ipynb)
+
+**Run locally:**
+```bash
+jupyter notebook examples/spain_meter_case_study.ipynb
+```
+
+### `ml_integration_example.py` **NEW - ML Integration (0.7)**
+Benchmarks network features against statistical baselines, demonstrates rolling features,
+feature selection, feature store export, and optional PyG/DGL conversion.
+
+**Run:**
+```bash
+python examples/ml_integration_example.py
+```
+
+**Optional extras:**
+```bash
+pip install ts2net[pyg]    # PyTorch Geometric
+pip install ts2net[dgl]     # DGL
+pip install ts2net[tsfresh] # tsfresh baseline comparison
+```
 
 ### `benchmark_numba.py`
 Performance benchmarks comparing Numba-accelerated vs. pure Python implementations:

@@ -7,6 +7,8 @@ Clean API inspired by ts2vg, extended for multiple network methods.
 from .core.graph import Graph
 from .api import HVG, NVG, RecurrenceNetwork, TransitionNetwork, build_network
 from .core import graph_summary
+from .exceptions import NotBuiltError, ValidationError, Ts2NetError
+from .protocols import NetworkBuilder
 
 __version__ = "0.8.0"
 
@@ -18,6 +20,10 @@ __all__ = [
     'TransitionNetwork',
     'build_network',
     'graph_summary',
+    'NetworkBuilder',
+    'NotBuiltError',
+    'ValidationError',
+    'Ts2NetError',
 ]
 
 # Optional Polars-based IO
@@ -65,10 +71,13 @@ __all__.append('build_windows')
 from .multiscale import MultiscaleGraphs, coarse_grain
 __all__.extend(['MultiscaleGraphs', 'coarse_grain'])
 
-# Configuration and factory modules
-from .config import PipelineConfig
-from .factory import create_graph_builder, build_graph_from_config
-__all__.extend(['PipelineConfig', 'create_graph_builder', 'build_graph_from_config'])
+# Configuration and factory modules (pipeline extra for YAML file loading)
+try:
+    from .config import PipelineConfig
+    from .factory import create_graph_builder, build_graph_from_config
+    __all__.extend(['PipelineConfig', 'create_graph_builder', 'build_graph_from_config'])
+except ImportError:
+    pass
 
 # BSTS decomposition and features (optional - requires statsmodels)
 try:
@@ -92,5 +101,114 @@ except ImportError:
     pass
 
 # Causal inference (transfer entropy, Granger causality)
-from .causal import transfer_entropy, transfer_entropy_network, conditional_transfer_entropy
-__all__.extend(['transfer_entropy', 'transfer_entropy_network', 'conditional_transfer_entropy'])
+from .causal import (
+    transfer_entropy,
+    transfer_entropy_network,
+    conditional_transfer_entropy,
+    granger_causality,
+    granger_causality_network,
+    causal_strength,
+    directionality_index,
+    causal_network_metrics,
+    time_lagged_causality_network,
+    search_granger_lag,
+    search_te_lag,
+    run_causal_analysis,
+    CausalWorkflowSpec,
+    CausalAnalysisResult,
+)
+__all__.extend([
+    'transfer_entropy',
+    'transfer_entropy_network',
+    'conditional_transfer_entropy',
+    'granger_causality',
+    'granger_causality_network',
+    'causal_strength',
+    'directionality_index',
+    'causal_network_metrics',
+    'time_lagged_causality_network',
+    'search_granger_lag',
+    'search_te_lag',
+    'run_causal_analysis',
+    'CausalWorkflowSpec',
+    'CausalAnalysisResult',
+])
+
+# Core graph expansion (v0.4)
+from .graphs import (
+    correlation_matrix,
+    correlation_network,
+    partial_correlation_matrix,
+    partial_correlation_network,
+    rolling_correlation_matrix,
+    rolling_correlation_network,
+    similarity_matrix,
+    similarity_network,
+    RollingGraphSequence,
+    edge_persistence,
+    graph_churn,
+    edge_birth_death,
+    MultiplexGraph,
+    multiplex_graph,
+    multiplex_visibility_graph,
+    adaptive_recurrence_network,
+    cross_recurrence_network,
+    recurrence_matrix,
+    recurrence_quantification,
+    event_sequence_network,
+    event_sync_network,
+    sax_symbolize,
+    entropy_max_symbolize,
+    sax_transition_network,
+)
+__all__.extend([
+    'correlation_matrix',
+    'correlation_network',
+    'partial_correlation_matrix',
+    'partial_correlation_network',
+    'rolling_correlation_matrix',
+    'rolling_correlation_network',
+    'similarity_matrix',
+    'similarity_network',
+    'RollingGraphSequence',
+    'edge_persistence',
+    'graph_churn',
+    'edge_birth_death',
+    'MultiplexGraph',
+    'multiplex_graph',
+    'multiplex_visibility_graph',
+    'adaptive_recurrence_network',
+    'cross_recurrence_network',
+    'recurrence_matrix',
+    'recurrence_quantification',
+    'event_sequence_network',
+    'event_sync_network',
+    'sax_symbolize',
+    'entropy_max_symbolize',
+    'sax_transition_network',
+])
+
+# scikit-learn integration
+from .sklearn import (
+    NetworkFeatureExtractor,
+    RollingNetworkFeatureExtractor,
+    NetworkFeatureSelector,
+    features_to_dataframe,
+    compare_feature_sets,
+    statistical_baseline_features,
+)
+__all__.extend([
+    'NetworkFeatureExtractor',
+    'RollingNetworkFeatureExtractor',
+    'NetworkFeatureSelector',
+    'features_to_dataframe',
+    'compare_feature_sets',
+    'statistical_baseline_features',
+])
+
+# Graph ML adapters (optional PyG/DGL)
+try:
+    from .ml import to_pyg_data, to_dgl_graph
+    __all__.extend(['to_pyg_data', 'to_dgl_graph'])
+except ImportError:
+    pass

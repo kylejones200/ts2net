@@ -3,11 +3,12 @@
 ## Installation
 
 ```bash
-pip install ts2net                    # Basic
-pip install ts2net[speed]             # With Numba (100-180x faster)
-pip install ts2net[bsts]              # With BSTS decomposition
-pip install ts2net[cnn]               # With Temporal CNN
-pip install ts2net[all]               # All optional features
+pip install ts2net                         # Core builders + sklearn
+pip install ts2net[pipeline]             # CLI + Parquet pipeline
+pip install ts2net[speed]                  # Numba (100-180x faster)
+pip install ts2net[bsts]                   # BSTS decomposition
+pip install ts2net[cnn]                    # Temporal CNN
+pip install ts2net[all]                     # All optional features
 ```
 
 ## Basic Usage
@@ -114,6 +115,52 @@ from ts2net.viz import (
 3. **Set limits for NVG**: Always use `limit` parameter
 4. **Use kNN for recurrence**: `rule='knn'` instead of exact all-pairs
 5. **Parallel distance computation**: `n_jobs=-1` for multivariate
+
+## sklearn Pipeline
+
+```python
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from ts2net.sklearn import NetworkFeatureExtractor
+
+pipe = Pipeline([
+    ("net", NetworkFeatureExtractor(method="hvg", output="stats")),
+    ("scale", StandardScaler()),
+    ("clf", LogisticRegression(max_iter=1000)),
+])
+pipe.fit(X_panel, y)  # X_panel shape: (n_series, n_timesteps)
+```
+
+## ML Integration (0.7)
+
+```python
+from ts2net.sklearn import (
+    RollingNetworkFeatureExtractor,
+    NetworkFeatureSelector,
+    compare_feature_sets,
+    statistical_baseline_features,
+    features_to_dataframe,
+)
+
+# Rolling window features (mean/std of graph stats per window)
+roll = RollingNetworkFeatureExtractor(
+    method="hvg", window=50, step=25, aggregates=("mean", "std")
+)
+X_roll = roll.fit_transform(X_panel)
+
+# Feature selection inside a pipeline
+sel = NetworkFeatureSelector(k=5, feature_names=list(roll.get_feature_names_out()))
+
+# Benchmark network features vs statistical baseline
+stat_X, _ = statistical_baseline_features(X_panel)
+compare_feature_sets(X_panel, y, {"network": net_X, "statistical": stat_X})
+
+# Optional PyG / DGL export (install ts2net[pyg] or ts2net[dgl])
+from ts2net.ml import to_pyg_data, to_dgl_graph
+```
+
+Install extras: `pip install ts2net[ml]` (PyG + tsfresh), `ts2net[pyg]`, or `ts2net[dgl]`.
 
 ## Common Patterns
 

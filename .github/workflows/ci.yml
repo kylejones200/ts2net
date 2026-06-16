@@ -31,8 +31,14 @@ jobs:
           uv pip install numba tslearn pynndescent pyreadr || true
           # Verify torch is installed
           uv run python -c "import torch; print(f'PyTorch {torch.__version__} (CPU-only) installed')"
+      - name: Lint (API hardening modules)
+        run: |
+          uv run ruff check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
+          uv run ruff format --check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
+      - name: Type check (public API)
+        run: uv run mypy ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"
         run: |
-          uv run pytest -q
+          uv run pytest -q --cov=ts2net --cov-report=term --cov-fail-under=15

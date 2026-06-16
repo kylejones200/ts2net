@@ -25,7 +25,7 @@ try:
     HAS_POLARS = True
 except ImportError:
     HAS_POLARS = False
-    logging.error("Polars not installed. Install with: pip install ts2net[polars]")
+    logging.error("Polars not installed. Install with: pip install ts2net[pipeline]")
     sys.exit(1)
 
 try:

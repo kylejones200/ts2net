@@ -20,6 +20,9 @@ from typing import Optional, Tuple, Union, Literal, List
 import networkx as nx
 from .core.graph import Graph
 from .core.visibility.weights import compute_weight, WeightMode
+from ._validation import validate_series, validate_output_mode, _validate_and_clean_series
+from ._builder_api import SklearnBuildMixin, require_built
+from .exceptions import NotBuiltError
 
 # Import existing implementations from ts2net.core
 from .core.visibility import HVG as _HVG_Old
@@ -28,98 +31,20 @@ from .core.recurrence import RecurrenceNetwork as _RN_Old
 from .core.transition import TransitionNetwork as _TN_Old
 
 
-def _validate_and_clean_series(x, method_name: str = "ts2net") -> NDArray[np.float64]:
-    """
-    Validate and clean time series input, handling dtype contamination.
-    
-    Parameters
-    ----------
-    x : array-like
-        Input time series (may contain non-numeric values)
-    method_name : str
-        Method name for error messages
-    
-    Returns
-    -------
-    x : array (float64)
-        Clean numeric array
-    
-    Raises
-    ------
-    ValueError
-        If input cannot be converted to valid numeric array
-    """
-    import pandas as pd
-    
-    # Convert to numpy array first
-    if not isinstance(x, np.ndarray):
-        x = np.asarray(x)
-    
-    # Check if already numeric
-    if x.dtype.kind in ['f', 'i', 'u']:
-        # Numeric type - just ensure float64 and check for inf/nan
-        x = x.astype(np.float64)
-        x = np.where(np.isfinite(x), x, np.nan)
-        x = x[~np.isnan(x)]
-    else:
-        # Non-numeric or object dtype - use pandas coercion
-        s = pd.Series(x)
-        s = pd.to_numeric(s, errors='coerce')
-        s = s.replace([np.inf, -np.inf], np.nan)
-        s = s.dropna()
-        x = s.values.astype(np.float64)
-    
-    # Final validation
-    if len(x) == 0:
-        raise ValueError(
-            f"{method_name}: No valid numeric values in input series. "
-            f"Check for non-numeric data, infinities, or all-null values."
-        )
-    
-    if x.ndim != 1:
-        raise ValueError(
-            f"{method_name}: Input must be 1D array, got shape {x.shape}"
-        )
-    
-    # Enhanced validation with warnings for common issues
-    import warnings
-    
-    # Check for constant series (can cause issues in some methods)
-    if np.std(x) == 0:
-        warnings.warn(
-            f"{method_name}: Constant series detected (std=0). "
-            f"Results may be degenerate.",
-            UserWarning
-        )
-    
-    # Check for very short series
-    if len(x) < 3:
-        warnings.warn(
-            f"{method_name}: Very short series (n={len(x)}). "
-            f"Network may be trivial or degenerate. Consider using longer series.",
-            UserWarning
-        )
-    
-    # Check for very long series (may be slow)
-    if len(x) > 100_000:
-        warnings.warn(
-            f"{method_name}: Very long series (n={len(x)}). "
-            f"This may be slow. Consider using limit parameter or resampling.",
-            UserWarning
-        )
-    
-    # Check for potential numerical issues
-    if np.any(np.abs(x) > 1e10):
-        warnings.warn(
-            f"{method_name}: Series contains very large values (max={np.max(np.abs(x)):.2e}). "
-            f"This may cause numerical issues.",
-            UserWarning
-        )
-    
-    return x
+# Re-export for backward compatibility (tests import from ts2net.api).
+__all__ = [
+    "HVG",
+    "NVG",
+    "RecurrenceNetwork",
+    "TransitionNetwork",
+    "build_network",
+    "_validate_and_clean_series",
+    "NetworkBuilder",
+]
+from .protocols import NetworkBuilder
 
 
-class HVG:
+class HVG(SklearnBuildMixin):
     """
     Horizontal Visibility Graph (HVG).
 
@@ -167,6 +92,8 @@ class HVG:
     >>> A = hvg.adjacency_matrix()    # sparse CSR by default
     >>> G_nx = hvg.as_networkx()  # Optional
     """
+
+    _builder_name = "HVG"
     
     def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None, 
                  only_degrees: bool = False, output: str = "edges", directed: bool = False,
@@ -210,89 +137,13 @@ class HVG:
         if only_degrees:
             self.output = "degrees"
         else:
-            self.output = output
+            self.output = validate_output_mode(output, "HVG")
         # For _HVG_Old, use bool weighted (it only supports absdiff)
         # We'll recompute weights after if needed
         self._impl = _HVG_Old(weighted=(self.weighted and self.weight_mode == "absdiff"), 
                              limit=limit, directed=directed)
         self._graph = None
         self._x = None  # Store series for weight recomputation
-    
-    def fit(self, x: NDArray[np.float64]) -> 'HVG':
-        """
-        Fit the HVG model to the time series (scikit-learn compatible).
-        
-        Parameters
-        ----------
-        x : array-like
-            Input time series (1D array)
-        
-        Returns
-        -------
-        self : HVG
-            Returns self for method chaining
-        
-        Examples
-        --------
-        >>> from ts2net import HVG
-        >>> import numpy as np
-        >>> x = np.random.randn(100)
-        >>> hvg = HVG()
-        >>> hvg.fit(x)  # scikit-learn style
-        >>> hvg.transform()  # Get graph
-        """
-        # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "HVG")
-        self._x = x.copy()  # Store for weight recomputation
-        self._fitted = True
-        return self
-    
-    def transform(self) -> nx.Graph:
-        """
-        Transform the fitted time series into a network (scikit-learn compatible).
-        
-        Returns
-        -------
-        G : networkx.Graph or DiGraph
-            The visibility graph
-        
-        Raises
-        ------
-        ValueError
-            If fit() has not been called first
-        
-        Examples
-        --------
-        >>> hvg = HVG()
-        >>> hvg.fit(x)
-        >>> G = hvg.transform()
-        """
-        if not getattr(self, '_fitted', False):
-            raise ValueError("Must call fit() before transform()")
-        if self._graph is None:
-            self.build(self._x)
-        return self.as_networkx(force=True)
-    
-    def fit_transform(self, x: NDArray[np.float64]) -> nx.Graph:
-        """
-        Fit the model and transform in one step (scikit-learn compatible).
-        
-        Parameters
-        ----------
-        x : array-like
-            Input time series
-        
-        Returns
-        -------
-        G : networkx.Graph or DiGraph
-            The visibility graph
-        
-        Examples
-        --------
-        >>> hvg = HVG()
-        >>> G = hvg.fit_transform(x)
-        """
-        return self.fit(x).transform()
     
     def _compute_degrees(self, G_nx: nx.Graph) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
         """Compute degree sequences (vectorized)."""
@@ -369,7 +220,7 @@ class HVG:
         self : HVG
         """
         # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "HVG")
+        x = validate_series(x, "HVG")
         self._x = x.copy()  # Store for weight recomputation
         
         # Use old implementation
@@ -394,8 +245,7 @@ class HVG:
     @property
     def edges(self):
         """Edge list (None if output='degrees' or 'stats')"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
@@ -403,15 +253,13 @@ class HVG:
     @property
     def n_nodes(self):
         """Number of nodes"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_nodes
     
     @property
     def n_edges(self):
         """Number of edges"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_edges
     
     def degree_sequence(self) -> NDArray[np.int64]:
@@ -423,30 +271,26 @@ class HVG:
         d : NDArray[int64] of shape (n_nodes,)
             Out-degree for directed graphs; total degree for undirected.
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.degree_sequence()
     
     def in_degree_sequence(self):
         """In-degree sequence (only valid for directed graphs)"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if not self.directed:
             raise ValueError("in_degree_sequence() only valid for directed graphs")
         return self._graph.in_degree_sequence()
     
     def out_degree_sequence(self):
         """Out-degree sequence (only valid for directed graphs)"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if not self.directed:
             raise ValueError("out_degree_sequence() only valid for directed graphs")
         return self._graph.out_degree_sequence()
     
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (memory efficient, no dense matrix)"""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
     
     def network_metrics(
@@ -488,8 +332,7 @@ class HVG:
         >>> print(f"Avg path length: {metrics['avg_path_length']:.3f}")
         >>> print(f"Modularity: {metrics['modularity']:.3f}")
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
     
     def test_significance(
@@ -537,8 +380,7 @@ class HVG:
         """
         from .stats.null_models import compute_network_metric_significance
         
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         
         if self._x is None:
             raise ValueError("Cannot test significance: original time series not stored")
@@ -588,8 +430,7 @@ class HVG:
         A : csr_matrix | coo_matrix | ndarray
             Symmetric adjacency matrix of shape (n_nodes, n_nodes).
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
     
     def edges_coo(
@@ -604,8 +445,7 @@ class HVG:
         cols : NDArray[int64]  — target node indices
         weights : NDArray[float64] or None — edge weights (None if unweighted)
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.edges_coo()
     
     def as_networkx(self, force: bool = False) -> nx.Graph:
@@ -622,12 +462,11 @@ class HVG:
         -------
         G : nx.Graph or nx.DiGraph
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.as_networkx(force=force)
 
 
-class NVG:
+class NVG(SklearnBuildMixin):
     """
     Natural Visibility Graph (NVG).
 
@@ -664,6 +503,8 @@ class NVG:
     >>> nvg = NVG(limit=500).build(x)
     >>> print(nvg.n_nodes, nvg.n_edges)
     """
+
+    _builder_name = "NVG"
 
     def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None,
                  only_degrees: bool = False, output: str = "edges",
@@ -709,7 +550,7 @@ class NVG:
         if only_degrees:
             self.output = "degrees"
         else:
-            self.output = output
+            self.output = validate_output_mode(output, "NVG")
         # For _NVG_Old, use bool weighted (it only supports absdiff)
         self._impl = _NVG_Old(
             weighted=(self.weighted and self.weight_mode == "absdiff"), limit=limit,
@@ -718,82 +559,6 @@ class NVG:
         )
         self._graph = None
         self._x = None  # Store series for weight recomputation
-    
-    def fit(self, x: NDArray[np.float64]) -> 'NVG':
-        """
-        Fit the NVG model to the time series (scikit-learn compatible).
-        
-        Parameters
-        ----------
-        x : array-like
-            Input time series (1D array)
-        
-        Returns
-        -------
-        self : NVG
-            Returns self for method chaining
-        
-        Examples
-        --------
-        >>> from ts2net import NVG
-        >>> import numpy as np
-        >>> x = np.random.randn(100)
-        >>> nvg = NVG()
-        >>> nvg.fit(x)  # scikit-learn style
-        >>> nvg.transform()  # Get graph
-        """
-        # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "NVG")
-        self._x = x.copy()  # Store for weight recomputation
-        self._fitted = True
-        return self
-    
-    def transform(self) -> nx.Graph:
-        """
-        Transform the fitted time series into a network (scikit-learn compatible).
-        
-        Returns
-        -------
-        G : networkx.Graph
-            The visibility graph
-        
-        Raises
-        ------
-        ValueError
-            If fit() has not been called first
-        
-        Examples
-        --------
-        >>> nvg = NVG()
-        >>> nvg.fit(x)
-        >>> G = nvg.transform()
-        """
-        if not getattr(self, '_fitted', False):
-            raise ValueError("Must call fit() before transform()")
-        if self._graph is None:
-            self.build(self._x)
-        return self.as_networkx(force=True)
-    
-    def fit_transform(self, x: NDArray[np.float64]) -> nx.Graph:
-        """
-        Fit the model and transform in one step (scikit-learn compatible).
-        
-        Parameters
-        ----------
-        x : array-like
-            Input time series
-        
-        Returns
-        -------
-        G : networkx.Graph
-            The visibility graph
-        
-        Examples
-        --------
-        >>> nvg = NVG()
-        >>> G = nvg.fit_transform(x)
-        """
-        return self.fit(x).transform()
     
     def build(self, x: NDArray[np.float64]) -> "NVG":
         """
@@ -811,7 +576,7 @@ class NVG:
         self : NVG
         """
         # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "NVG")
+        x = validate_series(x, "NVG")
         self._x = x.copy()  # Store for weight recomputation
         
         G_nx, A = self._impl.fit_transform(x)
@@ -878,8 +643,7 @@ class NVG:
     
     @property
     def edges(self):
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
@@ -887,27 +651,23 @@ class NVG:
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_nodes
 
     @property
     def n_edges(self) -> int:
         """Number of edges."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_edges
     
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.degree_sequence()
 
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (no dense matrix required)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
     
     def network_metrics(
@@ -949,8 +709,7 @@ class NVG:
         >>> print(f"Avg path length: {metrics['avg_path_length']:.3f}")
         >>> print(f"Modularity: {metrics['modularity']:.3f}")
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
     
     def test_significance(
@@ -998,8 +757,7 @@ class NVG:
         """
         from .stats.null_models import compute_network_metric_significance
         
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         
         if self._x is None:
             raise ValueError("Cannot test significance: original time series not stored")
@@ -1056,8 +814,7 @@ class NVG:
         A : csr_matrix | coo_matrix | ndarray
             Symmetric adjacency matrix of shape (n_nodes, n_nodes).
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
     
     def edges_coo(
@@ -1072,8 +829,7 @@ class NVG:
         cols : NDArray[int64]  — target node indices
         weights : NDArray[float64] or None — edge weights (None if unweighted)
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.edges_coo()
     
     def as_networkx(self, force: bool = False) -> nx.Graph:
@@ -1090,12 +846,11 @@ class NVG:
         -------
         G : nx.Graph or nx.DiGraph
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.as_networkx(force=force)
 
 
-class RecurrenceNetwork:
+class RecurrenceNetwork(SklearnBuildMixin):
     """
     Recurrence Network.
 
@@ -1140,6 +895,8 @@ class RecurrenceNetwork:
     >>> print(rn.n_nodes, rn.n_edges)
     """
 
+    _builder_name = "RecurrenceNetwork"
+
     def __init__(self, m: Optional[int] = None, tau: int = 1, rule: str = 'knn',
                  k: int = 5, epsilon: float = 0.1, metric: str = 'euclidean',
                  only_degrees: bool = False, output: str = "edges"):
@@ -1172,7 +929,7 @@ class RecurrenceNetwork:
         if only_degrees:
             self.output = "degrees"
         else:
-            self.output = output
+            self.output = validate_output_mode(output, "RecurrenceNetwork")
         # Map parameters to old implementation (uses threshold instead of epsilon)
         # For k-NN rule, use k parameter; for epsilon rule, use threshold
         threshold = epsilon if rule == 'epsilon' else None
@@ -1193,7 +950,7 @@ class RecurrenceNetwork:
         self : RecurrenceNetwork
         """
         # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "RecurrenceNetwork")
+        x = validate_series(x, "RecurrenceNetwork")
         
         G_nx, A = self._impl.fit_transform(x)
         
@@ -1236,8 +993,7 @@ class RecurrenceNetwork:
     
     @property
     def edges(self):
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
@@ -1245,27 +1001,23 @@ class RecurrenceNetwork:
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_nodes
 
     @property
     def n_edges(self) -> int:
         """Number of edges."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_edges
     
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.degree_sequence()
 
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (no dense matrix required)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
     
     def adjacency_matrix(
@@ -1287,8 +1039,7 @@ class RecurrenceNetwork:
         A : csr_matrix | coo_matrix | ndarray
             Symmetric adjacency matrix of shape (n_nodes, n_nodes).
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
     
     def edges_coo(
@@ -1303,8 +1054,7 @@ class RecurrenceNetwork:
         cols : NDArray[int64]  — target node indices
         weights : NDArray[float64] or None — edge weights (None if unweighted)
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.edges_coo()
     
     def as_networkx(self, force: bool = False) -> nx.Graph:
@@ -1321,12 +1071,11 @@ class RecurrenceNetwork:
         -------
         G : nx.Graph or nx.DiGraph
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.as_networkx(force=force)
 
 
-class TransitionNetwork:
+class TransitionNetwork(SklearnBuildMixin):
     """
     Transition Network (Ordinal Partition Network).
 
@@ -1370,6 +1119,8 @@ class TransitionNetwork:
     >>> print(tn.n_nodes, tn.n_edges)   # nodes = distinct patterns, directed
     """
 
+    _builder_name = "TransitionNetwork"
+
     def __init__(self, symbolizer: str = 'ordinal', order: int = 3, delay: int = 1,
                  tie_rule: str = 'stable', bins: int = 5, normalize: bool = True,
                  sparse: bool = False, only_degrees: bool = False, output: str = "edges"):
@@ -1405,7 +1156,7 @@ class TransitionNetwork:
         if only_degrees:
             self.output = "degrees"
         else:
-            self.output = output
+            self.output = validate_output_mode(output, "TransitionNetwork")
         # Map parameters to old implementation (doesn't accept normalize or sparse)
         self._impl = _TN_Old(
             symbolizer=symbolizer, order=order, delay=delay,
@@ -1427,7 +1178,7 @@ class TransitionNetwork:
         self : TransitionNetwork
         """
         # Validate and clean input (handles dtype contamination)
-        x = _validate_and_clean_series(x, "TransitionNetwork")
+        x = validate_series(x, "TransitionNetwork")
         
         G_nx, A = self._impl.fit_transform(x)
         
@@ -1470,8 +1221,7 @@ class TransitionNetwork:
     
     @property
     def edges(self):
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
@@ -1479,27 +1229,23 @@ class TransitionNetwork:
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_nodes
 
     @property
     def n_edges(self) -> int:
         """Number of edges."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.n_edges
     
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.degree_sequence()
 
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (no dense matrix required)."""
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
     
     def adjacency_matrix(
@@ -1521,8 +1267,7 @@ class TransitionNetwork:
         A : csr_matrix | coo_matrix | ndarray
             Symmetric adjacency matrix of shape (n_nodes, n_nodes).
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
     
     def edges_coo(
@@ -1537,8 +1282,7 @@ class TransitionNetwork:
         cols : NDArray[int64]  — target node indices
         weights : NDArray[float64] or None — edge weights (None if unweighted)
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.edges_coo()
     
     def as_networkx(self, force: bool = False) -> nx.Graph:
@@ -1555,8 +1299,7 @@ class TransitionNetwork:
         -------
         G : nx.Graph or nx.DiGraph
         """
-        if self._graph is None:
-            raise ValueError("Call build() first")
+        self._ensure_built()
         return self._graph.as_networkx(force=force)
 
 

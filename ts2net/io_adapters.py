@@ -141,7 +141,7 @@ def from_polars(
     if not HAS_POLARS:
         raise ImportError(
             "polars is required for from_polars. "
-            "Install with: pip install ts2net[polars]"
+            "Install with: pip install ts2net[pipeline]"
         )
     
     if group_col is None:

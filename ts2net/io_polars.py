@@ -89,7 +89,7 @@ def load_series_from_parquet_polars(
     if not HAS_POLARS:
         raise ImportError(
             "Polars is required for load_series_from_parquet_polars. "
-            "Install with: pip install ts2net[polars]"
+            "Install with: pip install ts2net[pipeline]"
         )
     
     # Build column selection

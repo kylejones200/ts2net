@@ -11,6 +11,8 @@ Time series to networks. Clean API for visibility graphs, recurrence networks, a
 
 ### Basic Installation
 
+Installs core network builders and sklearn integration:
+
 ```bash
 # Using uv (recommended)
 uv pip install ts2net
@@ -18,6 +20,31 @@ uv pip install ts2net
 # Or using pip
 pip install ts2net
 ```
+
+### Optional Feature Tiers
+
+```bash
+# YAML pipeline CLI + Parquet I/O
+uv pip install "ts2net[pipeline]"
+
+# Structural decomposition (BSTS)
+uv pip install "ts2net[bsts]"
+
+# Performance acceleration (Numba)
+uv pip install "ts2net[speed]"
+
+# All optional features
+uv pip install "ts2net[all]"
+```
+
+| Extra | Includes | Use when |
+|-------|----------|----------|
+| *(core)* | numpy, scipy, networkx, sklearn, matplotlib | Building networks, sklearn features |
+| `[pipeline]` | click, pyyaml, polars, pyarrow | `ts2net run`, Parquet ingestion |
+| `[bsts]` | statsmodels | Structural decomposition |
+| `[polars]` | polars, pyarrow | Polars-only ingestion (subset of pipeline) |
+| `[speed]` | numba | 100–180× visibility graph speedup |
+| `[all]` | everything above + dtw, cnn, examples, viz | Full development setup |
 
 ### Development Installation
 
@@ -37,20 +64,20 @@ uv run maturin develop --release
 
 ### Optional Dependencies
 
-Install with optional features:
-
 ```bash
 # Using uv
+uv pip install "ts2net[pipeline]"   # CLI + Parquet pipeline
+uv pip install "ts2net[bsts]"       # BSTS decomposition
 uv pip install "ts2net[speed]"      # Performance acceleration (Numba)
-uv pip install "ts2net[dtw]"         # DTW distance (tslearn)
+uv pip install "ts2net[dtw]"        # DTW distance (tslearn)
 uv pip install "ts2net[cnn]"        # Temporal CNN embeddings (PyTorch)
-uv pip install "ts2net[examples]"    # Example dependencies
+uv pip install "ts2net[examples]"   # Example dependencies
+uv pip install "ts2net[all]"        # All optional features
 
 # Or using pip
-pip install ts2net[speed]
-pip install ts2net[dtw]
-pip install ts2net[cnn]
-pip install ts2net[examples]
+pip install "ts2net[pipeline]"
+pip install "ts2net[bsts]"
+pip install "ts2net[speed]"
 ```
 
 ### Verify Installation
@@ -126,10 +153,11 @@ residual_network_stats = result.residual_network_stats  # Network features from 
 - Flag series where structural model fails (high residual complexity)
 - Separate predictable structure from irregular dynamics
 
-**Installation:**
+**Installation:** BSTS requires the `[bsts]` extra (statsmodels is not in the core install):
+
 ```bash
-uv pip install "ts2net[bsts]"  # Installs statsmodels
-# Or: pip install ts2net[bsts]
+uv pip install "ts2net[bsts]"
+# Or: pip install "ts2net[bsts]"
 ```
 
 See `examples/bsts_features.py` for complete examples.
@@ -353,6 +381,12 @@ Ferreira, L.N. (2024). From time series to networks in R with the ts2net package
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Case Study
+
+Try the Spain smart meter case study in Binder (no dataset download required):
+
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kylejones200/ts2net/main?filepath=examples%2Fspain_meter_case_study.ipynb)
 
 ## License
 

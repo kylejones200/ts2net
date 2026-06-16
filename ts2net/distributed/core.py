@@ -1,8 +1,8 @@
 """
 Distributed computation utilities for large-scale time series analysis.
 
-This module provides tools for parallel and distributed computation of
-time series distances and network construction.
+.. warning::
+    **Experimental** — Not part of the stable public API. May change without notice.
 """
 
 import os
@@ -10,10 +10,15 @@ import csv
 import json
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Any
+from typing import Dict, List, Tuple, Any
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    def tqdm(iterable, **kwargs):
+        return iterable
 
 
 @dataclass

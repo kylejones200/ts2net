@@ -15,6 +15,7 @@ import networkx as nx
 from scipy.sparse import csr_matrix
 
 from ..core.graph import Graph
+from ._parallel import pairwise_parallel
 
 
 def _discretize_series(x: NDArray[np.float64], bins: int = 10) -> NDArray[np.int32]:
@@ -316,7 +317,8 @@ def transfer_entropy_network(
     bins: int = 10,
     threshold: Optional[float] = None,
     method: Literal["discrete", "knn"] = "discrete",
-    series_names: Optional[List[str]] = None
+    series_names: Optional[List[str]] = None,
+    n_jobs: int = 1,
 ) -> Tuple[nx.DiGraph, NDArray, Dict[str, float]]:
     """
     Construct a directed network based on transfer entropy between time series.
@@ -338,6 +340,8 @@ def transfer_entropy_network(
         Method for computing entropy: "discrete" or "knn"
     series_names : list of str, optional
         Names for each series (default: "Series_0", "Series_1", ...)
+    n_jobs : int, default 1
+        Parallel workers for pairwise transfer entropy (-1 = all CPUs).
     
     Returns
     -------
@@ -373,14 +377,14 @@ def transfer_entropy_network(
             f"number of series ({n_series})"
         )
     
+    def _te_pair(i: int, j: int) -> float:
+        return transfer_entropy(X[i], X[j], lag=lag, bins=bins, method=method)
+
+    pair_te = pairwise_parallel(n_series, _te_pair, n_jobs=n_jobs)
+
     te_matrix = np.zeros((n_series, n_series))
-    
-    for i in range(n_series):
-        for j in range(n_series):
-            if i != j:
-                te_matrix[i, j] = transfer_entropy(
-                    X[i], X[j], lag=lag, bins=bins, method=method
-                )
+    for (i, j), te_val in pair_te.items():
+        te_matrix[i, j] = te_val
     
     G = nx.DiGraph()
     G.add_nodes_from(range(n_series))
