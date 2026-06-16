@@ -31,11 +31,11 @@ ts2net should sit at the intersection of time series analysis, network science, 
 | ------- | -------------------- | ------------------------------------------------------------------------------------------- | ------ |
 | 0.3     | API hardening        | Stable public API, complete typing, consistent docs, stronger tests.                        | **In progress** — `py.typed`, `NetworkBuilder` protocol, validation layer, CI gates |
 | 0.4     | Core graph expansion | Broader visibility, recurrence, transition, similarity, and dynamic graph builders.         | ✅ **Completed** — `ts2net.graphs` module |
-| 0.5     | Causal networks      | Full causal workflow with lag search, confidence, confounders, and causal summaries.        | ✅ **Completed** — `run_causal_analysis()`; PC/FCI/PCMCI deferred to 0.9 |
+| 0.5     | Causal networks      | Full causal workflow with lag search, confidence, confounders, and causal summaries.        | ✅ **Completed** — `run_causal_analysis()` |
 | 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              | **Planned** |
 | 0.7     | ML integration       | sklearn, PyG, DGL, feature selection, and benchmark comparisons.                            | ✅ **Completed** — see `examples/ml_integration_example.py` |
 | 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. | ✅ **Completed** — see `examples/dynamic_analytics_example.py` |
-| 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **Planned** |
+| 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **In progress** — PC/FCI discovery (`pc_algorithm`, `fci_algorithm`, time-series adapters) |
 | 1.0     | Stable release       | Stable API, mature docs, examples gallery, governance, and production-ready workflows.      | **Planned** |
 
 ## Guiding Principles
@@ -99,7 +99,7 @@ The package should answer four questions:
 | Transition networks  | Symbolic transition networks, ordinal pattern networks, entropy-maximizing symbolization, SAX-based transitions, and Markov transition graphs.                                  | ✅ PARTIAL — `sax_symbolize()`, `entropy_max_symbolize()`, `sax_transition_network()` |
 | Correlation networks | Pearson, Spearman, Kendall, distance correlation, partial correlation, rolling correlation, and thresholded correlation graphs.                                                 | ✅ COMPLETED — `correlation_network()`, `partial_correlation_network()`, `rolling_correlation_network()` |
 | Similarity networks  | DTW, soft-DTW, Euclidean, shape-based distance, matrix profile distance, and learned embedding distance.                                                                        | ✅ COMPLETED — `similarity_network()` with `soft_dtw`, `matrix_profile`, `dtw`, etc. |
-| Causal networks      | Transfer entropy, conditional transfer entropy, Granger causality, nonlinear Granger, PCMCI-style lagged discovery, PC, FCI, and time-aware constraint methods.                 | ✅ PARTIAL — see Horizon 3 |
+| Causal networks      | Transfer entropy, conditional transfer entropy, Granger causality, nonlinear Granger, PCMCI-style lagged discovery, PC, FCI, and time-aware constraint methods.                 | ✅ PARTIAL — PC/FCI discovery; PCMCI-style via `time_lagged_causality_network()` |
 | Event networks       | Convert events, spikes, regime changes, and detected motifs into temporal graphs.                                                                                               | ✅ COMPLETED — `event_sequence_network()`, `event_sync_network()` |
 | Dynamic networks     | Build graph sequences from rolling windows. Track edge birth, edge death, node role changes, and regime shifts.                                                                 | ✅ COMPLETED — see Horizon 6 |
 | Multiplex networks   | Represent multiple edge types at once, such as correlation, causality, recurrence, and transition edges.                                                                        | ✅ COMPLETED — `MultiplexGraph`, `multiplex_graph()`, `multiplex_visibility_graph()` |
@@ -119,7 +119,7 @@ The package should answer four questions:
 | Causal network metrics          | Path-based and node-level causal summaries.                                                           | ✅ `causal_strength()`, `directionality_index()`, `causal_network_metrics()` |
 | Time-lagged analysis            | Transfer entropy or Granger causality across multiple lags.                                           | ✅ `time_lagged_causality_network()` |
 | End-to-end workflow             | Lag search, confidence, confounders, network construction, and reports.                               | ✅ `run_causal_analysis()`, `CausalAnalysisResult.summary()` — `examples/causal_workflow_example.py` |
-| Causal discovery adapters       | PC, FCI, PCMCI-like workflows, and constraint-based discovery for lagged time series.                 | PLANNED v0.9 |
+| Causal discovery adapters       | PC, FCI, PCMCI-like workflows, and constraint-based discovery for lagged time series.                 | ✅ PARTIAL — `pc_algorithm()`, `fci_algorithm()`, `pc_timeseries_network()`, `fci_timeseries_network()` — `tests/test_causal_discovery.py` |
 | Directional visibility analysis | Use directed visibility graphs to detect irreversibility and temporal asymmetry.                      | PLANNED |
 | Intervention simulation         | Estimate downstream effects when a source node changes or disappears.                                 | PLANNED |
 | Network-based causal inference  | Leverage topology to infer causal relationships (e.g. directed visibility irreversibility).           | PLANNED |
@@ -214,7 +214,7 @@ See `examples/dynamic_analytics_example.py`.
 | Statistical tests        | Permutation tests, bootstrap tests, surrogate data tests, and threshold sensitivity analysis.                   | PARTIAL — causal TE permutation/bootstrap |
 | Reproducibility          | Version benchmark datasets, parameters, random seeds, and output artifacts.                                     | PLANNED |
 | Documentation references | Cite source papers for each method and explain assumptions.                                                     | PARTIAL |
-| Advanced causal discovery| PC algorithm, FCI, and PCMCI-style methods adapted for time series networks.                                    | PLANNED |
+| Advanced causal discovery| PC algorithm, FCI, and PCMCI-style methods adapted for time series networks.                                    | ✅ PARTIAL — `pc_algorithm`, `fci_algorithm`, lag-expanded time-series adapters |
 
 ## Horizon 10: Package Maturity and Community
 

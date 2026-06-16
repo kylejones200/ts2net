@@ -116,6 +116,12 @@ from .causal import (
     run_causal_analysis,
     CausalWorkflowSpec,
     CausalAnalysisResult,
+    pc_algorithm,
+    pc_timeseries_network,
+    PCResult,
+    fci_algorithm,
+    fci_timeseries_network,
+    FCIResult,
 )
 __all__.extend([
     'transfer_entropy',
@@ -132,6 +138,12 @@ __all__.extend([
     'run_causal_analysis',
     'CausalWorkflowSpec',
     'CausalAnalysisResult',
+    'pc_algorithm',
+    'pc_timeseries_network',
+    'PCResult',
+    'fci_algorithm',
+    'fci_timeseries_network',
+    'FCIResult',
 ])
 
 # Core graph expansion (v0.4)

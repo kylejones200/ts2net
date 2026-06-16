@@ -9,6 +9,7 @@ using information-theoretic and statistical approaches:
 - Causal metrics: Path-based causality measures and directionality indices
 - Time-lagged analysis: Causal structure across multiple lags
 - Workflow: End-to-end lag search, confidence, confounders, and summaries
+- Discovery: PC and FCI constraint-based causal discovery (0.9)
 """
 
 from .transfer_entropy import (
@@ -24,6 +25,10 @@ from .confidence import te_permutation_test, te_bootstrap_ci
 from .confounders import partial_granger_causality, conditional_te_network
 from .summary import CausalEdgeResult, CausalAnalysisResult, format_causal_report
 from .workflow import CausalWorkflowSpec, run_causal_analysis
+from .ci_tests import partial_correlation_ci_test, ci_test
+from .lagged_panel import lagged_panel_matrix
+from .pc import pc_algorithm, pc_timeseries_network, PCResult
+from .fci import fci_algorithm, fci_timeseries_network, FCIResult
 
 __all__ = [
     "transfer_entropy",
@@ -46,4 +51,13 @@ __all__ = [
     "format_causal_report",
     "CausalWorkflowSpec",
     "run_causal_analysis",
+    "partial_correlation_ci_test",
+    "ci_test",
+    "lagged_panel_matrix",
+    "pc_algorithm",
+    "pc_timeseries_network",
+    "PCResult",
+    "fci_algorithm",
+    "fci_timeseries_network",
+    "FCIResult",
 ]

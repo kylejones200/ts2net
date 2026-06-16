@@ -86,16 +86,20 @@ def soft_dtw_distance(
     x = np.asarray(x, dtype=np.float64).ravel()
     y = np.asarray(y, dtype=np.float64).ravel()
 
+    if np.allclose(x, y):
+        return 0.0
+
     try:
         from tslearn.metrics import soft_dtw
 
-        return float(
+        val = float(
             soft_dtw(
                 x.reshape(-1, 1),
                 y.reshape(-1, 1),
                 gamma=gamma,
             )
         )
+        return max(0.0, val)
     except ImportError:
         from ..multivariate.distances import tsdist_dtw
 
