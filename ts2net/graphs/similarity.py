@@ -15,6 +15,12 @@ from numpy.typing import NDArray
 from .._validation import validate_positive_int
 from ..multivariate.builders import net_enn, net_knn, net_weighted
 from ..multivariate.distances import ts_dist
+from ..scale.approximate import (
+    approximate_knn_network,
+    approximate_knn_panel,
+    has_pynndescent,
+    should_use_approximate,
+)
 from .distances_extra import (
     matrix_profile_distance_matrix,
     soft_dtw_distance_matrix,
@@ -95,6 +101,8 @@ def similarity_network(
     threshold: float | None = None,
     n_jobs: int = 1,
     weighted: bool = True,
+    approximate: bool = False,
+    approx_threshold: int = 500,
     **kwargs,
 ) -> tuple[nx.Graph, NDArray[np.float64]]:
     """
@@ -112,6 +120,10 @@ def similarity_network(
         Parallel workers for distance computation.
     weighted : bool
         Edge weights = dissimilarity values.
+    approximate : bool, default False
+        Use pynndescent approximate k-NN when ``rule='knn'``.
+    approx_threshold : int, default 500
+        Auto-enable approximate k-NN when ``n_series >= approx_threshold``.
 
     Returns
     -------
@@ -119,9 +131,19 @@ def similarity_network(
     D : distance matrix
     """
     D = similarity_matrix(X, method=method, n_jobs=n_jobs, **kwargs)
+    n_series = X.shape[0]
 
     if rule == "knn":
-        G, _ = net_knn(D, k=validate_positive_int("k", k), weighted=weighted)
+        k_val = validate_positive_int("k", k)
+        if should_use_approximate(n_series, approximate, approx_threshold):
+            if method == "euclidean" and has_pynndescent():
+                G, _ = approximate_knn_panel(
+                    X, k=k_val, metric="euclidean", weighted=weighted
+                )
+            else:
+                G, _ = approximate_knn_network(D, k=k_val, weighted=weighted)
+        else:
+            G, _ = net_knn(D, k=k_val, weighted=weighted)
     elif rule == "epsilon":
         G, _ = net_enn(D, eps=epsilon, weighted=weighted)
     elif rule == "threshold":

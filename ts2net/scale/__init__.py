@@ -2,11 +2,18 @@
 Scale and performance utilities (horizon 0.6 / v0.6).
 """
 
+from .approximate import (
+    approximate_knn_network,
+    approximate_knn_panel,
+    has_pynndescent,
+    should_use_approximate,
+)
 from .contracts import (
     PerformanceContract,
     get_performance_contract,
     list_performance_contracts,
 )
+from .incremental import AppendResult, IncrementalHVG
 from .sparse import edges_to_csr, to_sparse_csr
 from .streaming import (
     build_windows_streaming,
@@ -21,6 +28,12 @@ __all__ = [
     "PerformanceContract",
     "get_performance_contract",
     "list_performance_contracts",
+    "IncrementalHVG",
+    "AppendResult",
+    "approximate_knn_network",
+    "approximate_knn_panel",
+    "has_pynndescent",
+    "should_use_approximate",
     "to_sparse_csr",
     "edges_to_csr",
     "iter_windows",

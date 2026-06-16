@@ -55,8 +55,11 @@ CI_SMOKE = os.environ.get("TS2NET_CI_SMOKE", "0") == "1"
 LARGE_THRESHOLD = 100_000
 
 if CI_SMOKE:
-    SERIES_LENGTHS = [100, 1_000, 10_000]
-    DTW_CONFIGS = [(10, 100), (20, 500)]
+    SERIES_LENGTHS = [100, 1_000, 5_000]
+    DTW_CONFIGS = [(5, 50)]
+    RECURRENCE_LENGTHS = [100, 500, 1_000]
+else:
+    RECURRENCE_LENGTHS = [100, 500, 1_000, 5_000, 10_000]
 
 
 # ── timing helpers ─────────────────────────────────────────────────────────────
@@ -87,7 +90,11 @@ def bench_visibility(rng: np.random.Generator, repeats: int) -> list[dict]:
         for method, fn, note in [
             ("HVG",          lambda x=x: HVG().build(x),                          ""),
             ("HVG[deg]",     lambda x=x: HVG(output="degrees").build(x),          "degree-only mode"),
-            ("HVG[directed]",lambda x=x: HVG(directed=True).build(x),             ""),
+            *(
+                []
+                if CI_SMOKE
+                else [("HVG[directed]", lambda x=x: HVG(directed=True).build(x), "")]
+            ),
             ("NVG",          lambda x=x, kw=nvg_kwargs: NVG(**kw).build(x),       f"limit={nvg_limit or 'none'}"),
         ]:
             ms = time_ms(fn, repeats)
@@ -100,15 +107,20 @@ def bench_visibility(rng: np.random.Generator, repeats: int) -> list[dict]:
 def bench_recurrence(rng: np.random.Generator, repeats: int) -> list[dict]:
     """RecurrenceNetwork (knn and epsilon) at smaller series lengths."""
     rows = []
-    for n in [100, 500, 1_000, 5_000, 10_000]:
+    for n in RECURRENCE_LENGTHS:
         if SKIP_LARGE and n > LARGE_THRESHOLD:
             continue
         x = rng.standard_normal(n)
-        for method, fn, note in [
-            ("RN(knn,k=5)",     lambda x=x: RecurrenceNetwork(rule="knn",     k=5).build(x),      ""),
-            ("RN(eps,ε=0.3)",   lambda x=x: RecurrenceNetwork(rule="epsilon", epsilon=0.3).build(x), ""),
-            ("RN(knn)[deg]",    lambda x=x: RecurrenceNetwork(rule="knn",     k=5, output="degrees").build(x), "degree-only"),
-        ]:
+        configs = [
+            ("RN(knn,k=5)",   lambda x=x: RecurrenceNetwork(rule="knn", k=5).build(x), ""),
+            ("RN(knn)[deg]",  lambda x=x: RecurrenceNetwork(rule="knn", k=5, output="degrees").build(x), "degree-only"),
+        ]
+        if not CI_SMOKE or n <= 500:
+            configs.insert(
+                1,
+                ("RN(eps,ε=0.3)", lambda x=x: RecurrenceNetwork(rule="epsilon", epsilon=0.3).build(x), ""),
+            )
+        for method, fn, note in configs:
             ms = time_ms(fn, repeats)
             rows.append({"method": method, "n": n, "ms": ms, "note": note})
             print(f"  {method:<20} n={n:>7,}  {ms:8.1f} ms  {note}")
@@ -197,7 +209,7 @@ def main():
     print("=" * 60)
     print(f"ts2net benchmarks  ({datetime.now().strftime('%Y-%m-%d')})")
     print(f"  Python {sys.version.split()[0]}  DTW backend: {DTW_BACKEND}")
-    print(f"  repeats={args.repeats}  SKIP_LARGE={SKIP_LARGE}")
+    print(f"  repeats={args.repeats}  SKIP_LARGE={SKIP_LARGE}  CI_SMOKE={CI_SMOKE}")
     print("=" * 60)
 
     print("\n── Visibility graphs (HVG / NVG) ──")
@@ -210,7 +222,9 @@ def main():
     tn_rows = bench_transition(rng, args.repeats)
 
     print("\n── DTW pairwise distance ──")
-    dtw_rows = bench_dtw(rng, args.repeats)
+    dtw_rows = bench_dtw(rng, args.repeats) if not CI_SMOKE else []
+    if CI_SMOKE:
+        print("  (skipped in CI smoke mode)")
 
     # Write CSV
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -230,8 +244,11 @@ def main():
     print(build_visibility_table(vis_rows))
     print(f"\n> NVG uses `limit=2000` for n > 10 000 (unconstrained NVG is O(n²)).")
     print("\n### DTW pairwise (cdist_dtw)\n")
-    print(build_dtw_table(dtw_rows))
-    print(f"\n> Backend: `{DTW_BACKEND}`.  Install with `pip install ts2net` for the Rust backend.")
+    if dtw_rows:
+        print(build_dtw_table(dtw_rows))
+        print(f"\n> Backend: `{DTW_BACKEND}`.  Install with `pip install ts2net` for the Rust backend.")
+    else:
+        print("_Skipped in CI smoke mode._")
 
 
 if __name__ == "__main__":

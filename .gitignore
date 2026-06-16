@@ -1,3 +1,6 @@
+# Benchmark artifacts
+benchmarks/results/
+
 # Python
 __pycache__/
 *.py[cod]

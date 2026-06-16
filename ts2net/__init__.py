@@ -270,6 +270,12 @@ from .scale import (
     estimate_window_job_memory_mb,
     to_sparse_csr,
     edges_to_csr,
+    IncrementalHVG,
+    AppendResult,
+    approximate_knn_network,
+    approximate_knn_panel,
+    has_pynndescent,
+    should_use_approximate,
 )
 __all__.extend([
     'PerformanceContract',
@@ -283,4 +289,10 @@ __all__.extend([
     'estimate_window_job_memory_mb',
     'to_sparse_csr',
     'edges_to_csr',
+    'IncrementalHVG',
+    'AppendResult',
+    'approximate_knn_network',
+    'approximate_knn_panel',
+    'has_pynndescent',
+    'should_use_approximate',
 ])

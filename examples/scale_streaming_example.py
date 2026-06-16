@@ -76,6 +76,17 @@ def main():
 
     print()
     print("=" * 60)
+    print("Incremental HVG (streaming append)")
+    print("=" * 60)
+    from ts2net.scale import IncrementalHVG
+
+    inc = IncrementalHVG()
+    for v in x[:5]:
+        r = inc.append(float(v))
+        print(f"  append @{r.index}: +{len(r.new_edges)} edges (total {r.n_edges})")
+
+    print()
+    print("=" * 60)
     print("Parallel build_windows (n_jobs=2)")
     print("=" * 60)
     stats = build_windows(x, window=48, step=24, method="hvg", n_jobs=2)

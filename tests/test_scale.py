@@ -10,12 +10,14 @@ from scipy import sparse as sp
 
 from ts2net import HVG, build_windows
 from ts2net.scale import (
+    IncrementalHVG,
     build_windows_streaming,
     edges_to_csr,
     get_performance_contract,
     iter_series_chunks,
     iter_windows,
     list_performance_contracts,
+    should_use_approximate,
     stream_chunk_stats,
     to_sparse_csr,
 )
@@ -121,3 +123,54 @@ class TestContracts:
     def test_unknown_contract_raises(self):
         with pytest.raises(KeyError):
             get_performance_contract("not_a_method")
+
+
+class TestIncrementalHVG:
+    def test_matches_batch_hvg(self):
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal(80)
+        inc = IncrementalHVG.from_series(x)
+        batch = HVG().build(x)
+        assert inc.n_edges == batch.n_edges
+        assert inc.n_nodes == batch.n_nodes
+
+    def test_append_returns_new_edges(self):
+        inc = IncrementalHVG()
+        r1 = inc.append(1.0)
+        assert r1.index == 0
+        assert r1.new_edges == []
+        r2 = inc.append(0.5)
+        assert r2.index == 1
+        assert len(r2.new_edges) >= 1
+
+
+class TestApproximate:
+    def test_should_use_approximate_flag(self):
+        assert should_use_approximate(10, approximate=True, threshold=500)
+
+    def test_approximate_knn_network(self):
+        pynndescent = pytest.importorskip("pynndescent")
+        _ = pynndescent
+        from ts2net.scale import approximate_knn_network
+
+        rng = np.random.default_rng(3)
+        X = rng.standard_normal((60, 40))
+        from scipy.spatial.distance import pdist, squareform
+
+        D = squareform(pdist(X))
+        G, A = approximate_knn_network(D, k=3)
+        assert G.number_of_nodes() == 60
+        assert G.number_of_edges() > 0
+
+    def test_similarity_network_auto_approx(self):
+        pynndescent = pytest.importorskip("pynndescent")
+        _ = pynndescent
+        from ts2net.graphs import similarity_network
+
+        rng = np.random.default_rng(4)
+        X = rng.standard_normal((520, 30))
+        G, D = similarity_network(
+            X, method="euclidean", rule="knn", k=3, approx_threshold=500
+        )
+        assert G.number_of_nodes() == 520
+        assert D.shape == (520, 520)
