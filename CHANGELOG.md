@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-14
+
+### Added
+- **Core graph expansion (`ts2net.graphs`)**: correlation, similarity, recurrence RQA, SAX/entropy symbolization, event networks, multiplex visibility, adaptive/cross recurrence.
+- **Causal workflow (`ts2net.causal`)**: `run_causal_analysis()` with lag search, permutation/bootstrap confidence, confounder adjustment, and plain-language reports.
+- **Causal discovery**: PC and FCI algorithms with lag-expanded time-series adapters (`pc_timeseries_network`, `fci_timeseries_network`).
+- **Directed visibility asymmetry**: irreversibility and temporal-asymmetry metrics from directed HVG.
+- **ML integration (`ts2net.sklearn`, `ts2net.ml`)**: `NetworkFeatureExtractor`, rolling features, feature selection, baseline comparisons, PyG/DGL adapters.
+- **Dynamic analytics (`ts2net.dynamic`)**: `run_dynamic_analysis()` with regime detection, anomaly scores, community tracking, and node role evolution.
+- **Scale & performance (`ts2net.scale`)**: streaming window iterators, chunk/Parquet readers, `IncrementalHVG`, approximate kNN, performance contracts, sparse CSR helpers.
+- **Install extras**: `[ml]`, `[pyg]`, `[dgl]`, `[tsfresh]`, `[pipeline]`, `[approx]`.
+- Examples: causal workflow, ML integration, dynamic analytics, causal discovery, scale streaming; Binder notebook for Spain meter case study.
+- CI benchmark smoke test (`TS2NET_CI_SMOKE=1`).
+
+### Changed
+- Consolidated `horizons.md` and `ROADMAP.md` into a single `ROADMAP.md`.
+- `build_windows()` supports `n_jobs` and `streaming=True`.
+- `similarity_network()` supports `approximate=True` with auto-threshold for large panels.
+- Slimmed core dependencies; optional features moved to extras.
+
+### Fixed
+- `soft_dtw_distance` returns 0 for identical series and clamps negative numerical noise.
+- Lazy YAML import in `PipelineConfig.from_yaml()` when `[pipeline]` extra is not installed.
+
 ## [0.8.0] - 2026-05-15
 
 ### Fixed
@@ -110,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project structure optimized for distribution
 - Documentation setup with Sphinx
 
-[Unreleased]: https://github.com/kylejones200/ts2net/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/kylejones200/ts2net/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/kylejones200/ts2net/releases/tag/v0.4.0
+[Unreleased]: https://github.com/kylejones200/ts2net/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kylejones200/ts2net/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/kylejones200/ts2net/releases/tag/v0.8.0
 
