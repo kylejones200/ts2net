@@ -32,7 +32,7 @@ ts2net should sit at the intersection of time series analysis, network science, 
 | 0.3     | API hardening        | Stable public API, complete typing, consistent docs, stronger tests.                        | **In progress** — `py.typed`, `NetworkBuilder` protocol, validation layer, CI gates |
 | 0.4     | Core graph expansion | Broader visibility, recurrence, transition, similarity, and dynamic graph builders.         | ✅ **Completed** — `ts2net.graphs` module |
 | 0.5     | Causal networks      | Full causal workflow with lag search, confidence, confounders, and causal summaries.        | ✅ **Completed** — `run_causal_analysis()` |
-| 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              | **In progress** — `ts2net.scale`; unified backends; Arrow/Parquet chunk iterators; chunked DTW |
+| 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              | **In progress** — streaming iterators; Rust stats for HVG/NVG/recurrence; chunked DTW |
 | 0.7     | ML integration       | sklearn, PyG, DGL, feature selection, and benchmark comparisons.                            | ✅ **Completed** — see `examples/ml_integration_example.py` |
 | 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. | ✅ **Completed** — see `examples/dynamic_analytics_example.py` |
 | 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **In progress** — PC/FCI discovery, directional visibility asymmetry; reference datasets pending |
@@ -95,7 +95,7 @@ The package should answer four questions:
 | Method Family        | Capability                                                                                                                                                                      | Status |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | Visibility graphs    | Natural visibility graphs, horizontal visibility graphs, directed visibility graphs, weighted visibility graphs, multiplex visibility graphs, and multiscale visibility graphs. | ✅ PARTIAL — HVG/NVG/directed/weighted/multiscale exist; `multiplex_visibility_graph()`; Rust/Numba degree-only stats via `visibility_degree_stats()` |
-| Recurrence networks  | Fixed-threshold recurrence, adaptive recurrence, k-nearest recurrence, cross-recurrence, joint recurrence, and recurrence quantification features.                              | ✅ COMPLETED — `recurrence_quantification()`, `adaptive_recurrence_network()`, `cross_recurrence_network()` |
+| Recurrence networks  | Fixed-threshold recurrence, adaptive recurrence, k-nearest recurrence, cross-recurrence, joint recurrence, and recurrence quantification features.                              | ✅ COMPLETED — `recurrence_quantification()`, `adaptive_recurrence_network()`, `cross_recurrence_network()`; Rust degree-only stats via `recurrence_degree_stats()` |
 | Transition networks  | Symbolic transition networks, ordinal pattern networks, entropy-maximizing symbolization, SAX-based transitions, and Markov transition graphs.                                  | ✅ PARTIAL — `sax_symbolize()`, `entropy_max_symbolize()`, `sax_transition_network()` |
 | Correlation networks | Pearson, Spearman, Kendall, distance correlation, partial correlation, rolling correlation, and thresholded correlation graphs.                                                 | ✅ COMPLETED — `correlation_network()`, `partial_correlation_network()`, `rolling_correlation_network()` |
 | Similarity networks  | DTW, soft-DTW, Euclidean, shape-based distance, matrix profile distance, and learned embedding distance.                                                                        | ✅ COMPLETED — `similarity_network()` with `soft_dtw`, `matrix_profile`, `dtw`, etc. |
@@ -132,8 +132,8 @@ The package should answer four questions:
 
 | Area                   | Work                                                                                                              | Status |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
-| Compute backends       | Unified `rust` → `numba` → `python` selection for graph builders and distance kernels.                            | ✅ PARTIAL — `resolve_compute_backend()`, `TS2NET_BACKEND` env var, `backend=` on all four builder configs and DTW — `tests/test_backend.py` |
-| Out-of-core processing | Streaming builders for chunked arrays, Parquet files, Arrow tables, and memory-mapped data.                       | ✅ PARTIAL — `iter_windows()`, `iter_series_chunks()`, `iter_parquet_value_chunks()`, `iter_arrow_value_chunks()`, `build_windows_streaming()`, `stream_chunk_stats()` (array/memmap/Parquet/Arrow); degree-only HVG/NVG via `visibility_degree_stats()` — `examples/scale_streaming_example.py` |
+| Compute backends       | Unified `rust` → `numba` → `python` selection for graph builders and distance kernels.                            | ✅ PARTIAL — `resolve_compute_backend()`, `TS2NET_BACKEND`, `backend=` on all builder configs; visibility + recurrence Rust stats — `tests/test_backend.py` |
+| Out-of-core processing | Streaming builders for chunked arrays, Parquet files, Arrow tables, and memory-mapped data.                       | ✅ PARTIAL — `iter_windows()`, `iter_series_chunks()`, `iter_parquet_value_chunks()`, `iter_arrow_value_chunks()`, `build_windows_streaming()`, `stream_chunk_stats()`; fast stats via `visibility_degree_stats()` / `recurrence_degree_stats()` — `examples/scale_streaming_example.py` |
 | Distributed execution  | Dask and Ray-compatible execution for pairwise distance, causal tests, and rolling-window graph construction.     | ✅ PARTIAL — experimental `ts2net.distributed` module; chunking in distance jobs |
 | Parallelization        | Controls for embarrassingly parallel workloads.                                                                   | ✅ PARTIAL — `n_jobs` on `build_windows()`, causal network builders; `cdist_dtw_chunked()` and `ts_dist(panel_chunk_threshold=…)` for large DTW panels |
 | GPU acceleration       | Optional CuPy and PyTorch backends for distance matrices, window operations, and selected network builders.       | PLANNED — `[gpu]` extra reserved; install CuPy manually |
@@ -142,13 +142,13 @@ The package should answer four questions:
 | Incremental updates    | Update graphs as new time points arrive without full rebuilds.                                                     | ✅ PARTIAL — `IncrementalHVG.append()` for streaming HVG extension |
 | Benchmark suite        | Track runtime, memory, graph size, and accuracy across method families and dataset sizes.                         | ✅ PARTIAL — `benchmarks/run_benchmarks.py`; CI smoke via `TS2NET_CI_SMOKE=1` (~11s) |
 | Performance contracts  | Publish expected scaling behavior for each builder.                                                                 | ✅ PARTIAL — `get_performance_contract()`, `list_performance_contracts()` incl. `cdist_dtw` |
-| Rust fast paths        | Degree-only visibility stats and rectangular DTW blocks without full edge materialisation.                          | ✅ PARTIAL — `ts2net_rs.hvg_degrees`/`nvg_degrees`, `visibility_degree_stats()`, `cdist_dtw_rectangular` via `cdist_dtw_chunked()` |
+| Rust fast paths        | Degree-only visibility stats and rectangular DTW blocks without full edge materialisation.                          | ✅ PARTIAL — `hvg_degrees`/`nvg_degrees`, `visibility_degree_stats()`, `recurrence_degree_stats()` (kNN + epsilon), `cdist_dtw_chunked()` |
 
 ### v0.6 remaining
 
 - GPU backends (CuPy/PyTorch) for distance matrices and selected builders
 - Dask/Ray execution beyond experimental `ts2net.distributed`
-- Backend fast paths for recurrence (Rust epsilon adjacency) and transition builders
+- Transition network Rust/Numba fast paths (currently Python-only)
 
 ## Horizon 5: Machine Learning and Graph ML
 

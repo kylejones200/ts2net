@@ -71,6 +71,17 @@ class TestStreaming:
         assert len(chunks) == 5
         assert all(stats["n_edges"] > 0 for _, stats in chunks)
 
+    def test_stream_chunk_stats_recurrence_rust(self):
+        pytest.importorskip("ts2net_rs")
+        x = np.sin(np.linspace(0, 12 * np.pi, 200))
+        chunks = list(
+            stream_chunk_stats(
+                x, chunk_size=80, method="recurrence", k=5, backend="rust"
+            )
+        )
+        assert len(chunks) == 3
+        assert all(stats["n_edges"] > 0 for _, stats in chunks)
+
     def test_iter_series_chunks_memmap(self, tmp_path):
         path = tmp_path / "series.bin"
         x = np.arange(30, dtype=np.float64)

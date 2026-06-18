@@ -197,6 +197,22 @@ def _stats_for_window(
         if fast is not None:
             return fast
 
+    if output == "stats" and method_key == "recurrence":
+        from ..core.recurrence_backend import recurrence_degree_stats
+
+        fast = recurrence_degree_stats(
+            window_data,
+            rule=getattr(config, "rule", "knn"),
+            k=getattr(config, "k", 5),
+            epsilon=getattr(config, "epsilon", 0.1),
+            m=getattr(config, "m", None),
+            tau=getattr(config, "tau", 1),
+            metric=getattr(config, "metric", "euclidean"),
+            backend=getattr(config, "backend", "auto"),
+        )
+        if fast is not None:
+            return fast
+
     builder = create_graph_builder(method_key, config, n_points=len(window_data))
     builder.build(window_data)
     return builder.stats()

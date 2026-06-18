@@ -5,9 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from ts2net.config import HVGConfig, NVGConfig, RecurrenceConfig
 from ts2net.core.backend import resolve_compute_backend, rust_available
+from ts2net.core.recurrence_backend import recurrence_degree_stats
 from ts2net.core.visibility_backend import visibility_degree_stats
-from ts2net.config import HVGConfig, NVGConfig
 from ts2net.factory import create_graph_builder
 
 
@@ -45,6 +46,39 @@ class TestVisibilityDegreeStats:
         builder = create_graph_builder("nvg", config, n_points=len(x))
         builder.build(x)
         full = builder.stats()
+        assert fast["n_edges"] == full["n_edges"]
+
+
+class TestRecurrenceDegreeStats:
+    def test_knn_matches_builder_stats(self):
+        pytest.importorskip("ts2net_rs")
+        rng = np.random.default_rng(3)
+        x = rng.standard_normal(120)
+        config = RecurrenceConfig(enabled=True, output="stats", rule="knn", k=5)
+        fast = recurrence_degree_stats(
+            x, rule="knn", k=5, backend="rust"
+        )
+        assert fast is not None
+        builder = create_graph_builder("recurrence", config, n_points=len(x))
+        builder.build(x)
+        full = builder.stats()
+        assert fast["n_nodes"] == full["n_nodes"]
+        assert fast["n_edges"] == full["n_edges"]
+
+    def test_epsilon_matches_builder_stats(self):
+        pytest.importorskip("ts2net_rs")
+        x = np.sin(np.linspace(0, 6 * np.pi, 100))
+        config = RecurrenceConfig(
+            enabled=True, output="stats", rule="epsilon", epsilon=0.35, k=5
+        )
+        fast = recurrence_degree_stats(
+            x, rule="epsilon", epsilon=0.35, backend="rust"
+        )
+        assert fast is not None
+        builder = create_graph_builder("recurrence", config, n_points=len(x))
+        builder.build(x)
+        full = builder.stats()
+        assert fast["n_nodes"] == full["n_nodes"]
         assert fast["n_edges"] == full["n_edges"]
 
 
