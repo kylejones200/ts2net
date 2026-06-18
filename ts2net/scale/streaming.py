@@ -213,6 +213,18 @@ def _stats_for_window(
         if fast is not None:
             return fast
 
+    if output == "stats" and method_key == "transition":
+        from ..core.transition_backend import transition_degree_stats
+
+        fast = transition_degree_stats(
+            window_data,
+            symbolizer=getattr(config, "symbolizer", "ordinal"),
+            order=getattr(config, "order", 3),
+            backend=getattr(config, "backend", "auto"),
+        )
+        if fast is not None:
+            return fast
+
     builder = create_graph_builder(method_key, config, n_points=len(window_data))
     builder.build(window_data)
     return builder.stats()

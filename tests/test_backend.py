@@ -8,6 +8,7 @@ import pytest
 from ts2net.config import HVGConfig, NVGConfig, RecurrenceConfig
 from ts2net.core.backend import resolve_compute_backend, rust_available
 from ts2net.core.recurrence_backend import recurrence_degree_stats
+from ts2net.core.transition_backend import transition_degree_stats
 from ts2net.core.visibility_backend import visibility_degree_stats
 from ts2net.factory import create_graph_builder
 
@@ -80,6 +81,22 @@ class TestRecurrenceDegreeStats:
         full = builder.stats()
         assert fast["n_nodes"] == full["n_nodes"]
         assert fast["n_edges"] == full["n_edges"]
+
+
+class TestTransitionDegreeStats:
+    def test_ordinal_matches_builder_stats(self):
+        from ts2net import TransitionNetwork
+
+        rng = np.random.default_rng(4)
+        x = rng.standard_normal(150)
+        fast = transition_degree_stats(x, symbolizer="ordinal", order=3)
+        assert fast is not None
+        full = TransitionNetwork(
+            symbolizer="ordinal", order=3, output="stats"
+        ).build(x).stats()
+        assert fast["n_nodes"] == full["n_nodes"]
+        assert fast["n_edges"] == full["n_edges"]
+        assert fast["avg_out_degree"] > 0
 
 
 class TestChunkedDtw:
