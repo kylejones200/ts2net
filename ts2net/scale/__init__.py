@@ -18,6 +18,7 @@ from .sparse import edges_to_csr, to_sparse_csr
 from .streaming import (
     build_windows_streaming,
     estimate_window_job_memory_mb,
+    iter_arrow_value_chunks,
     iter_parquet_value_chunks,
     iter_series_chunks,
     iter_windows,
@@ -39,6 +40,7 @@ __all__ = [
     "iter_windows",
     "iter_series_chunks",
     "iter_parquet_value_chunks",
+    "iter_arrow_value_chunks",
     "build_windows_streaming",
     "stream_chunk_stats",
     "estimate_window_job_memory_mb",

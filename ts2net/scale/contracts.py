@@ -69,6 +69,13 @@ _CONTRACTS: dict[str, PerformanceContract] = {
         recommended_output="distance matrix",
         notes="Use n_jobs=-1; ts_dist_part() for out-of-core panels.",
     ),
+    "cdist_dtw": PerformanceContract(
+        method="cdist_dtw",
+        time_complexity="O(p²·n²) exact; O(p²·n·b) with Sakoe-Chiba band b",
+        memory_complexity="O(p²) or O(chunk²) with cdist_dtw_chunked()",
+        recommended_output="distance matrix",
+        notes="Rust backend preferred; cdist_dtw_chunked() for panels ≥ 64 series.",
+    ),
 }
 
 

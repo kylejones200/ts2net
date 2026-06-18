@@ -102,6 +102,7 @@ class RecurrenceConfig:
     tau: int = 1
     epsilon: float = 0.1
     metric: str = "euclidean"
+    backend: str = "auto"
     
     def __post_init__(self):
         """Validate recurrence configuration."""
@@ -132,6 +133,7 @@ class TransitionConfig:
     order: int = 3
     n_states: Optional[int] = None
     partition_mode: bool = False  # Enable partition-based analysis (entropy, motifs)
+    backend: str = "auto"
     
     def __post_init__(self):
         """Validate transition configuration."""

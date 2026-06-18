@@ -96,6 +96,39 @@ class TestParquetStreaming:
         assert chunks[0][1][0] == 0.0
         assert chunks[-1][1][-1] == 24.0
 
+    def test_stream_chunk_stats_parquet(self, tmp_path):
+        pl = pytest.importorskip("polars")
+        path = tmp_path / "meter.parquet"
+        pl.DataFrame({"v": np.sin(np.linspace(0, 10 * np.pi, 120))}).write_parquet(path)
+
+        chunks = list(
+            stream_chunk_stats(
+                path, chunk_size=40, method="hvg", value_col="v"
+            )
+        )
+        assert len(chunks) == 3
+        assert all(stats["n_edges"] > 0 for _, stats in chunks)
+
+
+class TestArrowStreaming:
+    def test_iter_arrow_value_chunks(self):
+        pa = pytest.importorskip("pyarrow")
+        from ts2net.scale import iter_arrow_value_chunks
+
+        table = pa.table({"v": np.arange(25, dtype=float)})
+        chunks = list(iter_arrow_value_chunks(table, value_col="v", chunk_size=10))
+        assert len(chunks) == 3
+        assert chunks[0][1][0] == 0.0
+
+    def test_stream_chunk_stats_arrow(self):
+        pa = pytest.importorskip("pyarrow")
+        table = pa.table({"v": np.sin(np.linspace(0, 8 * np.pi, 80))})
+        chunks = list(
+            stream_chunk_stats(table, chunk_size=25, method="hvg", value_col="v")
+        )
+        assert len(chunks) == 4
+        assert all(stats["n_edges"] > 0 for _, stats in chunks)
+
 
 class TestSparse:
     def test_edges_to_csr_undirected(self):
@@ -115,10 +148,15 @@ class TestContracts:
         c = get_performance_contract("hvg")
         assert "O(n)" in c.time_complexity
 
+    def test_cdist_dtw_contract(self):
+        c = get_performance_contract("cdist_dtw")
+        assert "chunk" in c.notes.lower()
+
     def test_list_contracts(self):
         contracts = list_performance_contracts()
         assert "nvg" in contracts
         assert "build_windows" in contracts
+        assert "cdist_dtw" in contracts
 
     def test_unknown_contract_raises(self):
         with pytest.raises(KeyError):

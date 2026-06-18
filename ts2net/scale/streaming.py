@@ -160,6 +160,7 @@ def _make_window_config(method: str, window: int, output: str, method_kwargs: di
             tau=method_kwargs.get("tau", 1),
             epsilon=method_kwargs.get("epsilon", 0.1),
             metric=method_kwargs.get("metric", "euclidean"),
+            backend=backend,
         )
     if method == "transition":
         return TransitionConfig(
@@ -168,6 +169,7 @@ def _make_window_config(method: str, window: int, output: str, method_kwargs: di
             symbolizer=method_kwargs.get("symbolizer", "ordinal"),
             order=method_kwargs.get("order", 3),
             n_states=method_kwargs.get("n_states"),
+            backend=backend,
         )
     raise ValueError(
         f"Unknown method: {method}. Must be one of hvg, nvg, recurrence, transition"
@@ -329,11 +331,154 @@ def iter_parquet_value_chunks(
         yield chunk_i, chunk
 
 
+def _is_arrow_source(source: object) -> bool:
+    try:
+        import pyarrow as pa
+    except ImportError:
+        return False
+    return isinstance(source, (pa.Table, pa.RecordBatch, pa.RecordBatchReader))
+
+
+def _is_parquet_path(source: object) -> bool:
+    if not isinstance(source, (str, Path)):
+        return False
+    path = Path(source)
+    if path.is_dir():
+        return any(path.glob("*.parquet"))
+    return path.suffix.lower() == ".parquet"
+
+
+def iter_arrow_value_chunks(
+    table: object,
+    value_col: str,
+    chunk_size: int = 50_000,
+    time_col: str | None = None,
+    id_col: str | None = None,
+    series_id: object | None = None,
+) -> Iterator[tuple[int, NDArray[np.float64]]]:
+    """
+    Yield value chunks from a PyArrow table without loading the full series.
+
+    Accepts :class:`pyarrow.Table`, :class:`pyarrow.RecordBatch`, or
+    :class:`pyarrow.RecordBatchReader`. Requires ``pyarrow`` (included in
+    ``[pipeline]`` / ``[polars]`` extras).
+
+    Parameters
+    ----------
+    table : pyarrow Table, RecordBatch, or RecordBatchReader
+        Arrow tabular data.
+    value_col : str
+        Numeric value column.
+    chunk_size : int, default 50_000
+        Rows per yielded chunk.
+    time_col : str, optional
+        Sort by this column before chunking.
+    id_col : str, optional
+        Filter to a single series id when set with ``series_id``.
+    series_id : optional
+        Series identifier value when ``id_col`` is provided.
+
+    Yields
+    ------
+    chunk_index : int
+    values : array
+        Chunk of ``value_col`` as float64.
+    """
+    try:
+        import pyarrow as pa
+        import pyarrow.compute as pc
+    except ImportError as exc:
+        raise ImportError(
+            "iter_arrow_value_chunks requires pyarrow. "
+            "Install with: uv sync --extra polars"
+        ) from exc
+
+    if isinstance(table, pa.RecordBatch):
+        table = pa.Table.from_batches([table])
+    elif isinstance(table, pa.RecordBatchReader):
+        table = table.read_all()
+    elif not isinstance(table, pa.Table):
+        raise TypeError(
+            "table must be a pyarrow Table, RecordBatch, or RecordBatchReader"
+        )
+
+    if value_col not in table.column_names:
+        raise ValueError(f"value_col {value_col!r} not in table columns")
+
+    chunk_size = validate_positive_int("chunk_size", chunk_size)
+
+    if id_col is not None:
+        if series_id is None:
+            raise ValueError("series_id is required when id_col is set")
+        if id_col not in table.column_names:
+            raise ValueError(f"id_col {id_col!r} not in table columns")
+        mask = pc.equal(table[id_col], series_id)
+        table = table.filter(mask)
+
+    if time_col is not None:
+        if time_col not in table.column_names:
+            raise ValueError(f"time_col {time_col!r} not in table columns")
+        table = table.sort_by([(time_col, "ascending")])
+
+    values = table[value_col].to_numpy(zero_copy_only=False).astype(np.float64)
+    n = len(values)
+    if n == 0:
+        return
+
+    for chunk_i, offset in enumerate(range(0, n, chunk_size)):
+        yield chunk_i, values[offset : offset + chunk_size]
+
+
+def _iter_value_chunks(
+    source: NDArray[np.float64] | str | Path | object,
+    chunk_size: int,
+    overlap: int = 0,
+    *,
+    value_col: str | None = None,
+    time_col: str | None = None,
+    id_col: str | None = None,
+    series_id: object | None = None,
+    dtype: type = np.float64,
+) -> Iterator[tuple[int, NDArray[np.float64]]]:
+    """Route chunk iteration to array, memmap, Parquet, or Arrow sources."""
+    if _is_arrow_source(source):
+        if value_col is None:
+            raise ValueError("value_col is required for Arrow table sources")
+        yield from iter_arrow_value_chunks(
+            source,
+            value_col=value_col,
+            chunk_size=chunk_size,
+            time_col=time_col,
+            id_col=id_col,
+            series_id=series_id,
+        )
+        return
+
+    if _is_parquet_path(source):
+        if value_col is None:
+            raise ValueError("value_col is required for Parquet sources")
+        yield from iter_parquet_value_chunks(
+            source,
+            value_col=value_col,
+            chunk_size=chunk_size,
+            time_col=time_col,
+            id_col=id_col,
+            series_id=series_id,
+        )
+        return
+
+    yield from iter_series_chunks(source, chunk_size, overlap=overlap, dtype=dtype)
+
+
 def stream_chunk_stats(
-    source: NDArray[np.float64] | str | Path,
+    source: NDArray[np.float64] | str | Path | object,
     chunk_size: int,
     method: str = "hvg",
     overlap: int = 0,
+    value_col: str | None = None,
+    time_col: str | None = None,
+    id_col: str | None = None,
+    series_id: str | None = None,
     **method_kwargs,
 ) -> Iterator[tuple[int, dict[str, float]]]:
     """
@@ -341,16 +486,20 @@ def stream_chunk_stats(
 
     Parameters
     ----------
-    source : array or path
-        In-memory series or memmap file path.
+    source : array, path, Parquet path, or pyarrow Table
+        In-memory series, memmap file, Parquet file/directory, or Arrow table.
     chunk_size : int
         Points per chunk.
     method : str, default "hvg"
         Builder name: ``hvg``, ``nvg``, ``recurrence``, ``transition``.
     overlap : int, default 0
-        Overlap between chunks (see :func:`iter_series_chunks`).
+        Overlap between chunks for in-memory/memmap sources only.
+    value_col : str, optional
+        Required when ``source`` is Parquet or Arrow tabular data.
+    time_col, id_col, series_id : optional
+        Column filtering/sorting for Parquet and Arrow sources.
     **method_kwargs
-        Passed to the graph builder config.
+        Passed to the graph builder config (including ``backend=``).
 
     Yields
     ------
@@ -361,7 +510,15 @@ def stream_chunk_stats(
     config = _make_window_config(method, chunk_size, "stats", method_kwargs)
     method_key = method.lower()
 
-    for chunk_i, chunk in iter_series_chunks(source, chunk_size, overlap=overlap):
+    for chunk_i, chunk in _iter_value_chunks(
+        source,
+        chunk_size,
+        overlap=overlap,
+        value_col=value_col,
+        time_col=time_col,
+        id_col=id_col,
+        series_id=series_id,
+    ):
         if len(chunk) < 2:
             yield chunk_i, {
                 "n_nodes": len(chunk),
