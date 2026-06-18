@@ -402,7 +402,11 @@ def ts_dist(X: NDArray[np.float64], method: str = 'correlation',
                         f"Available: {list(_DISTANCE_REGISTRY.keys())}")
     
     logger.info(f"Computing {method} distance matrix for {n_series} series ({n_points} points each)")
-    
+
+    method_key = method.lower()
+    if method_key == "dtw":
+        return _ts_dist_dtw_matrix(X, n_jobs=n_jobs, **kwargs)
+
     # Calculate distance matrix
     if n_jobs == 1:
         # Serial computation
@@ -411,6 +415,37 @@ def ts_dist(X: NDArray[np.float64], method: str = 'correlation',
         # Parallel computation
         D = _compute_distance_matrix_parallel(X, dist_func, n_jobs, **kwargs)
     
+    return D
+
+
+def _ts_dist_dtw_matrix(
+    X: np.ndarray,
+    n_jobs: int = 1,
+    window: Optional[int] = None,
+    normalize: bool = True,
+    chunk_size: int = 256,
+    panel_chunk_threshold: int = 64,
+    backend: str = "auto",
+    **kwargs,
+) -> np.ndarray:
+    """
+    DTW distance matrix via Rust chunked cdist when panels are large.
+    """
+    if kwargs:
+        logger.debug("Ignoring unused DTW kwargs: %s", sorted(kwargs))
+
+    from ..distances.dtw import cdist_dtw, cdist_dtw_chunked
+
+    n_series, n_points = X.shape
+    if n_series >= panel_chunk_threshold:
+        D = cdist_dtw_chunked(
+            X, band=window, chunk_size=chunk_size, backend=backend
+        )
+    else:
+        D = cdist_dtw(X, band=window, backend=backend)
+
+    if normalize:
+        D = D / (2 * n_points)
     return D
 
 
@@ -493,7 +528,36 @@ def ts_dist_part(X: NDArray[np.float64], start_idx: int, end_idx: int,
     dist_func = _DISTANCE_REGISTRY.get(method.lower())
     if dist_func is None:
         raise ValueError(f"Unknown distance method: {method}")
-    
+
+    if method.lower() == "dtw":
+        n_rows = end_idx - start_idx
+        D_part = np.zeros((n_rows, n_series))
+        from ..distances.dtw import cdist_dtw, cdist_dtw_rectangular, get_dtw_backend
+
+        window = kwargs.get("window")
+        normalize = kwargs.get("normalize", True)
+        backend = kwargs.get("backend", "auto")
+        n_points = X.shape[1]
+        row_slice = X[start_idx:end_idx]
+
+        if get_dtw_backend(backend) == "rust" and end_idx - start_idx < n_series:
+            try:
+                from ts2net_rs import cdist_dtw_rectangular as _rect
+
+                rect = np.asarray(
+                    _rect(row_slice, X, band=window), dtype=np.float64
+                )
+                if normalize:
+                    rect = rect / (2 * n_points)
+                return rect
+            except ImportError:
+                pass
+
+        full = cdist_dtw(X, band=window, backend=backend)
+        if normalize:
+            full = full / (2 * n_points)
+        return full[start_idx:end_idx]
+
     # Calculate partial matrix
     n_rows = end_idx - start_idx
     D_part = np.zeros((n_rows, n_series))

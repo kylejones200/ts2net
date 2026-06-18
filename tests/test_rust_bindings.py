@@ -64,6 +64,29 @@ def test_dtw_distance():
     assert np.isclose(D_same[0, 1], 0.0), "identical series must have DTW distance 0"
 
 
+def test_hvg_degrees():
+    y = np.array([1.0, 2.0, 1.0, 2.0, 3.0])
+    out = ts2net_rs.hvg_degrees(y)
+    assert out["n_edges"] == ts2net_rs.hvg_edges(y).shape[0]
+    deg = np.asarray(out["degree"])
+    assert deg.shape == (len(y),)
+    assert int(deg.sum()) == 2 * out["n_edges"]
+
+
+def test_nvg_degrees_with_limit():
+    y = np.sin(np.linspace(0, 4 * np.pi, 80))
+    full = ts2net_rs.nvg_degrees(y)
+    limited = ts2net_rs.nvg_degrees(y, limit=10)
+    assert limited["n_edges"] <= full["n_edges"]
+
+
+def test_cdist_dtw_rectangular():
+    X = np.array([[1.0, 2.0, 3.0], [3.0, 2.0, 1.0], [2.0, 2.0, 2.0]])
+    rect = ts2net_rs.cdist_dtw_rectangular(X[:2], X[1:])
+    full = ts2net_rs.cdist_dtw(X)
+    np.testing.assert_allclose(rect, full[:2, 1:], rtol=1e-10, atol=1e-10)
+
+
 if __name__ == "__main__":
     test_hvg_edges()
     test_dtw_distance()

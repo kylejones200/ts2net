@@ -104,6 +104,88 @@ fn nvg_edges_sweepline_core(y: &Array1<f64>) -> Array2<i64> {
     out
 }
 
+#[inline]
+fn within_horizon(i: usize, j: usize, limit: Option<usize>) -> bool {
+    match limit {
+        Some(l) => j.abs_diff(i) <= l,
+        None => true,
+    }
+}
+
+/// Degree sequences and edge count without materialising the edge list.
+#[inline]
+fn hvg_degrees_core(
+    y: &Array1<f64>,
+    directed: bool,
+    limit: Option<usize>,
+) -> (Array1<usize>, Array1<usize>, usize) {
+    let n = y.len();
+    let mut in_deg = Array1::<usize>::zeros(n);
+    let mut out_deg = Array1::<usize>::zeros(n);
+    let mut n_edges = 0usize;
+    let mut stack: Vec<usize> = Vec::with_capacity(n);
+
+    let mut add_edge = |i: usize, j: usize| {
+        if directed {
+            out_deg[i] += 1;
+            in_deg[j] += 1;
+        } else {
+            out_deg[i] += 1;
+            out_deg[j] += 1;
+        }
+        n_edges += 1;
+    };
+
+    for j in 0..n {
+        while let Some(i) = stack.last().copied() {
+            if y[i] < y[j] {
+                stack.pop();
+                if within_horizon(i, j, limit) {
+                    add_edge(i, j);
+                }
+            } else {
+                break;
+            }
+        }
+        if let Some(i) = stack.last().copied() {
+            if within_horizon(i, j, limit) {
+                add_edge(i, j);
+            }
+        }
+        stack.push(j);
+    }
+    (in_deg, out_deg, n_edges)
+}
+
+/// NVG degrees with optional horizon limit (undirected).
+#[inline]
+fn nvg_degrees_core(y: &Array1<f64>, limit: Option<usize>) -> (Array1<usize>, usize) {
+    let n = y.len();
+    let mut degrees = Array1::<usize>::zeros(n);
+    let mut n_edges = 0usize;
+    if n < 2 {
+        return (degrees, n_edges);
+    }
+    for i in 0..n - 1 {
+        let yi = y[i];
+        let mut slope_max = f64::NEG_INFINITY;
+        let j_end = match limit {
+            Some(l) => (i + 1 + l).min(n),
+            None => n,
+        };
+        for j in (i + 1)..j_end {
+            let s = (y[j] - yi) / ((j - i) as f64);
+            if s > slope_max {
+                degrees[i] += 1;
+                degrees[j] += 1;
+                n_edges += 1;
+                slope_max = s;
+            }
+        }
+    }
+    (degrees, n_edges)
+}
+
 #[pyfunction]
 fn hvg_edges(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<PyArray2<i64>>> {
     let v = as_1d(y)?;
@@ -111,9 +193,50 @@ fn hvg_edges(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<PyArray2<i
 }
 
 #[pyfunction]
+#[pyo3(signature = (y, directed=false, limit=None))]
+fn hvg_degrees(
+    py: Python<'_>,
+    y: PyReadonlyArray1<f64>,
+    directed: bool,
+    limit: Option<u64>,
+) -> PyResult<Py<PyAny>> {
+    use pyo3::types::PyDict;
+    let v = as_1d(y)?;
+    let lim = limit.map(|l| l as usize);
+    let (in_deg, out_deg, n_edges) = hvg_degrees_core(&v, directed, lim);
+    let dict = PyDict::new(py);
+    dict.set_item("n_edges", n_edges)?;
+    dict.set_item("directed", directed)?;
+    if directed {
+        dict.set_item("in_degree", in_deg.into_pyarray(py).unbind())?;
+        dict.set_item("out_degree", out_deg.into_pyarray(py).unbind())?;
+    } else {
+        dict.set_item("degree", out_deg.into_pyarray(py).unbind())?;
+    }
+    Ok(dict.into())
+}
+
+#[pyfunction]
 fn nvg_edges_sweepline(py: Python<'_>, y: PyReadonlyArray1<f64>) -> PyResult<Py<PyArray2<i64>>> {
     let v = as_1d(y)?;
     Ok(nvg_edges_sweepline_core(&v).into_pyarray(py).unbind())
+}
+
+#[pyfunction]
+#[pyo3(signature = (y, limit=None))]
+fn nvg_degrees(
+    py: Python<'_>,
+    y: PyReadonlyArray1<f64>,
+    limit: Option<u64>,
+) -> PyResult<Py<PyAny>> {
+    use pyo3::types::PyDict;
+    let v = as_1d(y)?;
+    let lim = limit.map(|l| l as usize);
+    let (degrees, n_edges) = nvg_degrees_core(&v, lim);
+    let dict = PyDict::new(py);
+    dict.set_item("n_edges", n_edges)?;
+    dict.set_item("degree", degrees.into_pyarray(py).unbind())?;
+    Ok(dict.into())
 }
 
 //
@@ -179,6 +302,37 @@ fn cdist_dtw_core(x: &Array2<f64>, band: Option<usize>) -> Array2<f64> {
     out
 }
 
+#[inline]
+fn cdist_dtw_rectangular_core(
+    a: &Array2<f64>,
+    b: &Array2<f64>,
+    band: Option<usize>,
+) -> Array2<f64> {
+    let na = a.len_of(Axis(0));
+    let nb = b.len_of(Axis(0));
+    let mut out = Array2::<f64>::zeros((na, nb));
+    let results: Vec<(usize, usize, f64)> = (0..na)
+        .into_par_iter()
+        .flat_map(|i| {
+            let ai = a.row(i).to_owned();
+            let mut local = Vec::new();
+            for j in 0..nb {
+                let d = dtw_pair(
+                    ai.as_slice().unwrap(),
+                    b.row(j).as_slice().unwrap(),
+                    band,
+                );
+                local.push((i, j, d));
+            }
+            local
+        })
+        .collect();
+    for (i, j, d) in results {
+        out[[i, j]] = d;
+    }
+    out
+}
+
 #[pyfunction]
 #[pyo3(signature = (x, band=None))]
 fn cdist_dtw(
@@ -191,6 +345,22 @@ fn cdist_dtw(
     // a segfault with keyword args under PyO3 0.19 + Python 3.14).
     let band_usize = band.map(|b| b as usize);
     Ok(cdist_dtw_core(&a, band_usize).into_pyarray(py).unbind())
+}
+
+#[pyfunction]
+#[pyo3(signature = (a, b, band=None))]
+fn cdist_dtw_rectangular(
+    py: Python<'_>,
+    a: PyReadonlyArray2<f64>,
+    b: PyReadonlyArray2<f64>,
+    band: Option<u64>,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let aa = as_2d(a)?;
+    let bb = as_2d(b)?;
+    let band_usize = band.map(|v| v as usize);
+    Ok(cdist_dtw_rectangular_core(&aa, &bb, band_usize)
+        .into_pyarray(py)
+        .unbind())
 }
 
 // ---- KD-tree (kiddo) for k-NN and radius queries ----
@@ -913,8 +1083,11 @@ fn moran_i(
 #[pymodule]
 fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hvg_edges, m)?)?;
+    m.add_function(wrap_pyfunction!(hvg_degrees, m)?)?;
     m.add_function(wrap_pyfunction!(nvg_edges_sweepline, m)?)?;
+    m.add_function(wrap_pyfunction!(nvg_degrees, m)?)?;
     m.add_function(wrap_pyfunction!(cdist_dtw, m)?)?;
+    m.add_function(wrap_pyfunction!(cdist_dtw_rectangular, m)?)?;
     m.add_function(wrap_pyfunction!(knn, m)?)?;
     m.add_function(wrap_pyfunction!(radius, m)?)?;
 

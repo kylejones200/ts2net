@@ -54,7 +54,8 @@ class HVGConfig:
     weight_mode: Optional[str] = None
     limit: Optional[int] = None
     directed: bool = False
-    
+    backend: str = "auto"
+
     def __post_init__(self):
         """Validate HVG configuration."""
         valid_output = {"edges", "degrees", "stats"}
@@ -77,7 +78,8 @@ class NVGConfig:
     max_edges: Optional[int] = None
     max_edges_per_node: Optional[int] = None
     max_memory_mb: Optional[int] = None
-    
+    backend: str = "auto"
+
     def __post_init__(self):
         """Validate NVG configuration."""
         valid_output = {"edges", "degrees", "stats"}

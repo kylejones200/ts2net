@@ -128,6 +128,7 @@ def iter_series_chunks(
 def _make_window_config(method: str, window: int, output: str, method_kwargs: dict):
     from ..config import HVGConfig, NVGConfig, RecurrenceConfig, TransitionConfig
 
+    backend = method_kwargs.get("backend", "auto")
     method = method.lower()
     if method == "hvg":
         return HVGConfig(
@@ -136,6 +137,7 @@ def _make_window_config(method: str, window: int, output: str, method_kwargs: di
             weighted=method_kwargs.get("weighted", False),
             limit=method_kwargs.get("limit"),
             directed=method_kwargs.get("directed", False),
+            backend=backend,
         )
     if method == "nvg":
         return NVGConfig(
@@ -146,6 +148,7 @@ def _make_window_config(method: str, window: int, output: str, method_kwargs: di
             max_edges=method_kwargs.get("max_edges"),
             max_edges_per_node=method_kwargs.get("max_edges_per_node"),
             max_memory_mb=method_kwargs.get("max_memory_mb"),
+            backend=backend,
         )
     if method == "recurrence":
         return RecurrenceConfig(
@@ -176,7 +179,23 @@ def _stats_for_window(
     method: str,
     config: Any,
 ) -> dict[str, float]:
-    builder = create_graph_builder(method, config, n_points=len(window_data))
+    method_key = method.lower()
+    output = getattr(config, "output", "stats")
+    if output == "stats" and method_key in ("hvg", "nvg"):
+        from ..core.visibility_backend import visibility_degree_stats
+
+        fast = visibility_degree_stats(
+            window_data,
+            method_key,
+            directed=getattr(config, "directed", False),
+            limit=getattr(config, "limit", None),
+            weighted=getattr(config, "weighted", False),
+            backend=getattr(config, "backend", "auto"),
+        )
+        if fast is not None:
+            return fast
+
+    builder = create_graph_builder(method_key, config, n_points=len(window_data))
     builder.build(window_data)
     return builder.stats()
 

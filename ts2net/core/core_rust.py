@@ -21,8 +21,11 @@ from ts2net_rs import (
     corr_perm as _corr_perm_rs,
     moran_i as _moran_rs,
     hvg_edges as _hvg_edges_rs,
+    hvg_degrees as _hvg_degrees_rs,
     nvg_edges_sweepline as _nvg_edges_rs,
+    nvg_degrees as _nvg_degrees_rs,
     cdist_dtw as _cdist_dtw_rs,
+    cdist_dtw_rectangular as _cdist_dtw_rect_rs,
     knn as _knn_rs,
     radius as _radius_rs,
 )
@@ -178,6 +181,28 @@ def nvg_graph(x: np.ndarray, sparse_out: bool = False):
 def cdist_dtw(X: np.ndarray, band: Optional[int] = None) -> np.ndarray:
     X = np.asarray(X, float)
     return np.array(_cdist_dtw_rs(X, band))
+
+
+def cdist_dtw_rectangular(
+    A: np.ndarray, B: np.ndarray, band: Optional[int] = None
+) -> np.ndarray:
+    A = np.asarray(A, float)
+    B = np.asarray(B, float)
+    return np.array(_cdist_dtw_rect_rs(A, B, band))
+
+
+def hvg_degrees(
+    x: np.ndarray,
+    directed: bool = False,
+    limit: Optional[int] = None,
+) -> dict:
+    y = np.asarray(x, float).ravel()
+    return dict(_hvg_degrees_rs(y, directed=directed, limit=limit))
+
+
+def nvg_degrees(x: np.ndarray, limit: Optional[int] = None) -> dict:
+    y = np.asarray(x, float).ravel()
+    return dict(_nvg_degrees_rs(y, limit=limit))
 
 
 def knn(X: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
