@@ -44,7 +44,11 @@ def load_ucr(
     try:
         from aeon.datasets import load_classification
 
-        X, y = load_classification(name, split="train", return_type="numpy2d")
+        X, y = load_classification(name, split="train")
+        X = np.asarray(X.squeeze(), dtype=np.float64)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+        y = np.asarray(y)
         meta["source"] = "aeon"
     except Exception:
         try:
