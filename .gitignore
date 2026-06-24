@@ -181,6 +181,7 @@ yarn-error.log*
 # Local Netlify folder
 .netlify
 .cursor
+cursor/
 .parity
 
 # Documentation build
@@ -189,5 +190,3 @@ docs/_build/
 simple_cnn.md
 
 wip/
-
-.cursor/
