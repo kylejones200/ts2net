@@ -6,7 +6,9 @@ for use in sklearn pipelines.
 """
 
 from .benchmarks import (
+    catch22_baseline_features,
     compare_feature_sets,
+    sktime_baseline_features,
     statistical_baseline_features,
     tsfresh_baseline_features,
 )
@@ -23,5 +25,7 @@ __all__ = [
     "features_to_dataframe",
     "statistical_baseline_features",
     "tsfresh_baseline_features",
+    "catch22_baseline_features",
+    "sktime_baseline_features",
     "compare_feature_sets",
 ]

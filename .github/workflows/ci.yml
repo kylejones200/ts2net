@@ -42,6 +42,14 @@ jobs:
           TS2NET_SKIP_LARGE: "1"
           TS2NET_CI_SMOKE: "1"
         run: uv run python benchmarks/run_benchmarks.py --repeats 1
+      - name: Literature validation smoke
+        env:
+          TS2NET_CI_SMOKE: "1"
+        run: uv run python benchmarks/run_validation.py
+      - name: UCR benchmark smoke
+        env:
+          TS2NET_CI_SMOKE: "1"
+        run: uv run python benchmarks/run_ucr_benchmark.py
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"

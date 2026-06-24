@@ -118,6 +118,70 @@ def tsfresh_baseline_features(
     return extracted.values.astype(np.float64), list(extracted.columns)
 
 
+def catch22_baseline_features(
+    X: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], list[str]]:
+    """
+    Extract catch22 features (optional ``pycatch22`` dependency).
+
+    Parameters
+    ----------
+    X : array (n_series, n_timesteps)
+
+    Returns
+    -------
+    features, feature_names
+    """
+    try:
+        import pycatch22
+    except ImportError as exc:
+        raise ImportError(
+            "pycatch22 required for catch22_baseline_features. "
+            "Install with: pip install pycatch22"
+        ) from exc
+
+    rows: list[list[float]] = []
+    names: list[str] | None = None
+    for series in X:
+        result = pycatch22.catch22_all(np.asarray(series, dtype=np.float64))
+        if names is None:
+            names = [str(n) for n in result["names"]]
+        rows.append([float(v) for v in result["values"]])
+    assert names is not None
+    return np.asarray(rows, dtype=np.float64), names
+
+
+def sktime_baseline_features(
+    X: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], list[str]]:
+    """
+    Extract sktime panel summary features (optional ``sktime`` dependency).
+
+    Uses ``SummaryTransformer`` (mean, std, min, max per series).
+    """
+    try:
+        from sktime.transformations.panel.summarize import SummaryTransformer
+    except ImportError as exc:
+        raise ImportError(
+            "sktime required for sktime_baseline_features. "
+            "Install with: pip install sktime"
+        ) from exc
+
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim != 2:
+        raise ValueError("X must be 2D (n_series, n_timesteps)")
+    # sktime nested panel format: list of 1-column DataFrames per series
+    import pandas as pd
+
+    panel = pd.DataFrame(
+        {i: pd.Series(X[i]) for i in range(X.shape[0])}
+    ).T
+    panel.index = pd.Index(range(X.shape[0]), name="series")
+    transformed = SummaryTransformer().fit_transform(panel)
+    transformed = transformed.fillna(0.0)
+    return transformed.values.astype(np.float64), list(transformed.columns)
+
+
 def compare_feature_sets(
     X: NDArray[np.float64],
     y: NDArray[Any],

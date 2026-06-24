@@ -1,0 +1,64 @@
+{
+  "fixtures": [
+    {
+      "id": "hvg_mean_degree_gaussian",
+      "method": "hvg_mean_degree",
+      "citation": "Lacasa et al. (2008) PNAS — mean HVG degree ≈ 4 for i.i.d. series",
+      "params": {
+        "n_trials": 200,
+        "n_points": 5000,
+        "seed": 42,
+        "min_mean": 3.85,
+        "max_mean": 4.15
+      }
+    },
+    {
+      "id": "hvg_monotone_edges",
+      "method": "hvg_edge_count",
+      "citation": "HVG consecutive-chain property — strictly increasing series",
+      "params": {
+        "n_points": 20,
+        "expected_edges": 19
+      }
+    },
+    {
+      "id": "visibility_irreversibility_ramp",
+      "method": "visibility_irreversibility",
+      "citation": "Lacasa et al. (2012) Sci. Rep. — directed visibility irreversibility",
+      "params": {
+        "n_points": 120,
+        "min_score": 0.0
+      }
+    },
+    {
+      "id": "transfer_entropy_coupled_maps",
+      "method": "transfer_entropy_asymmetry",
+      "citation": "Schreiber (2000) PRL — transfer entropy detects directed coupling",
+      "params": {
+        "n": 3000,
+        "seed": 42,
+        "coupling": 0.15,
+        "min_diff": 0.1
+      }
+    },
+    {
+      "id": "recurrence_epsilon_monotonicity",
+      "method": "recurrence_threshold_monotonicity",
+      "citation": "Marwan et al. (2007) Phys. Rep. — recurrence threshold increases edge count",
+      "params": {
+        "n_points": 200,
+        "thresholds": [0.05, 0.2, 0.5, 1.0, 2.0]
+      }
+    },
+    {
+      "id": "spain_hvg_mean_degree",
+      "method": "spain_hvg_mean_degree",
+      "citation": "Spain multi-meter experiment — empirical HVG degree ≈ 4",
+      "params": {
+        "min_mean": 3.95,
+        "max_mean": 4.05,
+        "optional": true
+      }
+    }
+  ]
+}

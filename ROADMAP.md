@@ -35,7 +35,7 @@ ts2net should sit at the intersection of time series analysis, network science, 
 | 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              | **In progress** — all four builders have streaming stats fast paths; chunked DTW; GPU/Dask open |
 | 0.7     | ML integration       | sklearn, PyG, DGL, feature selection, and benchmark comparisons.                            | ✅ **Completed** — see `examples/ml_integration_example.py` |
 | 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. | ✅ **Completed** — see `examples/dynamic_analytics_example.py` |
-| 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **In progress** — PC/FCI discovery, directional visibility asymmetry; reference datasets pending |
+| 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **In progress** — `ts2net.datasets` registry, literature fixtures, `benchmarks/run_validation.py` |
 | 1.0     | Stable release       | Stable API, mature docs, examples gallery, governance, and production-ready workflows.      | **Planned** |
 
 ## Guiding Principles
@@ -215,14 +215,21 @@ See `examples/dynamic_analytics_example.py`.
 
 | Area                     | Work                                                                                                            | Status |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------ |
-| Reference datasets       | Curated public datasets for classification, clustering, causality, anomaly detection, and regime detection.   | PLANNED |
-| Method validation        | Reproduce known results from visibility graph, recurrence network, and transfer entropy papers.                 | PLANNED |
-| Benchmark papers         | Comparative benchmarks showing when network features outperform standard time series features.                    | ✅ PARTIAL — `compare_feature_sets()`; `benchmarks/run_benchmarks.py` |
-| Statistical tests        | Permutation tests, bootstrap tests, surrogate data tests, and threshold sensitivity analysis.                   | ✅ PARTIAL — causal TE permutation/bootstrap; surrogate tests in `ts2net.stats.null_models` |
-| Reproducibility          | Version benchmark datasets, parameters, random seeds, and output artifacts.                                     | PLANNED |
-| Documentation references | Cite source papers for each method and explain assumptions.                                                     | PARTIAL |
+| Reference datasets       | Curated public datasets for classification, clustering, causality, anomaly detection, and regime detection.   | ✅ PARTIAL — `ts2net.datasets` registry + `load_ucr()` / `run_ucr_benchmark()` |
+| Method validation        | Reproduce known results from visibility graph, recurrence network, and transfer entropy papers.                 | ✅ PARTIAL — `benchmarks/fixtures/literature.json` (HVG, TE, RN, Spain) + `run_validation.py` |
+| Benchmark papers         | Comparative benchmarks showing when network features outperform standard time series features.                    | ✅ PARTIAL — `compare_feature_sets()`; `benchmarks/run_benchmarks.py`; `run_ucr_benchmark.py` |
+| Statistical tests        | Permutation tests, bootstrap tests, surrogate data tests, and threshold sensitivity analysis.                   | ✅ PARTIAL — `threshold_sensitivity_sweep()`; causal TE permutation/bootstrap; `ts2net.stats.null_models` |
+| Reproducibility          | Version benchmark datasets, parameters, random seeds, and output artifacts.                                     | ✅ PARTIAL — `validation_manifest.json`, `ucr_benchmark.json` |
+| Documentation references | Cite source papers for each method and explain assumptions.                                                     | ✅ PARTIAL — `docs/method_references.md` |
 | Advanced causal discovery| PC algorithm, FCI, and PCMCI-style methods adapted for time series networks.                                    | ✅ PARTIAL — `pc_algorithm()`, `fci_algorithm()`, `pc_timeseries_network()`, `fci_timeseries_network()` — `examples/causal_discovery_example.py` |
 | Directional asymmetry    | Irreversibility and time-arrow statistics from directed visibility graphs.                                      | ✅ PARTIAL — `directed_visibility_analysis()`, `visibility_irreversibility()` — `tests/test_visibility_causal.py` |
+
+### v0.9 remaining
+
+- Bundle or auto-download UCR/UEA archives for offline GunPoint/ItalyPowerDemand runs (harness falls back to synthetic panel today)
+- Additional recurrence-quantification paper fixtures (RQA baselines)
+- PCMCI-style benchmark fixtures
+- Per-method Sphinx citation pages linked from API docs
 
 ## Horizon 10: Package Maturity and Community
 
@@ -252,6 +259,9 @@ See `examples/dynamic_analytics_example.py`.
 | `examples/dynamic_analytics_example.py` | v0.8 dynamic analytics |
 | `examples/causal_workflow_example.py` | v0.5 causal workflow |
 | `examples/causal_discovery_example.py` | v0.9 PC/FCI discovery |
+| `examples/validation_example.py` | v0.9 research validation |
+| `benchmarks/run_validation.py` | v0.9 literature validation CLI |
+| `benchmarks/run_ucr_benchmark.py` | v0.9 UCR classification benchmark |
 | `examples/scale_streaming_example.py` | v0.6 streaming scale |
 | `examples/polars_spain_windows.py` | Large-scale meter data |
 | `examples/spain_meter_case_study.ipynb` | Domain recipe (energy) |

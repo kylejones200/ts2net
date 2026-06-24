@@ -31,6 +31,8 @@ from .null_models import (
     NetworkSignificanceResult,
 )
 
+from .threshold_sensitivity import threshold_sensitivity_sweep
+
 __all__ = [
     'permutation_entropy',
     'cao_e1_e2', 
@@ -52,4 +54,5 @@ __all__ = [
     'compute_multiple_metrics_significance',
     'compute_zscore',
     'NetworkSignificanceResult',
+    'threshold_sensitivity_sweep',
 ]
