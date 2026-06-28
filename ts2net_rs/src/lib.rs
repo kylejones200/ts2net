@@ -23,6 +23,7 @@ use rustfft::FftPlanner;
 pub mod distance;
 pub mod embedding;
 pub mod graphs;
+pub mod sindy;
 pub mod utils;
 
 //
@@ -1077,6 +1078,100 @@ fn moran_i(
 }
 
 //
+// --------- SINDy ----------
+//
+
+#[pyfunction]
+#[pyo3(signature = (
+    x,
+    t,
+    state_names,
+    polynomial_degree=3,
+    threshold=0.1,
+    alpha=0.05,
+    differentiation_order=2,
+    max_iter=20,
+))]
+fn fit_sindy_rust(
+    py: Python<'_>,
+    x: PyReadonlyArray2<f64>,
+    t: PyReadonlyArray1<f64>,
+    state_names: Vec<String>,
+    polynomial_degree: usize,
+    threshold: f64,
+    alpha: f64,
+    differentiation_order: usize,
+    max_iter: usize,
+) -> PyResult<(Py<PyArray2<f64>>, Vec<String>)> {
+    let x_arr = as_2d(x)?;
+    let t_arr = as_1d(t)?;
+    let config = sindy::SindyConfig {
+        polynomial_degree,
+        threshold,
+        alpha,
+        differentiation_order,
+        max_iter,
+    };
+    let fit = sindy::fit_single(&x_arr, &t_arr, None, &state_names, &config)
+        .map_err(|e| PyValueError::new_err(e))?;
+    Ok((
+        fit.coefficients.into_pyarray(py).into(),
+        fit.feature_names,
+    ))
+}
+
+#[pyfunction]
+#[pyo3(signature = (
+    x_list,
+    t_list,
+    state_names,
+    polynomial_degree=3,
+    threshold=0.1,
+    alpha=0.05,
+    differentiation_order=2,
+    max_iter=20,
+))]
+fn fit_sindy_rust_multi(
+    py: Python<'_>,
+    x_list: Vec<PyReadonlyArray2<f64>>,
+    t_list: Vec<PyReadonlyArray1<f64>>,
+    state_names: Vec<String>,
+    polynomial_degree: usize,
+    threshold: f64,
+    alpha: f64,
+    differentiation_order: usize,
+    max_iter: usize,
+) -> PyResult<(Py<PyArray2<f64>>, Vec<String>)> {
+    if x_list.len() != t_list.len() {
+        return Err(PyValueError::new_err(
+            "x_list and t_list must have the same length",
+        ));
+    }
+    if x_list.is_empty() {
+        return Err(PyValueError::new_err("x_list must be non-empty"));
+    }
+    let mut trajectories = Vec::with_capacity(x_list.len());
+    let mut times = Vec::with_capacity(t_list.len());
+    for (x, t) in x_list.into_iter().zip(t_list.into_iter()) {
+        trajectories.push(as_2d(x)?);
+        times.push(as_1d(t)?);
+    }
+    let config = sindy::SindyConfig {
+        polynomial_degree,
+        threshold,
+        alpha,
+        differentiation_order,
+        max_iter,
+    };
+    let fit = sindy::fit_many(&trajectories, &times, None, &state_names, &config)
+        .map_err(|e| PyValueError::new_err(e))?;
+    Ok((
+        fit.coefficients.into_pyarray(py).into(),
+        fit.feature_names,
+    ))
+}
+
+//
 // --------- Python module ----------
 //
 
@@ -1108,6 +1203,9 @@ fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(corr_perm, m)?)?;
 
     m.add_function(wrap_pyfunction!(moran_i, m)?)?;
+
+    m.add_function(wrap_pyfunction!(fit_sindy_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(fit_sindy_rust_multi, m)?)?;
 
     Ok(())
 }

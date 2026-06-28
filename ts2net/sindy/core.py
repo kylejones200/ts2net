@@ -1,22 +1,22 @@
 """
-PySINDy integration — sparse identification of nonlinear dynamics.
+SINDy dynamics discovery — Rust core with optional PySINDy fallback.
 
-Wraps `pysindy` with ts2net conventions for multivariate time series input
-``(n_timepoints, n_coordinates)`` and optional conversion to coupling networks.
-
-See the PySINDy tutorial:
-https://pysindy.readthedocs.io/en/latest/examples/tutorial_1/example.html
+Uses the native ``ts2net_rs`` STLSQ implementation when available; falls back
+to PySINDy for advanced optimizers and simulation.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from .._validation import validate_series
+from ..core.backend import rust_available
+
+SindyBackend = Literal["auto", "rust", "pysindy"]
 
 
 def _require_pysindy():
@@ -43,6 +43,7 @@ class SINDySpec:
     alpha: float = 0.05
     differentiation_order: int = 2
     optimizer: str = "stlsq"
+    backend: SindyBackend = "auto"
 
 
 @dataclass
@@ -55,6 +56,7 @@ class SINDyResult:
     state_names: list[str]
     t: NDArray[np.float64] | float | list[NDArray[np.float64]] | None = None
     spec: SINDySpec = field(default_factory=SINDySpec)
+    backend_used: str = "pysindy"
 
     def equations(self) -> list[str]:
         """Human-readable ODE right-hand sides (one per state)."""
@@ -77,6 +79,12 @@ class SINDyResult:
         t: NDArray[np.float64],
     ) -> NDArray[np.float64]:
         """Integrate the discovered model from ``x0`` over ``t``."""
+        if self.model is None:
+            raise NotImplementedError(
+                "Simulation requires a PySINDy model. "
+                "Re-fit with spec.backend='pysindy' or install pysindy and use "
+                "fit_sindy(..., spec=SINDySpec(backend='pysindy'))."
+            )
         x0 = np.asarray(x0, dtype=np.float64).ravel()
         t = np.asarray(t, dtype=np.float64).ravel()
         return np.asarray(self.model.simulate(x0, t=t), dtype=np.float64)
@@ -109,60 +117,75 @@ def _normalize_X(
     return arr, arr.shape[1]
 
 
-def fit_sindy(
-    X: NDArray[np.float64] | list[NDArray[np.float64]],
+def _resolve_sindy_backend(spec: SINDySpec) -> str:
+    backend = (spec.backend or "auto").lower()
+    if backend not in ("auto", "rust", "pysindy"):
+        raise ValueError("backend must be 'auto', 'rust', or 'pysindy'")
+    if backend == "auto":
+        return "rust" if rust_available() else "pysindy"
+    if backend == "rust" and not rust_available():
+        raise ImportError(
+            "Rust SINDy backend requested but ts2net_rs is not built. "
+            "Install with: pip install ts2net[speed] or build from source."
+        )
+    return backend
+
+
+def _fit_sindy_rust(
+    X_norm: NDArray[np.float64] | list[NDArray[np.float64]],
     t: NDArray[np.float64] | float | list[NDArray[np.float64]],
     *,
-    x_dot: NDArray[np.float64] | list[NDArray[np.float64]] | None = None,
-    feature_names: list[str] | None = None,
-    spec: SINDySpec | None = None,
-) -> SINDyResult:
-    """
-    Fit a SINDy model to multivariate time-series data.
+    state_names: list[str],
+    spec: SINDySpec,
+) -> tuple[NDArray[np.float64], list[str]]:
+    import ts2net_rs
 
-    Parameters
-    ----------
-    X : array (n_time, n_coords) or list of such arrays
-        State observations. PySINDy axis convention: time first, coordinate second.
-    t : array, scalar dt, or list of time arrays
-        Sample times. Pass scalar ``dt`` when the timestep is uniform.
-    x_dot : array, optional
-        Known time derivatives (same shape conventions as ``X``).
-    feature_names : list of str, optional
-        Names for each coordinate (e.g. ``["x", "y"]``).
-    spec : SINDySpec, optional
-        Model configuration.
+    if spec.optimizer.lower() != "stlsq":
+        raise ValueError(
+            f"Rust SINDy backend supports optimizer='stlsq' only, got {spec.optimizer!r}"
+        )
 
-    Returns
-    -------
-    SINDyResult
-        Fitted model, coefficient matrix, and helpers.
+    kwargs = dict(
+        state_names=state_names,
+        polynomial_degree=int(spec.polynomial_degree),
+        threshold=float(spec.threshold),
+        alpha=float(spec.alpha),
+        differentiation_order=int(spec.differentiation_order),
+    )
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from ts2net.sindy import SINDySpec, fit_sindy
-    >>> t = np.linspace(0, 1, 100)
-    >>> X = np.column_stack([3 * np.exp(-2 * t), 0.5 * np.exp(t)])
-    >>> result = fit_sindy(X, t, feature_names=["x", "y"], spec=SINDySpec(polynomial_degree=1))
-    >>> result.coefficients[0, 1]  # dx/dt coefficient on x
-    -2.0...
-    """
+    if isinstance(X_norm, list):
+        if not isinstance(t, list):
+            raise ValueError("t must be a list when X is a list of trajectories")
+        coef, names = ts2net_rs.fit_sindy_rust_multi(
+            [np.asarray(x, dtype=np.float64) for x in X_norm],
+            [np.asarray(a, dtype=np.float64) for a in t],
+            **kwargs,
+        )
+    else:
+        if isinstance(t, list):
+            raise ValueError("t must be a scalar or 1-D array for a single trajectory")
+        t_arr = np.asarray(t, dtype=np.float64) if not isinstance(t, (float, int)) else None
+        if isinstance(t, (float, int)):
+            n = X_norm.shape[0]
+            t_arr = np.linspace(0.0, float(t) * (n - 1), n, dtype=np.float64)
+        coef, names = ts2net_rs.fit_sindy_rust(
+            np.asarray(X_norm, dtype=np.float64),
+            t_arr,
+            **kwargs,
+        )
+    return np.asarray(coef, dtype=np.float64), list(names)
+
+
+def _fit_sindy_pysindy(
+    X_norm: NDArray[np.float64] | list[NDArray[np.float64]],
+    t: NDArray[np.float64] | float | list[NDArray[np.float64]],
+    *,
+    x_dot: NDArray[np.float64] | list[NDArray[np.float64]] | None,
+    state_names: list[str],
+    spec: SINDySpec,
+) -> tuple[Any, NDArray[np.float64], list[str]]:
     _require_pysindy()
     import pysindy as ps
-
-    spec = spec or SINDySpec()
-    X_norm, n_vars = _normalize_X(X)
-
-    if feature_names is None:
-        state_names = [f"x{i}" for i in range(n_vars)]
-    else:
-        if len(feature_names) != n_vars:
-            raise ValueError(
-                f"feature_names length ({len(feature_names)}) must match "
-                f"n_coords ({n_vars})"
-            )
-        state_names = list(feature_names)
 
     differentiation_method = ps.FiniteDifference(order=spec.differentiation_order)
     feature_library = ps.PolynomialLibrary(degree=spec.polynomial_degree)
@@ -182,9 +205,66 @@ def fit_sindy(
         fit_kwargs["x_dot"] = x_dot
 
     model.fit(X_norm, t=t, **fit_kwargs)
-
     coef = np.asarray(model.coefficients(), dtype=np.float64)
     lib_names = list(model.get_feature_names())
+    return model, coef, lib_names
+
+
+def fit_sindy(
+    X: NDArray[np.float64] | list[NDArray[np.float64]],
+    t: NDArray[np.float64] | float | list[NDArray[np.float64]],
+    *,
+    x_dot: NDArray[np.float64] | list[NDArray[np.float64]] | None = None,
+    feature_names: list[str] | None = None,
+    spec: SINDySpec | None = None,
+) -> SINDyResult:
+    """
+    Fit a SINDy model to multivariate time-series data.
+
+    Parameters
+    ----------
+    X : array (n_time, n_coords) or list of such arrays
+        State observations. PySINDy axis convention: time first, coordinate second.
+    t : array, scalar dt, or list of time arrays
+        Sample times. Pass scalar ``dt`` when the timestep is uniform.
+    x_dot : array, optional
+        Known time derivatives (same shape conventions as ``X``). Rust backend only
+        when supplied via PySINDy fallback.
+    feature_names : list of str, optional
+        Names for each coordinate (e.g. ``["x", "y"]``).
+    spec : SINDySpec, optional
+        Model configuration. ``spec.backend`` selects ``rust``, ``pysindy``, or
+        ``auto`` (Rust when ``ts2net_rs`` is built).
+
+    Returns
+    -------
+    SINDyResult
+        Fitted model, coefficient matrix, and helpers.
+    """
+    spec = spec or SINDySpec()
+    X_norm, n_vars = _normalize_X(X)
+
+    if feature_names is None:
+        state_names = [f"x{i}" for i in range(n_vars)]
+    else:
+        if len(feature_names) != n_vars:
+            raise ValueError(
+                f"feature_names length ({len(feature_names)}) must match "
+                f"n_coords ({n_vars})"
+            )
+        state_names = list(feature_names)
+
+    backend = _resolve_sindy_backend(spec)
+    if x_dot is not None and backend == "rust":
+        backend = "pysindy"
+
+    if backend == "rust":
+        coef, lib_names = _fit_sindy_rust(X_norm, t, state_names=state_names, spec=spec)
+        model = None
+    else:
+        model, coef, lib_names = _fit_sindy_pysindy(
+            X_norm, t, x_dot=x_dot, state_names=state_names, spec=spec
+        )
 
     if isinstance(t, (float, int)):
         t_store: NDArray[np.float64] | float | list[NDArray[np.float64]] | None = float(t)
@@ -200,4 +280,5 @@ def fit_sindy(
         state_names=state_names,
         t=t_store,
         spec=spec,
+        backend_used=backend,
     )

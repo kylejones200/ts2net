@@ -1,4 +1,4 @@
-"""Tests for PySINDy integration."""
+"""Tests for SINDy integration (Rust backend and PySINDy fallback)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,13 @@ import pytest
 pysindy = pytest.importorskip("pysindy")
 
 from ts2net.sindy import SINDySpec, fit_sindy, sindy_coupling_network
+
+try:
+    import ts2net_rs  # noqa: F401
+
+    HAS_RUST = True
+except ImportError:
+    HAS_RUST = False
 
 
 class TestSINDy:
@@ -62,7 +69,7 @@ class TestSINDy:
             X,
             t,
             feature_names=["x", "y"],
-            spec=SINDySpec(polynomial_degree=1, threshold=0.1),
+            spec=SINDySpec(polynomial_degree=1, threshold=0.1, backend="pysindy"),
         )
         sim = result.simulate(np.array([1.0, 1.0]), np.linspace(0, 0.5, 20))
         assert sim.shape == (20, 2)
@@ -74,3 +81,48 @@ class TestSINDy:
         eqs = result.equations()
         assert len(eqs) == 2
         assert "(x)'" in eqs[0]
+
+
+@pytest.mark.skipif(not HAS_RUST, reason="ts2net_rs not built")
+class TestSINDyRust:
+    def test_linear_decoupled_system_rust(self):
+        t = np.linspace(0, 1, 80)
+        X = np.column_stack([3.0 * np.exp(-2 * t), 0.5 * np.exp(t)])
+        result = fit_sindy(
+            X,
+            t,
+            feature_names=["x", "y"],
+            spec=SINDySpec(polynomial_degree=1, threshold=0.1, backend="rust"),
+        )
+        assert result.backend_used == "rust"
+        assert result.model is None
+        names = result.feature_names
+        assert result.coefficients[0, names.index("x")] == pytest.approx(-2.0, abs=0.05)
+        assert result.coefficients[1, names.index("y")] == pytest.approx(1.0, abs=0.05)
+
+    def test_multiple_trajectories_rust(self):
+        t1 = np.linspace(0, 1, 50)
+        t2 = np.linspace(0, 2, 80)
+        X1 = np.column_stack([np.exp(-2 * t1), np.exp(t1)])
+        X2 = np.column_stack([2 * np.exp(-2 * t2), 3 * np.exp(t2)])
+        result = fit_sindy(
+            [X1, X2],
+            [t1, t2],
+            feature_names=["x", "y"],
+            spec=SINDySpec(polynomial_degree=1, threshold=0.1, backend="rust"),
+        )
+        names = result.feature_names
+        assert result.coefficients[0, names.index("x")] == pytest.approx(-2.0, abs=0.05)
+        assert result.coefficients[1, names.index("y")] == pytest.approx(1.0, abs=0.05)
+
+    def test_simulate_requires_pysindy(self):
+        t = np.linspace(0, 1, 40)
+        X = np.column_stack([np.exp(-2 * t), np.exp(t)])
+        result = fit_sindy(
+            X,
+            t,
+            feature_names=["x", "y"],
+            spec=SINDySpec(polynomial_degree=1, backend="rust"),
+        )
+        with pytest.raises(NotImplementedError):
+            result.simulate(np.array([1.0, 1.0]), t[:10])
