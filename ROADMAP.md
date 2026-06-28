@@ -97,6 +97,7 @@ The package should answer four questions:
 | Visibility graphs    | Natural visibility graphs, horizontal visibility graphs, directed visibility graphs, weighted visibility graphs, multiplex visibility graphs, and multiscale visibility graphs. | ✅ PARTIAL — HVG/NVG/directed/weighted/multiscale exist; `multiplex_visibility_graph()`; Rust/Numba degree-only stats via `visibility_degree_stats()` |
 | Recurrence networks  | Fixed-threshold recurrence, adaptive recurrence, k-nearest recurrence, cross-recurrence, joint recurrence, and recurrence quantification features.                              | ✅ COMPLETED — `recurrence_quantification()`, `adaptive_recurrence_network()`, `cross_recurrence_network()`; Rust degree-only stats via `recurrence_degree_stats()` |
 | Transition networks  | Symbolic transition networks, ordinal pattern networks, entropy-maximizing symbolization, SAX-based transitions, and Markov transition graphs.                                  | ✅ PARTIAL — `sax_symbolize()`, `entropy_max_symbolize()`, `sax_transition_network()`; stats-only path via `transition_degree_stats()` |
+| Dynamics (SINDy)     | Sparse identification of governing equations from multivariate trajectories; coupling networks from discovered Jacobians.                                                        | ✅ PARTIAL — `fit_sindy()`, `sindy_coupling_network()` (`pip install ts2net[sindy]`) |
 | Correlation networks | Pearson, Spearman, Kendall, distance correlation, partial correlation, rolling correlation, and thresholded correlation graphs.                                                 | ✅ COMPLETED — `correlation_network()`, `partial_correlation_network()`, `rolling_correlation_network()` |
 | Similarity networks  | DTW, soft-DTW, Euclidean, shape-based distance, matrix profile distance, and learned embedding distance.                                                                        | ✅ COMPLETED — `similarity_network()` with `soft_dtw`, `matrix_profile`, `dtw`, etc. |
 | Causal networks      | Transfer entropy, conditional transfer entropy, Granger causality, nonlinear Granger, PCMCI-style lagged discovery, PC, FCI, and time-aware constraint methods.                 | ✅ PARTIAL — TE/Granger workflow + PC/FCI (`ts2net.causal`); PCMCI-style via `time_lagged_causality_network()` |
@@ -251,5 +252,6 @@ See `examples/dynamic_analytics_example.py`.
 | `benchmarks/run_validation.py` | v0.9 literature validation CLI |
 | `benchmarks/run_ucr_benchmark.py` | v0.9 UCR classification benchmark |
 | `examples/scale_streaming_example.py` | v0.6 streaming scale |
+| `examples/sindy_example.py` | PySINDy dynamics discovery |
 | `examples/polars_spain_windows.py` | Large-scale meter data |
 | `examples/spain_meter_case_study.ipynb` | Domain recipe (energy) |

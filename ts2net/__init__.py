@@ -86,6 +86,25 @@ try:
 except ImportError:
     pass
 
+# PySINDy dynamics discovery (optional - requires pysindy)
+try:
+    from .sindy import (
+        SINDySpec,
+        SINDyResult,
+        fit_sindy,
+        sindy_coupling_network,
+        sindy_jacobian_network,
+    )
+    __all__.extend([
+        'SINDySpec',
+        'SINDyResult',
+        'fit_sindy',
+        'sindy_coupling_network',
+        'sindy_jacobian_network',
+    ])
+except ImportError:
+    pass
+
 # Temporal CNN embeddings (optional - requires torch)
 try:
     from .temporal_cnn import temporal_cnn_embeddings

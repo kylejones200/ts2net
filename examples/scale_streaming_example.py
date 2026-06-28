@@ -87,11 +87,33 @@ def main():
 
     print()
     print("=" * 60)
-    print("Parallel build_windows (n_jobs=2)")
+    print("Parallel build_windows (n_jobs=2, CPU)")
     print("=" * 60)
     stats = build_windows(x, window=48, step=24, method="hvg", n_jobs=2)
     print(f"  Computed {len(stats['n_edges'])} window stat vectors")
     print(f"  Mean avg_degree: {np.nanmean(stats['avg_degree']):.2f}")
+
+    print()
+    print("=" * 60)
+    print("Distributed executors (CPU-local, no GPU required)")
+    print("=" * 60)
+    try:
+        dask_stats = build_windows(
+            x[:5000], window=48, step=24, method="hvg", executor="dask"
+        )
+        print(f"  Dask: {len(dask_stats['n_edges'])} windows")
+    except ImportError as exc:
+        print(f"  Dask skipped: {exc}")
+
+    try:
+        import ray  # noqa: F401
+
+        ray_stats = build_windows(
+            x[:5000], window=48, step=24, method="hvg", executor="ray"
+        )
+        print(f"  Ray:  {len(ray_stats['n_edges'])} windows")
+    except ImportError:
+        print("  Ray skipped: pip install 'ts2net[distributed]'")
 
     print()
     print(f"Registered contracts: {', '.join(sorted(list_performance_contracts()))}")
