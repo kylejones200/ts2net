@@ -25,6 +25,18 @@ class TestDatasetRegistry:
         assert data["y"] is not None
         assert len(np.unique(data["y"])) == 2
 
+    def test_synthetic_anomaly(self):
+        data = load_dataset("synthetic_anomaly", n=200, seed=1)
+        assert data["X"].shape == (1, 200)
+        assert data["metadata"]["task"] == "anomaly_detection"
+        assert int(np.sum(data["y"])) > 0
+
+    def test_synthetic_regime(self):
+        data = load_dataset("synthetic_regime", n=400, seed=1)
+        assert data["X"].shape == (1, 400)
+        assert data["metadata"]["task"] == "regime_detection"
+        assert len(np.unique(data["y"])) == 2
+
     def test_spain_optional(self):
         from pathlib import Path
 

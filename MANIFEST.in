@@ -11,6 +11,8 @@ include pytest.ini
 
 # Include Python source code
 recursive-include ts2net *.py
+recursive-include ts2net/datasets/data *.npz
+recursive-include ts2net/datasets/data *.json
 
 # Include Rust source code for building
 recursive-include ts2net_rs *.rs *.toml

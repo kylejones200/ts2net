@@ -108,6 +108,17 @@ coverage.xml
 # Project specific (add your own below)
 data/
 !data/README.md
+!ts2net/datasets/data/
+!ts2net/datasets/data/**/*
+
+# Project specific data
+*.npy
+*.npz
+!ts2net/datasets/data/**/*.npz
+*.h5
+*.hdf5
+*.pkl
+*.pickle
 
 # Build outputs
 /ts2net_rs/target/
@@ -145,14 +156,6 @@ $RECYCLE.BIN/
 
 # Linux
 *~
-
-# Project specific data
-*.npy
-*.npz
-*.h5
-*.hdf5
-*.pkl
-*.pickle
 
 # Generated images (should be in examples/images/)
 /*.png

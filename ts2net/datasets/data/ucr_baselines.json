@@ -1,0 +1,20 @@
+{
+  "GunPoint": {
+    "split": "train",
+    "cv": 3,
+    "tolerance": 0.15,
+    "feature_sets": {
+      "network_hvg": {"mean_score_min": 0.75},
+      "statistical": {"mean_score_min": 0.60}
+    }
+  },
+  "ItalyPowerDemand": {
+    "split": "train",
+    "cv": 3,
+    "tolerance": 0.15,
+    "feature_sets": {
+      "network_hvg": {"mean_score_min": 0.85},
+      "statistical": {"mean_score_min": 0.85}
+    }
+  }
+}

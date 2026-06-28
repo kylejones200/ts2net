@@ -142,6 +142,62 @@ def _spain_meters_summary(**_: Any) -> dict[str, Any]:
     }
 
 
+def _synthetic_regime(
+    n: int = 1000,
+    seed: int = 42,
+    **_: Any,
+) -> dict[str, Any]:
+    """Piecewise regime panel for dynamic / regime-detection smoke tests."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n, dtype=np.float64)
+    x = np.where(
+        t < n // 2,
+        0.2 * np.sin(2 * np.pi * t / 40) + 0.02 * rng.standard_normal(n),
+        1.5 * np.sin(2 * np.pi * t / 12) + 0.15 * rng.standard_normal(n),
+    ).astype(np.float64)
+    labels = np.where(t < n // 2, 0, 1).astype(np.int64)
+    return {
+        "X": x.reshape(1, -1),
+        "y": labels,
+        "metadata": {
+            "name": "synthetic_regime",
+            "task": "regime_detection",
+            "citation": "Synthetic piecewise regime shift (ts2net validation)",
+            "seed": seed,
+            "n_points": n,
+            "n_regimes": 2,
+        },
+    }
+
+
+def _synthetic_anomaly(
+    n: int = 500,
+    n_anomalies: int = 8,
+    seed: int = 42,
+    **_: Any,
+) -> dict[str, Any]:
+    """Normal baseline series with injected point anomalies."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n, dtype=np.float64)
+    x = 0.5 + 0.1 * np.sin(2 * np.pi * t / 24) + 0.01 * rng.standard_normal(n)
+    idx = rng.choice(n, size=n_anomalies, replace=False)
+    x[idx] += rng.uniform(3.0, 5.0, size=n_anomalies)
+    y = np.zeros(n, dtype=np.int64)
+    y[idx] = 1
+    return {
+        "X": x.reshape(1, -1),
+        "y": y,
+        "metadata": {
+            "name": "synthetic_anomaly",
+            "task": "anomaly_detection",
+            "citation": "Synthetic point anomalies on periodic baseline",
+            "seed": seed,
+            "n_points": n,
+            "n_anomalies": n_anomalies,
+        },
+    }
+
+
 REGISTRY: dict[str, DatasetSpec] = {
     "synthetic_causal": DatasetSpec(
         name="synthetic_causal",
@@ -164,6 +220,20 @@ REGISTRY: dict[str, DatasetSpec] = {
         description="Per-meter HVG/NVG/TN summary features from bundled CSV.",
         loader=_spain_meters_summary,
         optional=True,
+    ),
+    "synthetic_regime": DatasetSpec(
+        name="synthetic_regime",
+        task="regime_detection",
+        citation="Synthetic piecewise regime shift",
+        description="Single series with two amplitude/frequency regimes.",
+        loader=_synthetic_regime,
+    ),
+    "synthetic_anomaly": DatasetSpec(
+        name="synthetic_anomaly",
+        task="anomaly_detection",
+        citation="Synthetic point anomalies",
+        description="Periodic baseline with injected spike anomalies.",
+        loader=_synthetic_anomaly,
     ),
 }
 

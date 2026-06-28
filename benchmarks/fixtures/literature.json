@@ -59,6 +59,27 @@
         "max_mean": 4.05,
         "optional": true
       }
+    },
+    {
+      "id": "rqa_sine_determinism",
+      "method": "rqa_periodic_determinism",
+      "citation": "Marwan et al. (2007) Phys. Rep. — high DET for periodic recurrence plots",
+      "params": {
+        "n_points": 400,
+        "target_density": 0.1,
+        "min_det": 0.7
+      }
+    },
+    {
+      "id": "pcmci_lagged_driver",
+      "method": "pcmci_lagged_coupling",
+      "citation": "Runge et al. (2019) — PCMCI-style lagged TE identifies directed coupling",
+      "params": {
+        "n": 800,
+        "seed": 42,
+        "min_ratio": 2.0,
+        "bins": 8
+      }
     }
   ]
 }

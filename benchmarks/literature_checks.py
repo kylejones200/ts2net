@@ -180,6 +180,69 @@ def _check_spain_hvg_mean_degree(params: dict[str, Any]) -> FixtureResult:
     )
 
 
+def _check_rqa_periodic_det(params: dict[str, Any]) -> FixtureResult:
+    from ts2net.graphs.recurrence import recurrence_quantification
+
+    n = int(params.get("n_points", 400))
+    target_density = float(params.get("target_density", 0.1))
+    min_det = float(params.get("min_det", 0.7))
+    x = np.sin(np.linspace(0.0, 12.0 * np.pi, n, dtype=np.float64))
+    result = recurrence_quantification(x, target_density=target_density)
+    det = float(result["rqa"]["DET"])
+    rr = float(result["rqa"]["RR"])
+    passed = det >= min_det and rr > 0.0
+    return FixtureResult(
+        id="",
+        method="rqa_periodic_determinism",
+        passed=passed,
+        message=f"DET={det:.4f}, RR={rr:.4f} (expected DET >= {min_det})",
+        observed={"DET": det, "RR": rr, "epsilon": result["epsilon"]},
+    )
+
+
+def _check_pcmci_lagged_coupling(params: dict[str, Any]) -> FixtureResult:
+    from ts2net.causal.time_lagged import time_lagged_causality_network
+
+    n = int(params.get("n", 800))
+    seed = int(params.get("seed", 42))
+    min_ratio = float(params.get("min_ratio", 2.0))
+    bins = int(params.get("bins", 8))
+
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal(n)
+    y = np.zeros(n, dtype=np.float64)
+    for t in range(1, n):
+        y[t] = 0.7 * x[t - 1] + 0.1 * rng.standard_normal()
+
+    results = time_lagged_causality_network(
+        [x, y],
+        lags=[1, 2],
+        method="transfer_entropy",
+        combine="per_lag",
+        bins=bins,
+    )
+    te_01_lag1 = float(results[1][1][0, 1])
+    te_10_lag1 = float(results[1][1][1, 0])
+    te_01_lag2 = float(results[2][1][0, 1])
+    ratio = te_01_lag1 / max(te_10_lag1, 1e-12)
+    passed = ratio >= min_ratio and te_01_lag1 > te_01_lag2
+    return FixtureResult(
+        id="",
+        method="pcmci_lagged_coupling",
+        passed=passed,
+        message=(
+            f"TE(0→1|lag1)/TE(1→0|lag1)={ratio:.2f}, "
+            f"lag1={te_01_lag1:.3f} > lag2={te_01_lag2:.3f}"
+        ),
+        observed={
+            "te_01_lag1": te_01_lag1,
+            "te_10_lag1": te_10_lag1,
+            "te_01_lag2": te_01_lag2,
+            "ratio": ratio,
+        },
+    )
+
+
 _CHECKERS = {
     "hvg_mean_degree": _check_hvg_mean_degree,
     "hvg_edge_count": _check_hvg_edge_count,
@@ -187,6 +250,8 @@ _CHECKERS = {
     "transfer_entropy_asymmetry": _check_transfer_entropy_asymmetry,
     "recurrence_threshold_monotonicity": _check_recurrence_threshold_monotonicity,
     "spain_hvg_mean_degree": _check_spain_hvg_mean_degree,
+    "rqa_periodic_determinism": _check_rqa_periodic_det,
+    "pcmci_lagged_coupling": _check_pcmci_lagged_coupling,
 }
 
 
@@ -202,7 +267,7 @@ def load_literature_fixtures(
     fixtures = list(data.get("fixtures", []))
     if smoke:
         # Fast CI subset: skip Monte Carlo mean-degree and slow TE tests
-        skip_methods = {"hvg_mean_degree", "transfer_entropy_asymmetry"}
+        skip_methods = {"hvg_mean_degree", "transfer_entropy_asymmetry", "pcmci_lagged_coupling"}
         fixtures = [f for f in fixtures if f.get("method") not in skip_methods]
     return fixtures
 

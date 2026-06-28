@@ -1,8 +1,7 @@
 """
 UCR/UEA classification benchmark harness (Horizon 9 / v0.9).
 
-Uses aeon/sktime loaders when available; falls back to the bundled
-synthetic classification panel for CI smoke tests.
+Loads bundled ``.npz`` archives offline, with optional aeon/sktime refresh.
 """
 
 from __future__ import annotations
@@ -10,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,6 +17,8 @@ from numpy.typing import NDArray
 from ts2net.datasets.registry import load_dataset
 
 _UCR_NAMES = ("GunPoint", "ItalyPowerDemand", "Coffee")
+_DATA_DIR = Path(__file__).resolve().parent / "data" / "ucr"
+_BASELINES_PATH = Path(__file__).resolve().parent / "data" / "ucr_baselines.json"
 
 
 def list_ucr_datasets() -> list[str]:
@@ -25,47 +26,65 @@ def list_ucr_datasets() -> list[str]:
     return list(_UCR_NAMES)
 
 
+def _load_bundled(
+    name: str,
+    split: Literal["train", "test"] = "train",
+) -> tuple[NDArray[np.float64], NDArray[Any]] | None:
+    path = _DATA_DIR / f"{name}_{split}.npz"
+    if not path.is_file():
+        return None
+    data = np.load(path)
+    return data["X"].astype(np.float64), np.asarray(data["y"])
+
+
 def load_ucr(
     name: str,
     *,
+    split: Literal["train", "test"] = "train",
     return_metadata: bool = False,
 ) -> tuple[NDArray[np.float64], NDArray[Any]] | tuple[NDArray[np.float64], NDArray[Any], dict[str, Any]]:
     """
     Load a UCR univariate classification dataset.
 
-    Tries ``aeon.datasets.load_classification`` then ``sktime``; on failure
-    falls back to ``synthetic_classification`` for smoke testing.
+    Order: bundled ``.npz`` → aeon → sktime → synthetic fallback.
     """
     name = name.strip()
     X: NDArray[np.float64]
     y: NDArray[Any]
-    meta: dict[str, Any] = {"name": name, "source": "unknown"}
+    meta: dict[str, Any] = {"name": name, "split": split, "source": "unknown"}
 
-    try:
-        from aeon.datasets import load_classification
-
-        X, y = load_classification(name, split="train")
-        X = np.asarray(X.squeeze(), dtype=np.float64)
-        if X.ndim == 1:
-            X = X.reshape(1, -1)
-        y = np.asarray(y)
-        meta["source"] = "aeon"
-    except Exception:
+    bundled = _load_bundled(name, split=split)
+    if bundled is not None:
+        X, y = bundled
+        meta["source"] = "bundled"
+    else:
         try:
-            from sktime.datasets import load_UCR_UEA_dataset
+            from aeon.datasets import load_classification
 
-            X, y = load_UCR_UEA_dataset(name, return_X_y=True)
+            X, y = load_classification(name, split=split)
             X = np.asarray(X.squeeze(), dtype=np.float64)
             if X.ndim == 1:
                 X = X.reshape(1, -1)
             y = np.asarray(y)
-            meta["source"] = "sktime"
+            meta["source"] = "aeon"
         except Exception:
-            data = load_dataset("synthetic_classification", n_per_class=25, n_points=128, seed=0)
-            X = data["X"]
-            y = data["y"]
-            meta["source"] = "synthetic_fallback"
-            meta["fallback_reason"] = f"UCR dataset {name!r} not available locally"
+            try:
+                from sktime.datasets import load_UCR_UEA_dataset
+
+                X, y = load_UCR_UEA_dataset(name, return_X_y=True)
+                X = np.asarray(X.squeeze(), dtype=np.float64)
+                if X.ndim == 1:
+                    X = X.reshape(1, -1)
+                y = np.asarray(y)
+                meta["source"] = "sktime"
+            except Exception:
+                data = load_dataset(
+                    "synthetic_classification", n_per_class=25, n_points=128, seed=0
+                )
+                X = data["X"]
+                y = data["y"]
+                meta["source"] = "synthetic_fallback"
+                meta["fallback_reason"] = f"UCR dataset {name!r} not available locally"
 
     if return_metadata:
         meta.setdefault("n_series", int(X.shape[0]))
@@ -75,12 +94,70 @@ def load_ucr(
     return X, y
 
 
+def load_ucr_baselines(path: Path | None = None) -> dict[str, Any]:
+    """Load recorded UCR benchmark baselines."""
+    path = path or _BASELINES_PATH
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def validate_ucr_benchmark(
+    payload: dict[str, Any],
+    *,
+    baselines: dict[str, Any] | None = None,
+) -> tuple[bool, list[str]]:
+    """
+    Compare benchmark scores against recorded baselines.
+
+    Returns ``(passed, messages)``.
+    """
+    baselines = baselines or load_ucr_baselines()
+    dataset = payload["dataset"]
+    if dataset not in baselines:
+        return True, [f"no baseline for {dataset!r}; skipped"]
+
+    spec = baselines[dataset]
+    messages: list[str] = []
+    passed = True
+
+    if payload.get("cv") != spec.get("cv"):
+        messages.append(
+            f"cv={payload.get('cv')} differs from baseline cv={spec.get('cv')}"
+        )
+
+    meta = payload.get("metadata", {})
+    if meta.get("source") == "synthetic_fallback":
+        messages.append("warning: used synthetic fallback instead of bundled UCR data")
+
+    for name, bounds in spec.get("feature_sets", {}).items():
+        scores = payload.get("scores", {}).get(name)
+        if scores is None:
+            passed = False
+            messages.append(f"missing feature set {name!r}")
+            continue
+        min_score = float(bounds.get("mean_score_min", 0.0))
+        mean = float(scores["mean_score"])
+        tol = float(spec.get("tolerance", 0.1))
+        floor = max(0.0, min_score - tol)
+        if mean < floor:
+            passed = False
+            messages.append(
+                f"{name}: mean_score={mean:.3f} below baseline floor {floor:.3f}"
+            )
+        else:
+            messages.append(f"{name}: mean_score={mean:.3f} >= {floor:.3f}")
+
+    return passed, messages
+
+
 def run_ucr_benchmark(
     dataset: str = "GunPoint",
     *,
+    split: Literal["train", "test"] = "train",
     cv: int = 5,
     include_optional_baselines: bool = False,
     output_path: Path | None = None,
+    validate_baselines: bool = False,
 ) -> dict[str, Any]:
     """
     Cross-validate network vs baseline features on a UCR-style panel.
@@ -90,7 +167,7 @@ def run_ucr_benchmark(
     from ts2net.sklearn import NetworkFeatureExtractor, compare_feature_sets
     from ts2net.sklearn.benchmarks import statistical_baseline_features
 
-    X, y, meta = load_ucr(dataset, return_metadata=True)
+    X, y, meta = load_ucr(dataset, split=split, return_metadata=True)
     feature_sets: dict[str, NDArray[np.float64]] = {
         "network_hvg": NetworkFeatureExtractor(method="hvg").fit_transform(X),
     }
@@ -112,13 +189,19 @@ def run_ucr_benchmark(
             pass
 
     scores = compare_feature_sets(X, y, feature_sets, cv=cv)
-    payload = {
+    payload: dict[str, Any] = {
         "dataset": dataset,
+        "split": split,
         "metadata": meta,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "cv": cv,
         "scores": scores,
     }
+
+    if validate_baselines:
+        ok, messages = validate_ucr_benchmark(payload)
+        payload["baseline_check"] = {"passed": ok, "messages": messages}
+
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

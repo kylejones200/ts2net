@@ -52,6 +52,7 @@ Contents:
 
    usage
    examples
+   references
 
 .. toctree::
    :maxdepth: 2

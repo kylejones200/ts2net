@@ -12,11 +12,16 @@ class TestUCRHarness:
         names = list_ucr_datasets()
         assert "GunPoint" in names
 
-    def test_load_ucr_fallback(self):
+    def test_load_ucr_bundled(self):
         X, y, meta = load_ucr("GunPoint", return_metadata=True)
         assert X.ndim == 2
         assert len(y) == X.shape[0]
-        assert meta["source"] in {"aeon", "sktime", "synthetic_fallback"}
+        assert meta["source"] == "bundled"
+        assert X.shape == (50, 150)
+
+    def test_validate_ucr_baselines(self):
+        payload = run_ucr_benchmark("GunPoint", cv=3, validate_baselines=True)
+        assert payload["baseline_check"]["passed"]
 
     def test_run_ucr_benchmark_smoke(self, tmp_path):
         out = tmp_path / "ucr.json"

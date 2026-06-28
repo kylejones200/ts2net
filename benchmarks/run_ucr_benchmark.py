@@ -22,14 +22,15 @@ from ts2net.datasets.ucr import run_ucr_benchmark  # noqa: E402
 
 def main() -> int:
     smoke = os.environ.get("TS2NET_CI_SMOKE", "") == "1"
-    dataset = "GunPoint" if not smoke else "GunPoint"
     output = _REPO / "benchmarks" / "results" / "ucr_benchmark.json"
 
     payload = run_ucr_benchmark(
-        dataset,
+        "GunPoint",
+        split="train",
         cv=3 if smoke else 5,
         include_optional_baselines=not smoke,
         output_path=output,
+        validate_baselines=True,
     )
 
     print("=" * 60)
@@ -41,7 +42,17 @@ def main() -> int:
             f"  {name}: {scores['mean_score']:.3f} ± {scores['std_score']:.3f} "
             f"({scores['n_features']} features)"
         )
+
+    if "baseline_check" in payload:
+        check = payload["baseline_check"]
+        print()
+        for msg in check["messages"]:
+            print(f"  baseline: {msg}")
+        print(f"Baseline check: {'PASS' if check['passed'] else 'FAIL'}")
+
     print(f"\nResults written to {output}")
+    if payload.get("baseline_check", {}).get("passed") is False:
+        return 1
     return 0
 
 
