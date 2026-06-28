@@ -362,7 +362,9 @@ _DISTANCE_REGISTRY: Dict[str, Callable] = {
 # ============================================================================
 
 def ts_dist(X: NDArray[np.float64], method: str = 'correlation', 
-            n_jobs: int = 1, **kwargs) -> NDArray[np.float64]:
+            n_jobs: int = 1, executor: str | None = None,
+            device: str = "cpu", gpu_backend: str = "auto",
+            **kwargs) -> NDArray[np.float64]:
     """
     Calculate pairwise distance matrix between multiple time series.
     
@@ -374,6 +376,12 @@ def ts_dist(X: NDArray[np.float64], method: str = 'correlation',
         Distance function: 'correlation', 'ccf', 'dtw', 'nmi', 'es'
     n_jobs : int
         Number of parallel workers (-1 = all cores)
+    executor : str, optional
+        Distributed backend: ``dask`` or ``ray``. Overrides ``n_jobs`` when set.
+    device : str, default ``cpu``
+        ``cpu``, ``cuda``, ``gpu``, or ``auto`` (uses ``TS2NET_DEVICE``).
+    gpu_backend : str, default ``auto``
+        ``torch`` or ``cupy`` for GPU correlation matrices.
     **kwargs
         Distance-specific parameters
     
@@ -404,6 +412,24 @@ def ts_dist(X: NDArray[np.float64], method: str = 'correlation',
     logger.info(f"Computing {method} distance matrix for {n_series} series ({n_points} points each)")
 
     method_key = method.lower()
+
+    if executor in ("dask", "ray"):
+        from ..scale.distributed import ts_dist_distributed
+
+        return ts_dist_distributed(
+            X,
+            method=method_key,
+            executor=executor,  # type: ignore[arg-type]
+            row_chunk_size=int(kwargs.pop("row_chunk_size", 32)),
+            n_workers=kwargs.pop("n_workers", None),
+            **kwargs,
+        )
+
+    if method_key in ("correlation", "cor") and device.lower() in ("gpu", "cuda"):
+        from ..distances.gpu import cdist_correlation
+
+        return cdist_correlation(X, device=device, backend=gpu_backend)
+
     if method_key == "dtw":
         return _ts_dist_dtw_matrix(X, n_jobs=n_jobs, **kwargs)
 

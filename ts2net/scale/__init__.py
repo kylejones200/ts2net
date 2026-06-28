@@ -15,6 +15,13 @@ from .contracts import (
 )
 from .incremental import AppendResult, IncrementalHVG
 from .sparse import edges_to_csr, to_sparse_csr
+from .distributed import (
+    build_windows_distributed,
+    dask_available,
+    parallel_map,
+    ray_available,
+    ts_dist_distributed,
+)
 from .streaming import (
     build_windows_streaming,
     estimate_window_job_memory_mb,
@@ -44,4 +51,9 @@ __all__ = [
     "build_windows_streaming",
     "stream_chunk_stats",
     "estimate_window_job_memory_mb",
+    "parallel_map",
+    "ts_dist_distributed",
+    "build_windows_distributed",
+    "dask_available",
+    "ray_available",
 ]

@@ -53,6 +53,7 @@ def build_windows(
     output: str = "stats",
     aggregate: str | None = None,
     n_jobs: int = 1,
+    executor: str | None = None,
     streaming: bool = False,
     **method_kwargs,
 ) -> dict[str, np.ndarray] | np.ndarray:
@@ -75,6 +76,8 @@ def build_windows(
         Aggregation function for stats: 'mean', 'std', 'min', 'max'
     n_jobs : int, default 1
         Parallel workers for independent windows. Use -1 for all CPUs.
+    executor : str, optional
+        Distributed backend ``dask`` or ``ray`` for embarrassingly parallel windows.
     streaming : bool, default False
         If True, avoid materializing the full ``(n_windows, window)`` matrix.
     **method_kwargs
@@ -87,6 +90,19 @@ def build_windows(
     """
     method_key = method.lower()
     config = _make_window_config(method_key, window, output, method_kwargs)
+
+    if executor in ("dask", "ray"):
+        from .scale.distributed import build_windows_distributed
+
+        return build_windows_distributed(
+            x,
+            window,
+            step,
+            method_key,
+            executor=executor,  # type: ignore[arg-type]
+            n_workers=method_kwargs.pop("n_workers", None),
+            **method_kwargs,
+        )
 
     if streaming:
         window_iter = (

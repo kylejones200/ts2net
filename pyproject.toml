@@ -59,7 +59,8 @@ speed = ["numba"]
 dtw = ["tslearn"]
 approx = ["pynndescent"]
 rdata = ["pyreadr"]
-gpu = []  # cudtw not available on PyPI; install manually if needed
+gpu = ["torch>=2.0"]
+distributed = ["dask>=2024.1", "ray[default]>=2.9"]
 examples = ["pandas-datareader", "signalplot"]
 cnn = ["torch>=2.0"]
 viz = ["plotly>=5.0"]
@@ -117,6 +118,7 @@ dev = [
     "pynndescent",
     "numba",
     "tslearn",
+    "dask>=2024.1",
 ]
 
 [project.scripts]

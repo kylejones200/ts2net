@@ -76,6 +76,20 @@ _CONTRACTS: dict[str, PerformanceContract] = {
         recommended_output="distance matrix",
         notes="Rust backend preferred; cdist_dtw_chunked() for panels ≥ 64 series.",
     ),
+    "cdist_correlation_gpu": PerformanceContract(
+        method="cdist_correlation_gpu",
+        time_complexity="O(p²·n) on GPU GEMM",
+        memory_complexity="O(p²)",
+        recommended_output="distance matrix",
+        notes="PyTorch or CuPy; set device='gpu' on ts_dist(correlation).",
+    ),
+    "ts_dist_distributed": PerformanceContract(
+        method="ts_dist_distributed",
+        time_complexity="O(p²·cost(method)) / workers",
+        memory_complexity="O(p²) result; O(chunk·p) per worker",
+        recommended_output="distance matrix",
+        notes="executor='dask' or 'ray'; row blocks via ts_dist_part().",
+    ),
 }
 
 
