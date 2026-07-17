@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -98,7 +98,8 @@ def load_ucr_baselines(path: Path | None = None) -> dict[str, Any]:
     """Load recorded UCR benchmark baselines."""
     path = path or _BASELINES_PATH
     with path.open(encoding="utf-8") as f:
-        return json.load(f)
+        data: dict[str, Any] = json.load(f)
+    return data
 
 
 def validate_ucr_benchmark(
@@ -167,7 +168,10 @@ def run_ucr_benchmark(
     from ts2net.sklearn import NetworkFeatureExtractor, compare_feature_sets
     from ts2net.sklearn.benchmarks import statistical_baseline_features
 
-    X, y, meta = load_ucr(dataset, split=split, return_metadata=True)
+    X, y, meta = cast(
+        tuple[NDArray[np.float64], NDArray[Any], dict[str, Any]],
+        load_ucr(dataset, split=split, return_metadata=True),
+    )
     feature_sets: dict[str, NDArray[np.float64]] = {
         "network_hvg": NetworkFeatureExtractor(method="hvg").fit_transform(X),
     }

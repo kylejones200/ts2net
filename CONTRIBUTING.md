@@ -74,6 +74,20 @@ pytest --cov=ts2net --cov-report=html
 - **Mark slow tests** - Use `@pytest.mark.slow` for tests that take >1 second
 - **Mark benchmark tests** - Use `@pytest.mark.benchmark` for performance tests
 
+## Release process
+
+Maintainers follow this checklist for each release:
+
+1. **Version bump** — Update `ts2net/__init__.py` `__version__` and `[project.version]` in `pyproject.toml`.
+2. **Changelog** — Move `[Unreleased]` entries to a dated section in `CHANGELOG.md`.
+3. **Migration** — Document breaking changes in `MIGRATION.md`.
+4. **API tiers** — Update `ts2net/api_tiers.py` and `docs/API_STABILITY.md` if the public surface changed.
+5. **Tests** — `uv run pytest -q` and smoke benchmarks (`TS2NET_CI_SMOKE=1`).
+6. **Tag** — `git tag vX.Y.Z` and push; publish to PyPI via project release workflow.
+7. **Roadmap** — Mark completed items in `ROADMAP.md`.
+
+Experimental APIs may change in minor releases; stable APIs require deprecation warnings before removal (see `docs/API_STABILITY.md`).
+
 ### Commit Messages
 
 Follow conventional commit format:

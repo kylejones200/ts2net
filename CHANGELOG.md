@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Reports (`ts2net.reports`)**: `GraphReport`, `EdgeExplanation`, `NodeRoleSummary`, `DynamicChangeReport`, `DecisionPackage`, `build_graph_report()`, `build_decision_package()`.
+- **Domain recipes**: `examples/recipes/` — industrial, energy, finance, observability, healthcare (synthetic + real-data variants).
+- **Real-data recipes**: `energy_spain_real.py` (Spain meter panel + ItalyPowerDemand UCR), `finance_fred_real.py` (bundled FRED-style macro panel).
+- **DecisionPackage walkthrough**: `examples/decision_package_walkthrough.py`.
+- **Proof artifacts**: multi-dataset `benchmarks/when_graphs_win.py` narrative benchmark report.
+- **Bundled datasets**: `fred_macro_panel` in `ts2net.datasets.registry`, `ts2net/datasets/data/fred_panel.csv`.
+- **Adoption docs**: `docs/method_chooser.md`, `docs/comparisons.md`, `examples/GALLERY.md`, `docs/API_STABILITY.md`, `MIGRATION.md`, `docs/adoption.rst`.
+- **API tiers**: `ts2net.api_tiers` stable/experimental/deprecated lists; `tests/test_api_tiers.py`.
+- **Recipe notebooks**: `examples/recipes/*.ipynb` for all five domain workflows.
+
+### Changed
+- Roadmap refocused from method expansion to product proof (reports, recipes, adoption).
+- v1.0 target: freeze core API; see migration guide.
+- v0.3 typing CI extended to `causal/summary`, `dynamic/summary`, `datasets/ucr`.
+- `when_graphs_win.py` now compares all bundled UCR datasets with rollup narrative.
+
 ## [0.9.0] - 2026-06-14
 
 ### Added

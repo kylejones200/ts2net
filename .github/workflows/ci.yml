@@ -33,10 +33,10 @@ jobs:
           uv run python -c "import torch; print(f'PyTorch {torch.__version__} (CPU-only) installed')"
       - name: Lint (API hardening modules)
         run: |
-          uv run ruff check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
-          uv run ruff format --check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
+          uv run ruff check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py ts2net/api_tiers.py ts2net/reports/__init__.py ts2net/causal/summary.py ts2net/dynamic/summary.py ts2net/datasets/ucr.py
+          uv run ruff format --check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py ts2net/api_tiers.py ts2net/reports/__init__.py ts2net/causal/summary.py ts2net/dynamic/summary.py ts2net/datasets/ucr.py
       - name: Type check (public API)
-        run: uv run mypy ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py
+        run: uv run mypy ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py ts2net/api_tiers.py ts2net/reports/__init__.py ts2net/causal/summary.py ts2net/dynamic/summary.py ts2net/datasets/ucr.py
       - name: Benchmark smoke test
         env:
           TS2NET_SKIP_LARGE: "1"
@@ -50,6 +50,10 @@ jobs:
         env:
           TS2NET_CI_SMOKE: "1"
         run: uv run python benchmarks/run_ucr_benchmark.py
+      - name: When graphs win smoke
+        env:
+          TS2NET_CI_SMOKE: "1"
+        run: uv run python benchmarks/when_graphs_win.py
       - name: Run tests
         env:
           PYTHONHASHSEED: "0"

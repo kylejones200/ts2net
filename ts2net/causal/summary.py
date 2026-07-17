@@ -91,8 +91,14 @@ def format_causal_report(
         lines.append("Confounder adjustment: enabled")
     lines.append("")
 
-    emitters = result.metrics.get("top_emitters", [])
-    receivers = result.metrics.get("top_receivers", [])
+    raw_emitters = result.metrics.get("top_emitters")
+    raw_receivers = result.metrics.get("top_receivers")
+    emitters: list[int] = (
+        [int(i) for i in raw_emitters] if isinstance(raw_emitters, list) else []
+    )
+    receivers: list[int] = (
+        [int(i) for i in raw_receivers] if isinstance(raw_receivers, list) else []
+    )
     if emitters or receivers:
         lines.append(f"{h}Network roles")
         if emitters:

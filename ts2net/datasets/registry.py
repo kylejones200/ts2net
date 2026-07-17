@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SPAIN_CSV = _REPO_ROOT / "experiments/spain-multi-meter/spain_meter_network_results.csv"
+_FRED_CSV = Path(__file__).resolve().parent / "data" / "fred_panel.csv"
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,33 @@ def _synthetic_classification(
             "n_series": len(series),
             "n_points": n_points,
             "n_classes": 2,
+        },
+    }
+
+
+def _fred_macro_panel(**_: Any) -> dict[str, Any]:
+    """Bundled monthly macro panel (FRED-style indicators, offline)."""
+    if not _FRED_CSV.is_file():
+        raise FileNotFoundError(f"FRED panel not found at {_FRED_CSV}")
+
+    import pandas as pd
+
+    df = pd.read_csv(_FRED_CSV, parse_dates=["date"])
+    cols = ["sp500_ret", "vix", "unrate"]
+    X = df[cols].to_numpy(dtype=np.float64).T
+    return {
+        "X": X,
+        "y": None,
+        "metadata": {
+            "name": "fred_macro_panel",
+            "task": "macro_regime",
+            "citation": (
+                "Bundled FRED-style macro panel "
+                "(ts2net/datasets/data/fred_panel.csv)"
+            ),
+            "path": str(_FRED_CSV),
+            "series_names": cols,
+            "n_points": len(df),
         },
     }
 
@@ -212,6 +240,15 @@ REGISTRY: dict[str, DatasetSpec] = {
         citation="Synthetic smart-meter patterns",
         description="Two-class panel for ML benchmark smoke tests.",
         loader=_synthetic_classification,
+    ),
+    "fred_macro_panel": DatasetSpec(
+        name="fred_macro_panel",
+        task="macro_regime",
+        citation="Bundled FRED-style macro indicators",
+        description=(
+            "Monthly SP500 returns proxy, VIX, unemployment for finance recipes."
+        ),
+        loader=_fred_macro_panel,
     ),
     "spain_meters_summary": DatasetSpec(
         name="spain_meters_summary",

@@ -1,257 +1,276 @@
 # ts2net Roadmap
 
 Single source of truth for product direction, release milestones, and implementation status.
-Consolidates the former `horizons.md` and `ROADMAP.md` documents.
 
 ## Product Vision
 
-ts2net should become the standard Python toolkit for converting time series into network graphs.
+ts2net converts time series into network graphs — and makes the result **usable**.
 
-The goal is not only to build graphs from signals. The goal is to make temporal structure computable.
+The goal is not only to build graphs from signals. The goal is to make temporal structure **computable, explainable, and actionable**.
 
-A user should be able to start with sensor data, market data, logs, production data, patient data, climate data, or any multivariate time series, then produce network representations that support exploration, causality, anomaly detection, clustering, forecasting, graph machine learning, and decision support.
+A user should start with sensor data, market data, logs, production data, patient data, or any multivariate time series, then produce network representations that support exploration, causality, anomaly detection, forecasting, graph ML, and **decision support**.
 
-ts2net should sit at the intersection of time series analysis, network science, causal inference, and machine learning.
+ts2net sits at the intersection of time series analysis, network science, causal inference, and machine learning.
 
-## Strategic Direction
+## Phase Shift: Library Construction → Product Proof
 
-| Theme                   | Ambition                                                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Core graph construction | Support the major families of time-series-to-network methods with clean APIs and strong defaults.                  |
-| Causality               | Make causal network inference a first-class capability, not an add-on.                                             |
-| Scale                   | Handle large, streaming, and high-dimensional time series without forcing all data into memory.                    |
-| ML integration          | Make graph features and graph objects easy to use in sklearn, PyTorch Geometric, DGL, and downstream ML workflows. |
-| Interpretability        | Explain why edges exist, how they change, and what network structure means.                                        |
-| Benchmarks              | Prove value against baseline time series methods on public datasets.                                               |
-| Documentation           | Make ts2net easy for scientists, engineers, and data scientists to adopt.                                          |
+The method library is mostly done. v0.4 through v0.9 are complete. v0.3 API polish is complete for public modules under CI.
+
+**The next move is not “add more graph methods.”**
+
+The next move is **make ts2net useful enough that people can trust it, copy it, cite it, and apply it.**
+
+| Question | What “done” looks like |
+| -------- | ---------------------- |
+| Can someone use this in 15 minutes? | Quick start + recipes + method chooser |
+| Can they explain the result to a boss? | Graph reports, edge explanations, summaries |
+| Can they trust the evidence? | Benchmarks, confidence, assumptions surfaced |
+| Can they cite the method? | References, reproducible validation artifacts |
+| Can they apply it to a real domain? | Domain recipes, not toy examples |
+| Can it produce a decision? | Decision packages with evidence and next action |
+
+---
+
+## Active Roadmap (Post–v0.9)
+
+### v1.0 — Freeze the Core
+
+Stop method churn. Ship a stable release people can depend on.
+
+| Work | Outcome |
+| ---- | ------- |
+| API tiers | Define **stable**, **experimental**, and **deprecated** public APIs |
+| Builder patterns | Lock main builder patterns (`fit` / `transform` / configs / provenance) |
+| Release notes | Per-version changelog with breaking changes called out |
+| Migration guide | v0.x → v1.0 upgrade path for common workflows |
+| Governance | Contribution guide, release process, maintainer decision rules |
+| Finish v0.3 polish | Complete typing, docstrings, and CI gates on remaining public modules |
+
+**Status:** ✅ SHIPPED — API tiers, CHANGELOG, MIGRATION, governance, builder contract tests; typing CI on reports, api_tiers, causal/dynamic summaries, datasets/ucr
+
+### Reports — Make Graphs Explain Themselves
+
+This is the biggest product gap. Every graph should answer:
+
+- What made this edge exist?
+- What changed?
+- What is anomalous?
+- What can I do with this?
+
+| Component | Purpose | Status |
+| --------- | ------- | ------ |
+| `GraphReport` | Human-readable summary of topology, hubs, communities, instability | ✅ `build_graph_report()` |
+| `EdgeExplanation` | Method, parameters, lag, threshold, strength, confidence per edge | ✅ `explain_edge_from_graph()`, `explain_edges_from_causal()` |
+| `NodeRoleSummary` | Role, centrality context, drift, anomaly flags per node | ✅ via `node_roles()` in graph reports |
+| `DynamicChangeReport` | Regime breaks, edge birth/death, attribution across windows | ✅ `build_dynamic_change_report()` |
+| `DecisionPackage` | Evidence, confidence, assumptions, what changed, suggested next action | ✅ `build_decision_package()` |
+
+Build on existing: `CausalAnalysisResult.summary()`, `DynamicAnalysisResult.summary()`, `graph_summary()`, `FeatureMetadata`.
+
+**Horizon:** 7 (Interpretability and Reporting) · **Status:** ✅ SHIPPED (v1.0-rc)
+
+### Recipes — Turn Methods into Use Cases
+
+Horizon 8 becomes the main backlog. Not broad examples — **real recipes**.
+
+| Domain | Recipe focus | Status |
+| ------ | ------------ | ------ |
+| Industrial sensors | Drift, causal driver, failure precursor | ✅ `examples/recipes/industrial_sensors.py` |
+| Energy production | Analog wells, interference, abnormal decline, forecast risk | ✅ synthetic + `energy_spain_real.py` |
+| Finance | Contagion, regime change, unstable correlations | ✅ synthetic + `finance_fred_real.py` |
+| Observability | Service dependency, incident precursors, noisy subsystem | ✅ `examples/recipes/observability_services.py` |
+| Healthcare | Patient trajectory states, risk shifts | ✅ `examples/recipes/healthcare_trajectory.py` |
+
+Each recipe: data → graph → report → decision hook, runnable in &lt;15 minutes.
+
+**Horizon:** 8 (Domain Recipes) · **Status:** ✅ SHIPPED (synthetic + real-data variants)
+
+### Benchmarks — Prove When Graphs Beat Tables
+
+The package needs **proof artifacts**. Each benchmark should compare ts2net graph features against ordinary time-series features (statistical, tsfresh, matrix profile, etc.).
+
+The result should say **where graphs help, where they do not, and why**.
+
+| Work | Status |
+| ---- | ------ |
+| UCR classification harness | ✅ Bundled `.npz`, baselines, `run_ucr_benchmark.py` |
+| Literature validation fixtures | ✅ HVG, TE, RN, RQA, PCMCI — `run_validation.py` |
+| Feature-set comparison API | ✅ `compare_feature_sets()`, statistical baselines |
+| Published “when graphs win” reports | ✅ multi-dataset `when_graphs_win.py` → `benchmarks/results/` |
+| Threshold sensitivity + null models | ✅ `threshold_sensitivity_sweep()`, causal permutation/bootstrap |
+
+**Horizon:** 9 (validation infra + proof narratives) · **Status:** ✅ SHIPPED
+
+### Decision Workflows — Connect to Decision Systems
+
+ts2net should be part of **Decision Systems Institute**, not a standalone package.
+
+```
+time series → network → decision package
+```
+
+A decision package includes:
+
+- Evidence (edges, metrics, causal paths)
+- Confidence (p-values, bootstrap, stability)
+- Assumptions (method, window, threshold, lag)
+- What changed (regime, edge churn, role shift)
+- Next action (investigate, monitor, intervene, forecast)
+
+**Status:** ✅ SHIPPED — `build_decision_package()` ties graph, causal, and dynamic evidence
+
+### Adoption — Make It Easy to Steal the Pattern
+
+| Work | Status |
+| ---- | ------ |
+| Examples gallery | ✅ `examples/GALLERY.md` |
+| Five core notebooks | ✅ `examples/recipes/*.ipynb` (generated via `scripts/generate_recipe_notebooks.py`) + Spain case study |
+| “Choose your method” guide | ✅ `docs/method_chooser.md` |
+| Comparison pages | ✅ `docs/comparisons.md` |
+| PyData-style talks / downstream examples | PLANNED |
+
+**Horizon:** 10 (Package Maturity and Community) · **Status:** ✅ SHIPPED (docs + notebooks wired; PyData talks remain optional)
+
+---
 
 ## Release Milestones
 
-| Version | Theme                | Outcome                                                                                     | Status |
-| ------- | -------------------- | ------------------------------------------------------------------------------------------- | ------ |
-| 0.3     | API hardening        | Stable public API, complete typing, consistent docs, stronger tests.                        | **In progress** — `py.typed`, `NetworkBuilder` protocol, validation layer, CI gates |
-| 0.4     | Core graph expansion | Broader visibility, recurrence, transition, similarity, and dynamic graph builders.         | ✅ **Completed** — `ts2net.graphs` module |
-| 0.5     | Causal networks      | Full causal workflow with lag search, confidence, confounders, and causal summaries.        | ✅ **Completed** — `run_causal_analysis()` |
-| 0.6     | Scale                | Streaming, sparse, parallel, and optional GPU-backed builders.                              | **Completed** — GPU correlation, Dask/Ray executors, streaming stats |
-| 0.7     | ML integration       | sklearn, PyG, DGL, feature selection, and benchmark comparisons.                            | ✅ **Completed** — see `examples/ml_integration_example.py` |
-| 0.8     | Dynamic analytics    | Rolling graph sequences, regime detection, edge persistence, and network anomaly detection. | ✅ **Completed** — see `examples/dynamic_analytics_example.py` |
-| 0.9     | Research validation  | Public benchmarks, reproduced papers, statistical testing, and formal method references.    | **Completed** — bundled UCR, literature fixtures (HVG/TE/RN/RQA/PCMCI), baselines, Sphinx refs |
-| 1.0     | Stable release       | Stable API, mature docs, examples gallery, governance, and production-ready workflows.      | **Planned** |
+| Version | Theme | Outcome | Status |
+| ------- | ----- | ------- | ------ |
+| 0.3 | API hardening | Stable public API, typing, docs, tests | ✅ **Completed** |
+| 0.4 | Core graph expansion | Visibility, recurrence, transition, similarity builders | ✅ **Completed** |
+| 0.5 | Causal networks | Lag search, confidence, confounders, causal summaries | ✅ **Completed** |
+| 0.6 | Scale | Streaming, sparse, parallel, GPU, Dask/Ray | ✅ **Completed** |
+| 0.7 | ML integration | sklearn, PyG, DGL, feature selection, baselines | ✅ **Completed** |
+| 0.8 | Dynamic analytics | Rolling graphs, regimes, edge persistence, anomalies | ✅ **Completed** |
+| 0.9 | Research validation | UCR, literature fixtures, baselines, Sphinx refs | ✅ **Completed** |
+| **1.0** | **Stable release** | **Freeze core API, reports, recipes, proof benchmarks, adoption** | **Ready** — tag/push pending maintainer sign-off |
+
+### Remaining before v1.0 tag
+
+| Item | Status |
+| ---- | ------ |
+| Recipe notebooks (5 domains) | ✅ `examples/recipes/*.ipynb` |
+| v0.3 typing / docstring polish on public modules | ✅ CI gates on reports, summaries, ucr |
+| Real-data recipe variants (Spain, FRED) | ✅ `energy_spain_real.py`, `finance_fred_real.py` |
+| Extended benchmark narratives (multi-dataset) | ✅ `when_graphs_win.py` rollup across UCR panels |
+| DecisionPackage walkthrough | ✅ `examples/decision_package_walkthrough.py` |
+| PyPI release with `1.0.0` version bump | ⏳ pending tag/push (not done yet) |
+
+---
+
+## Strategic Direction
+
+| Theme | Ambition |
+| ----- | -------- |
+| Core graph construction | ✅ Major method families shipped — maintain, do not expand blindly |
+| Causality | First-class workflow — extend with reports and recipes |
+| Scale | Large, streaming, distributed — done for core paths |
+| ML integration | sklearn / PyG / DGL — done; focus on recipe outcomes |
+| **Interpretability** | **Reports shipped — extend edge cases and causal/dynamic tie-ins** |
+| **Benchmarks** | **Multi-dataset proof narratives shipped — maintain harness** |
+| **Documentation** | **Gallery, notebooks, real-data recipes shipped** |
+| **Decision support** | **Decision packages shipped — connect to external decision systems** |
 
 ## Guiding Principles
 
-| Principle                 | Meaning                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------- |
-| Make graphs useful        | Every graph builder should support downstream analysis, not only graph creation.      |
-| Keep simple things simple | Common workflows should need only one or two function calls.                          |
-| Preserve provenance       | Every graph should know how it was built.                                             |
-| Prefer composability      | Builders, metrics, features, and exporters should work together.                      |
-| Scale by design           | Large datasets should not require a rewrite.                                          |
-| Explain the result        | Users should understand what edges, nodes, and metrics mean.                          |
-| Respect uncertainty       | Causal and statistical claims should expose confidence, sensitivity, and assumptions. |
-| Stay interoperable        | ts2net should fit the PyData, sklearn, NetworkX, and graph ML ecosystems.             |
-
-## Development Principles
-
-- **Backward compatibility**: New parameters have sensible defaults.
-- **Consistent patterns**: Dataclass configs, factory dispatch, type safety.
-- **Documentation**: Each feature gets docstrings, examples, and config docs.
-- **Benchmarking**: Validate performance and memory on real datasets.
-- **Testing**: Comprehensive test coverage for all new features.
+| Principle | Meaning |
+| --------- | ------- |
+| Make graphs useful | Every builder supports downstream analysis, not only graph creation |
+| Keep simple things simple | Common workflows need one or two function calls |
+| Preserve provenance | Every graph knows how it was built |
+| Explain the result | Users understand edges, nodes, metrics, and confidence |
+| Respect uncertainty | Causal and statistical claims expose assumptions and sensitivity |
+| Stay interoperable | PyData, sklearn, NetworkX, graph ML ecosystems |
+| **Stop method churn** | **v1.0 freezes the core; new work is proof and product** |
 
 ## North Star
 
-ts2net should become the library people reach for when they believe the shape of a time series contains structure that a normal feature table cannot show.
+ts2net is the library people reach for when the **shape** of a time series contains structure a feature table cannot show — and they need to **trust, explain, and act on** that structure.
 
-The package should answer four questions:
+Four questions every release should strengthen:
 
 1. What network does this time series imply?
 2. How does that network change over time?
 3. What relationships appear causal, unstable, anomalous, or predictive?
-4. How can I use that structure in a real machine learning or decision workflow?
+4. **What should someone do next — and why?**
 
 ---
 
-## Horizon 1: Foundation Hardening
+## Completed Work (Reference)
 
-**Milestone: v0.3** · **Status: IN PROGRESS**
+<details>
+<summary>Horizon 1 — Foundation Hardening (v0.3 partial)</summary>
 
-| Area               | Work                                                                                                                                                | Status |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| API consistency    | Standardize fit, transform, fit_transform, and network builder patterns across all modules.                                                         | ✅ PARTIAL — `SklearnBuildMixin` on all four builders; `NetworkBuilder` protocol |
-| Type system        | Complete type hints across all public APIs. Add py.typed support. Add optional stub files where needed.                                             | ✅ PARTIAL — `py.typed`, `NetworkBuilder` protocol, mypy on core API modules |
-| Config model       | Move complex builder options into dataclass configs. Keep simple function APIs for common use.                                                      | PARTIAL — pipeline dataclass configs; all four builders expose `backend=` |
-| Docstrings         | Standardize purpose, inputs, outputs, assumptions, examples, and references for every public function.                                              | PARTIAL |
-| Test coverage      | Add coverage targets. Cover edge cases, empty inputs, constant series, missing values, short windows, unequal lengths, and high-dimensional inputs. | ✅ PARTIAL — `tests/test_api_hardening.py`, CI `--cov-fail-under=15` |
-| CI quality gates   | Enforce formatting, linting, type checks, unit tests, coverage, and benchmark smoke tests.                                                          | ✅ PARTIAL — ruff + mypy + coverage + `TS2NET_CI_SMOKE` benchmark in `.github/workflows/ci.yml` |
-| Error handling     | Replace silent failures and opaque errors with clear validation messages.                                                                           | ✅ PARTIAL — `ValidationError`, `NotBuiltError`, centralized `validate_series()` |
-| Versioned examples | Add runnable examples for every major graph construction family.                                                                                    | ✅ PARTIAL — see Examples table below |
-| Fuzz testing       | Random time series to catch numerical errors.                                                                                                       | ✅ PARTIAL — Hypothesis property tests in `tests/unit/test_properties.py` |
+| Area | Status |
+| ---- | ------ |
+| API consistency, typing, validation, CI | ✅ |
+| Docstrings, coverage targets | ✅ (public modules under CI) |
+| Fuzz testing (Hypothesis) | ✅ PARTIAL |
 
-## Horizon 2: Core Method Expansion
+</details>
 
-**Milestone: v0.4** · **Status: COMPLETED**
+<details>
+<summary>Horizon 2 — Core Method Expansion (v0.4 complete)</summary>
 
-| Method Family        | Capability                                                                                                                                                                      | Status |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Visibility graphs    | Natural visibility graphs, horizontal visibility graphs, directed visibility graphs, weighted visibility graphs, multiplex visibility graphs, and multiscale visibility graphs. | ✅ PARTIAL — HVG/NVG/directed/weighted/multiscale exist; `multiplex_visibility_graph()`; Rust/Numba degree-only stats via `visibility_degree_stats()` |
-| Recurrence networks  | Fixed-threshold recurrence, adaptive recurrence, k-nearest recurrence, cross-recurrence, joint recurrence, and recurrence quantification features.                              | ✅ COMPLETED — `recurrence_quantification()`, `adaptive_recurrence_network()`, `cross_recurrence_network()`; Rust degree-only stats via `recurrence_degree_stats()` |
-| Transition networks  | Symbolic transition networks, ordinal pattern networks, entropy-maximizing symbolization, SAX-based transitions, and Markov transition graphs.                                  | ✅ PARTIAL — `sax_symbolize()`, `entropy_max_symbolize()`, `sax_transition_network()`; stats-only path via `transition_degree_stats()` |
-| Dynamics (SINDy)     | Sparse identification of governing equations from multivariate trajectories; coupling networks from discovered Jacobians.                                                        | ✅ PARTIAL — `fit_sindy()` with Rust STLSQ backend (`ts2net_rs`) or PySINDy fallback (`pip install ts2net[sindy]`) |
-| Correlation networks | Pearson, Spearman, Kendall, distance correlation, partial correlation, rolling correlation, and thresholded correlation graphs.                                                 | ✅ COMPLETED — `correlation_network()`, `partial_correlation_network()`, `rolling_correlation_network()` |
-| Similarity networks  | DTW, soft-DTW, Euclidean, shape-based distance, matrix profile distance, and learned embedding distance.                                                                        | ✅ COMPLETED — `similarity_network()` with `soft_dtw`, `matrix_profile`, `dtw`, etc. |
-| Causal networks      | Transfer entropy, conditional transfer entropy, Granger causality, nonlinear Granger, PCMCI-style lagged discovery, PC, FCI, and time-aware constraint methods.                 | ✅ PARTIAL — TE/Granger workflow + PC/FCI (`ts2net.causal`); PCMCI-style via `time_lagged_causality_network()` |
-| Event networks       | Convert events, spikes, regime changes, and detected motifs into temporal graphs.                                                                                               | ✅ COMPLETED — `event_sequence_network()`, `event_sync_network()` |
-| Dynamic networks     | Build graph sequences from rolling windows. Track edge birth, edge death, node role changes, and regime shifts.                                                                 | ✅ COMPLETED — see Horizon 6 |
-| Multiplex networks   | Represent multiple edge types at once, such as correlation, causality, recurrence, and transition edges.                                                                        | ✅ COMPLETED — `MultiplexGraph`, `multiplex_graph()`, `multiplex_visibility_graph()` |
+Visibility, recurrence, transition, correlation, similarity, causal, event, dynamic, multiplex graphs; Rust SINDy backend. See git history and `ts2net.graphs` for full inventory.
 
-## Horizon 3: Causal Intelligence
+</details>
 
-**Milestone: v0.5** · **Status: COMPLETED** (advanced discovery algorithms deferred to v0.9)
+<details>
+<summary>Horizon 3 — Causal Intelligence (v0.5 complete)</summary>
 
-| Capability                      | Description                                                                                           | Status |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
-| Transfer entropy                | Pairwise and network-level information-theoretic causality.                                           | ✅ `transfer_entropy()`, `transfer_entropy_network()` — `tests/test_transfer_entropy.py` |
-| Conditional transfer entropy    | Multi-variable causal inference with confounders.                                                     | ✅ `conditional_transfer_entropy()` |
-| Granger causality               | Linear (statsmodels) and nonlinear (MLP permutation) pairwise tests and networks.                     | ✅ `granger_causality()`, `granger_causality_network()` — `tests/test_granger_causality.py` |
-| Lag selection                   | Automatic lag search with information criteria and permutation tests.                                 | ✅ `search_granger_lag()`, `search_te_lag()` |
-| Confounder handling             | Partial Granger and conditional TE in multi-variable settings.                                        | ✅ `partial_granger_causality()`, `conditional_te_network()` |
-| Causal edge confidence          | P-values, permutation scores, and bootstrapped confidence intervals.                                  | ✅ `te_permutation_test()`, `te_bootstrap_ci()` |
-| Causal network metrics          | Path-based and node-level causal summaries.                                                           | ✅ `causal_strength()`, `directionality_index()`, `causal_network_metrics()` |
-| Time-lagged analysis            | Transfer entropy or Granger causality across multiple lags.                                           | ✅ `time_lagged_causality_network()` |
-| End-to-end workflow             | Lag search, confidence, confounders, network construction, and reports.                               | ✅ `run_causal_analysis()`, `CausalAnalysisResult.summary()` — `examples/causal_workflow_example.py` |
-| Causal discovery adapters       | PC, FCI, PCMCI-like workflows, and constraint-based discovery for lagged time series.                 | ✅ PARTIAL — `pc_algorithm()`, `fci_algorithm()`, `pc_timeseries_network()`, `fci_timeseries_network()` — `tests/test_causal_discovery.py` |
-| Directional visibility analysis | Use directed visibility graphs to detect irreversibility and temporal asymmetry.                      | ✅ `directed_visibility_analysis()`, `visibility_irreversibility()` — `tests/test_visibility_causal.py` |
-| Intervention simulation         | Estimate downstream effects when a source node changes or disappears.                                 | PLANNED |
-| Network-based causal inference  | Leverage topology to infer causal relationships (e.g. directed visibility irreversibility).           | ✅ PARTIAL — visibility asymmetry panel and temporal asymmetry index |
+Transfer entropy, Granger, lag search, confounders, `run_causal_analysis()`, PC/FCI adapters. Intervention simulation remains PLANNED.
 
-**Use cases:** multi-sensor causal driver identification, information-flow analysis in complex systems, network-based causal discovery for time series.
+</details>
 
-## Horizon 4: Scale and Performance
+<details>
+<summary>Horizon 4 — Scale (v0.6 complete)</summary>
 
-**Milestone: v0.6** · **Status: COMPLETED**
+Rust/Numba/Python backends, streaming, Dask/Ray, GPU correlation, sparse graphs, approximate KNN, incremental HVG, benchmarks.
 
-| Area                   | Work                                                                                                              | Status |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
-| Compute backends       | Unified `rust` → `numba` → `python` selection for graph builders and distance kernels.                            | ✅ `resolve_compute_backend()`, `TS2NET_BACKEND`, `backend=` on all builder configs |
-| Out-of-core processing | Streaming builders for chunked arrays, Parquet files, Arrow tables, and memory-mapped data.                       | ✅ chunk iterators + `stream_chunk_stats()` fast paths for all four core builders |
-| Distributed execution  | Dask and Ray-compatible execution for pairwise distance, causal tests, and rolling-window graph construction.     | ✅ `ts_dist(..., executor=)` / `build_windows(..., executor=)`; `ts2net.scale.distributed` |
-| Parallelization        | Controls for embarrassingly parallel workloads.                                                                   | ✅ `n_jobs`, `cdist_dtw_chunked()`, `ts_dist_part()` row blocks |
-| GPU acceleration       | Optional CuPy and PyTorch backends for distance matrices, window operations, and selected network builders.       | ✅ `cdist_correlation()` (torch/cupy); `ts_dist(..., device='gpu')` |
-| Sparse graph support   | Build sparse adjacency structures directly. Avoid dense matrices where possible.                                  | ✅ `Graph.adjacency_matrix(format='sparse')`, `to_sparse_csr()`, `edges_to_csr()` |
-| Approximate algorithms | Approximate nearest neighbors, sketching, and pruning for high-dimensional graph construction.                    | ✅ `approximate_knn_network()`, `similarity_network(approximate=True)` |
-| Incremental updates    | Update graphs as new time points arrive without full rebuilds.                                                     | ✅ `IncrementalHVG.append()` |
-| Benchmark suite        | Track runtime, memory, graph size, and accuracy across method families and dataset sizes.                         | ✅ `benchmarks/run_benchmarks.py`; CI smoke |
-| Performance contracts  | Publish expected scaling behavior for each builder.                                                                 | ✅ incl. `cdist_correlation_gpu`, `ts_dist_distributed` |
-| Rust fast paths        | Degree-only visibility stats and rectangular DTW blocks without full edge materialisation.                          | ✅ visibility + recurrence + transition stats; `cdist_dtw_chunked()` |
+</details>
 
-## Horizon 5: Machine Learning and Graph ML
+<details>
+<summary>Horizon 5 — ML Integration (v0.7 complete)</summary>
 
-**Milestone: v0.7** · **Status: COMPLETED**
+sklearn extractors, PyG/DGL converters, baseline comparisons, feature metadata.
 
-| Integration          | Capability                                                                                                            | Status |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------ |
-| sklearn              | Network features, rolling features, and feature selection helpers.                                                    | ✅ `NetworkFeatureExtractor`, `RollingNetworkFeatureExtractor`, `NetworkFeatureSelector` — `examples/network_features_sklearn.py` |
-| PyTorch Geometric    | Converters from ts2net graph outputs to PyG Data objects.                                                             | ✅ `to_pyg_data()`, `panel_to_pyg_list()` (`[pyg]` extra) |
-| DGL                  | DGL graph adapters.                                                                                                   | ✅ `to_dgl_graph()`, `panel_to_dgl_list()` (`[dgl]` extra) |
-| NetworkX             | Keep NetworkX compatibility without making it the only graph representation.                                         | ✅ existing |
-| numpy and scipy      | Sparse matrices, dense arrays, and feature matrices as first-class outputs.                                           | ✅ `features_to_dataframe()` |
-| pandas and Polars    | Tabular time series inputs with entity, timestamp, variable, and value columns.                                       | PARTIAL — `from_pandas()`, `from_polars()`, pipeline I/O |
-| Feature stores       | Export graph features with stable names and metadata.                                                                 | ✅ `FeatureMetadata`, `features_to_dataframe()` |
-| Baseline comparisons | Compare network features against tsfresh, catch22, sktime, matrix profile, and statistical features.                  | ✅ PARTIAL — `statistical_baseline_features()`, optional `tsfresh_baseline_features()`, `compare_feature_sets()` |
+</details>
 
-## Horizon 6: Dynamic Network Analytics
+<details>
+<summary>Horizon 6 — Dynamic Analytics (v0.8 complete)</summary>
 
-**Milestone: v0.8** · **Status: COMPLETED**
+`RollingGraphSequence`, regime detection, edge persistence, anomaly scores. See `examples/dynamic_analytics_example.py`.
 
-| Capability                | Description                                                                                            | Status |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
-| Rolling graph builder     | Graph sequences over sliding, expanding, or event-based windows.                                       | ✅ `RollingGraphSequence`, `build_windows()` |
-| Regime detection          | Structural breaks from graph metrics, edge churn, community changes, and centrality shifts.              | ✅ `detect_regime_changes()`, `run_dynamic_analysis()` |
-| Temporal communities      | Track communities across graph windows.                                                                  | ✅ `track_communities()` |
-| Node role evolution       | Identify nodes that become hubs, bridges, sinks, sources, or isolates over time.                       | ✅ `node_role_evolution()` |
-| Edge persistence          | Measure which relationships persist, fade, reverse, or spike.                                          | ✅ `edge_persistence()`, `graph_churn()`, `edge_birth_death()` |
-| Network anomaly detection | Detect abnormal graphs, nodes, edges, and transitions.                                                 | ✅ `window_anomaly_scores()`, `edge_transition_anomalies()` |
-| Change attribution        | Explain which metrics, edges, or windows caused a network-level change.                                | ✅ PARTIAL — metric shift attribution at regime breaks |
+</details>
 
-See `examples/dynamic_analytics_example.py`.
+<details>
+<summary>Horizon 9 — Research Validation (v0.9 complete)</summary>
 
-## Horizon 7: Interpretability and Reporting
+Bundled UCR, literature fixtures, `run_validation.py`, `run_ucr_benchmark.py`, Sphinx method refs, threshold sensitivity.
 
-**Status: PLANNED**
-
-| Feature                | Description                                                                                                         | Status |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- | ------ |
-| Edge explanations      | Explain why an edge exists, which method produced it, which lag mattered, and how strong the evidence was.          | PARTIAL — causal reports cover lag and p-value |
-| Node summaries         | Describe each node's role in the network.                                                                           | PARTIAL — `node_roles()`, causal emitter/receiver metrics |
-| Graph summaries        | Summarize topology, density, hubs, communities, feedback loops, and instability.                                    | PARTIAL — `graph_summary()`, causal network metrics |
-| Method provenance      | Attach builder name, parameters, data window, lag settings, threshold rules, and random seed to every graph.      | PARTIAL — `FeatureMetadata`, builder stats |
-| Confidence annotations | Statistical confidence, bootstrap stability, and sensitivity to threshold choices.                                  | PARTIAL — causal permutation/bootstrap; TE confidence |
-| Report export          | Export markdown, JSON, HTML, and notebook-friendly summaries.                                                       | PARTIAL — `CausalAnalysisResult.to_markdown()`, `DynamicAnalysisResult.summary()` |
-| Visualization helpers  | Plotting for adjacency matrices, rolling metrics, causal networks, and dynamic graph changes.                       | PARTIAL — `ts2net.viz` gallery plots |
-
-## Horizon 8: Domain Recipes
-
-**Status: PLANNED**
-
-| Domain                | Example Workflow                                                                               | Status |
-| --------------------- | ---------------------------------------------------------------------------------------------- | ------ |
-| Industrial sensors    | Detect causal drivers, sensor drift, control-loop instability, and equipment state changes.    | ✅ PARTIAL — `run_causal_analysis()`, `run_dynamic_analysis()`, `directed_visibility_analysis()` |
-| Energy production     | Convert well production histories into similarity graphs, anomaly graphs, and analog networks. | PARTIAL — Spain meter case study, FRED example |
-| Finance               | Build correlation, causality, and contagion networks from asset prices or returns.             | PARTIAL — `examples/example_fred_data.py` |
-| Climate               | Analyze teleconnection networks and dynamic climate relationships.                             | PLANNED |
-| Healthcare            | Build patient trajectory graphs, physiological signal networks, and event transition graphs.   | PLANNED |
-| Web and observability | Convert logs, traces, and service metrics into dependency and anomaly networks.                | PLANNED |
-| Neuroscience          | Build connectivity networks from EEG, fMRI, or spike train data.                               | PLANNED |
-| Mobility              | Convert trajectories and flow time series into spatial-temporal networks.                      | PLANNED |
-
-## Horizon 9: Research-Grade Validation
-
-**Milestone: v0.9** · **Status: COMPLETED**
-
-| Area                     | Work                                                                                                            | Status |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------ |
-| Reference datasets       | Curated public datasets for classification, clustering, causality, anomaly detection, and regime detection.   | ✅ `ts2net.datasets` registry; bundled UCR `.npz`; `synthetic_anomaly`, `synthetic_regime` |
-| Method validation        | Reproduce known results from visibility graph, recurrence network, and transfer entropy papers.                 | ✅ `literature.json` — HVG, TE, RN, RQA, PCMCI, Spain + `run_validation.py` |
-| Benchmark papers         | Comparative benchmarks showing when network features outperform standard time series features.                    | ✅ `compare_feature_sets()`; `run_benchmarks.py`; `run_ucr_benchmark.py` + recorded baselines |
-| Statistical tests        | Permutation tests, bootstrap tests, surrogate data tests, and threshold sensitivity analysis.                   | ✅ `threshold_sensitivity_sweep()`; causal TE permutation/bootstrap; `null_models` |
-| Reproducibility          | Version benchmark datasets, parameters, random seeds, and output artifacts.                                     | ✅ `validation_manifest.json`, `ucr_benchmark.json`, `ucr_baselines.json` |
-| Documentation references | Cite source papers for each method and explain assumptions.                                                     | ✅ `docs/references.rst`, `docs/methods/*`, `method_references.md` |
-| Advanced causal discovery| PC algorithm, FCI, and PCMCI-style methods adapted for time series networks.                                    | ✅ PC/FCI + PCMCI lagged TE fixture — `causal_discovery_example.py` |
-| Directional asymmetry    | Irreversibility and time-arrow statistics from directed visibility graphs.                                      | ✅ `visibility_irreversibility()` — `test_visibility_causal.py` |
-
-## Horizon 10: Package Maturity and Community
-
-**Milestone: v1.0** · **Status: PLANNED**
-
-| Area               | Work                                                                                            | Status |
-| ------------------ | ----------------------------------------------------------------------------------------------- | ------ |
-| Governance         | Code of conduct, contribution guide, maintainer guide, release process, and decision rules.     | PLANNED |
-| Issue templates    | Templates for bugs, features, methods, benchmarks, and documentation.                           | PLANNED |
-| Examples gallery   | Gallery with copy-paste examples and expected outputs.                                            | PARTIAL — `examples/viz_gallery.py`, Binder notebook |
-| Tutorials          | Quick starts for Colab, Binder, local Python, and notebook workflows.                           | PARTIAL — `binder/`, `examples/spain_meter_case_study.ipynb` |
-| API stability      | Define experimental, stable, and deprecated API areas.                                          | PLANNED |
-| Community adoption | PyData-style talks, comparison guides, and curated downstream examples.                           | PLANNED |
-| Comparison guides  | Guides to alternative time-series and network libraries.                                        | PLANNED |
+</details>
 
 ---
 
 ## Runnable Examples
 
-| Example | Milestone / area |
-| ------- | ---------------- |
+| Example | Area |
+| ------- | ---- |
 | `examples/quick_start.py` | Core builders |
 | `examples/unified_graphs_example.py` | Core graph families |
-| `examples/viz_gallery.py` | Visualization |
-| `examples/network_features_sklearn.py` | v0.7 sklearn |
-| `examples/ml_integration_example.py` | v0.7 PyG/DGL/baselines |
-| `examples/dynamic_analytics_example.py` | v0.8 dynamic analytics |
-| `examples/causal_workflow_example.py` | v0.5 causal workflow |
-| `examples/causal_discovery_example.py` | v0.9 PC/FCI discovery |
-| `examples/validation_example.py` | v0.9 research validation |
-| `benchmarks/run_validation.py` | v0.9 literature validation CLI |
-| `benchmarks/run_ucr_benchmark.py` | v0.9 UCR classification benchmark |
-| `examples/scale_streaming_example.py` | v0.6 streaming scale |
-| `examples/sindy_example.py` | PySINDy dynamics discovery |
-| `examples/polars_spain_windows.py` | Large-scale meter data |
-| `examples/spain_meter_case_study.ipynb` | Domain recipe (energy) |
+| `examples/causal_workflow_example.py` | Causal workflow |
+| `examples/dynamic_analytics_example.py` | Dynamic analytics |
+| `examples/ml_integration_example.py` | PyG/DGL/baselines |
+| `examples/validation_example.py` | Research validation |
+| `examples/sindy_example.py` | Dynamics discovery |
+| `examples/scale_streaming_example.py` | Streaming scale |
+| `examples/spain_meter_case_study.ipynb` | Energy domain (recipe seed) |
+| `benchmarks/run_validation.py` | Literature validation CLI |
+| `benchmarks/run_ucr_benchmark.py` | UCR benchmark CLI |
+| `examples/recipes/*_real.py` | Real-data domain recipes (Spain, FRED) |
+| `examples/decision_package_walkthrough.py` | DecisionPackage demo |
+| `benchmarks/when_graphs_win.py` | Multi-dataset “when graphs win” report |
+
+**Next examples to add:** intervention simulation demo (Horizon 3 backlog); PyData talk notebooks (optional).

@@ -3,6 +3,8 @@ Examples
 
 The `examples/` directory contains comprehensive examples demonstrating ts2net functionality.
 
+See also `GALLERY.md <https://github.com/kylejones200/ts2net/blob/main/examples/GALLERY.md>`_ for a curated index.
+
 Notebooks
 ---------
 
@@ -14,6 +16,30 @@ Interactive Jupyter notebooks are available for hands-on learning:
    ../examples/quick_start.ipynb
    ../examples/unified_graphs_example.ipynb
    ../examples/temporal_cnn_example.ipynb
+   ../examples/spain_meter_case_study.ipynb
+   ../examples/recipes/industrial_sensors.ipynb
+   ../examples/recipes/energy_production.ipynb
+   ../examples/recipes/finance_regime.ipynb
+   ../examples/recipes/observability_services.ipynb
+   ../examples/recipes/healthcare_trajectory.ipynb
+
+Domain recipes
+--------------
+
+End-to-end workflows (**data → graph → report → decision**). Each script runs
+in under a minute on synthetic data:
+
+.. code-block:: bash
+
+   uv run python examples/recipes/industrial_sensors.py
+
+| Recipe | Domain |
+| ------ | ------ |
+| ``industrial_sensors.py`` | Drift, causal driver, failure precursor |
+| ``energy_production.py`` | Well analogs, abnormal decline |
+| ``finance_regime.py`` | Regime change, rolling correlation |
+| ``observability_services.py`` | Service dependency, incident precursors |
+| ``healthcare_trajectory.py`` | Patient trajectory risk shift |
 
 Scripts
 -------

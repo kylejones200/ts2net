@@ -52,6 +52,7 @@ Contents:
 
    usage
    examples
+   adoption
    references
 
 .. toctree::
