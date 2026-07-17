@@ -16,14 +16,16 @@ try:
     import torch.nn as nn
     import torch.optim as optim
     from torch.utils.data import Dataset, DataLoader
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None
-    nn = None
-    optim = None
-    Dataset = None
-    DataLoader = None
+except ImportError as _e:
+    # This module defines nn.Module subclasses at import time, so it cannot
+    # load without torch. Raise ImportError (not the AttributeError the old
+    # `nn = None` fallback produced) so the optional-import guard in
+    # ts2net/__init__ actually catches it.
+    raise ImportError(
+        "ts2net.inference.neural_inference requires torch — install ts2net[gpu] or ts2net[ml]"
+    ) from _e
+
+TORCH_AVAILABLE = True
 
 
 class DynamicsModel:

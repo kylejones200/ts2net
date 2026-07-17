@@ -132,6 +132,15 @@ ts2net = "ts2net._cli_entry:main"
 [tool.maturin]
 # Path to the Cargo.toml of the Rust project (relative to the project root)
 manifest-path = "./ts2net_rs/Cargo.toml"
+# Mixed Rust/Python project: without python-source + a module-name rooted in
+# the python package, maturin ships ONLY the compiled ts2net_rs module — the
+# 0.8.0 wheel had no `ts2net` package at all (and a CLI entry point targeting
+# the missing ts2net._cli_entry).
+python-source = "."
+# The extension lives inside the package (ts2net/ts2net_rs.*.so);
+# ts2net/__init__ aliases it into sys.modules as top-level `ts2net_rs` for
+# backward compatibility with existing imports.
+module-name = "ts2net.ts2net_rs"
 # Build in release mode for better performance
 release = true
 # Strip the binary to reduce size
@@ -163,6 +172,11 @@ files = [
     "ts2net/protocols.py",
     "ts2net/_validation.py",
     "ts2net/_builder_api.py",
+    "ts2net/api_tiers.py",
+    "ts2net/reports/__init__.py",
+    "ts2net/causal/summary.py",
+    "ts2net/dynamic/summary.py",
+    "ts2net/datasets/ucr.py",
 ]
 
 # Pytest configuration
@@ -183,6 +197,7 @@ extend-ignore = []
 [tool.ruff.lint.per-file-ignores]
 "ts2net/sklearn/*.py" = ["N802", "N803", "N806"]  # sklearn API uses X, y
 "ts2net/dynamic/*.py" = ["N803", "N806"]  # networkx convention: G for graphs
+"ts2net/reports/__init__.py" = ["N803", "N806"]  # networkx convention: G for graphs
 "ts2net/scale/approximate.py" = ["N803"]
 "tests/test_dynamic_analytics.py" = ["N806"]
 "tests/test_scale.py" = ["N806"]

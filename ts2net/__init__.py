@@ -4,6 +4,19 @@ ts2net: Time Series to Networks
 Clean API inspired by ts2vg, extended for multiple network methods.
 """
 
+# The compiled Rust extension ships inside the package (ts2net.ts2net_rs, see
+# [tool.maturin] module-name). Alias it as top-level `ts2net_rs` BEFORE any
+# submodule imports so existing `import ts2net_rs` sites keep working. In a
+# source checkout without the built extension, fall back to whatever
+# top-level ts2net_rs is installed (or none — backends degrade).
+import sys as _sys
+
+try:
+    from . import ts2net_rs as _ts2net_rs
+    _sys.modules.setdefault("ts2net_rs", _ts2net_rs)
+except ImportError:
+    pass
+
 from .core.graph import Graph
 from .api import HVG, NVG, RecurrenceNetwork, TransitionNetwork, build_network
 from .core import graph_summary
@@ -316,4 +329,32 @@ __all__.extend([
     'approximate_knn_panel',
     'has_pynndescent',
     'should_use_approximate',
+])
+
+# Reports and decision packages (v1.0)
+from .reports import (
+    GraphReport,
+    EdgeExplanation,
+    NodeRoleSummary,
+    DynamicChangeReport,
+    DecisionPackage,
+    Provenance,
+    build_graph_report,
+    build_dynamic_change_report,
+    build_decision_package,
+    explain_edge_from_graph,
+    explain_edges_from_causal,
+)
+__all__.extend([
+    'GraphReport',
+    'EdgeExplanation',
+    'NodeRoleSummary',
+    'DynamicChangeReport',
+    'DecisionPackage',
+    'Provenance',
+    'build_graph_report',
+    'build_dynamic_change_report',
+    'build_decision_package',
+    'explain_edge_from_graph',
+    'explain_edges_from_causal',
 ])
