@@ -41,7 +41,24 @@ CANONICAL = [n for n in NAMES if n not in ALIASES]
 
 
 def zscore(x: np.ndarray) -> np.ndarray:
-    return (x - x.mean(axis=0)) / (x.std(axis=0, ddof=1) + 1e-12)
+    """The documented standardization rule, implemented independently here.
+
+    Mirrors ts2net.networks._standardize.standardize without importing it, so
+    the reconstruction check below compares two implementations rather than one
+    implementation against itself: degenerate columns become exactly zero, and
+    every other column is centred and scaled to unit variance.
+    """
+    x = np.asarray(x, float)
+    out = np.zeros_like(x)
+    if x.shape[0] < 2:
+        return out
+    spread = x.std(axis=0, ddof=1)
+    scale = np.maximum(np.abs(x.mean(axis=0)), np.abs(x).max(axis=0))
+    keep = spread > np.maximum(1e-12, 1e-12 * scale)
+    if keep.any():
+        sub = x[:, keep]
+        out[:, keep] = (sub - sub.mean(axis=0)) / sub.std(axis=0, ddof=1)
+    return out
 
 
 def raw_feature_matrix(graph: nx.Graph):

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Role features are deterministic again; standardization happens exactly once.**
+  `_role_features_basic` standardized its seven columns and
+  `role_features_extended` standardized the concatenation again. Each pass
+  divided by `std + 1e-12`. For a mathematically constant column the raw spread
+  is floating-point residue near 1e-15: the first pass's epsilon dominated it,
+  the second did not, and the residue was renormalized to unit variance. Since
+  `eigenvector_centrality_numpy` starts ARPACK from a random vector, identical
+  graphs produced feature matrices differing by up to 3.48. Standardization now
+  has a single owner, `ts2net.networks._standardize.standardize`, and a
+  numerically degenerate column standardizes to exactly `0.0` under a
+  scale-aware criterion rather than being rescaled. Repeated-call spread on
+  `cycle_20` and `complete_12` goes from 3.26/3.48 to exactly 0.0, and 20/20
+  corpus graphs are now reproducible. Node distances are unchanged on every
+  graph where the old pipeline was deterministic, and cluster assignments are
+  identical wherever nodes are structurally distinguishable.
+  `ts2net.networks.communities.node_roles` gets the same degeneracy handling,
+  since it shares the feature builder. **No feature column was removed, no
+  ordering changed, no clustering default altered.**
+
 ### Added
 - **Audit: `role_features_extended` feature matrix** (`docs/audits/role_features_audit.md`,
   reproduce with `scripts/audit_role_features.py`). Characterization only; no

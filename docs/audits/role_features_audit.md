@@ -1,7 +1,9 @@
 # Audit: the `role_features_extended` feature matrix
 
-**Status:** characterization complete. **No production code was changed.**
-Recommendations at the end are proposals, not applied edits.
+**Status:** characterization complete. The **correctness** defect in section 4
+has since been fixed (see section 4a). The **schema** findings in sections 2, 5
+and 8 are unchanged and remain proposals: no column has been removed, no
+ordering changed, and no clustering default touched.
 
 **Scope:** `ts2net.networks.roles.role_features_extended`, the twelve-column
 node-feature matrix consumed by `node_roles_kmeans` and `node_roles_spectral`.
@@ -115,6 +117,72 @@ On karate the spread is 1.1e-14.
 
 This is independent of the aliasing and, unlike it, produces results that are
 not reproducible at all.
+
+## 4a. Correctness fix applied
+
+Section 4's defect is fixed. The schema findings are untouched.
+
+**Ownership.** Standardization occurred in two places:
+`communities._role_features_basic` (over its seven columns) and
+`roles.role_features_extended` (over the concatenation). Both are removed in
+favour of a single owner, `ts2net.networks._standardize.standardize`. Feature
+builders now return raw columns; whoever assembles the final matrix
+standardizes it once. `communities.node_roles`, the other consumer of
+`_role_features_basic`, standardizes its own matrix through the same function.
+
+**Degeneracy criterion.** `std == 0` is not used, because a mathematically
+constant graph feature computed in floating point has a spread near 1e-15. A
+column is degenerate when
+
+```
+std <= max(DEGENERACY_ATOL, DEGENERACY_RTOL * scale)
+scale = max(|mean|, max|x|)
+```
+
+with both tolerances at `1e-12`. The relative term catches a constant at any
+magnitude; the absolute floor catches residue straddling zero, where there is
+no magnitude for a relative test to work against. A degenerate column
+standardizes to **exactly 0.0**. Non-degenerate columns are divided directly:
+the tolerance has already established the divisor is safe, so no `+ epsilon`
+remains. An epsilon should protect arithmetic, not manufacture structure.
+
+**Results after the fix.**
+
+| Measure | Before | After |
+|---|---|---|
+| Repeated-call spread, `cycle_20` | 3.26 | **0.0** |
+| Repeated-call spread, `complete_12` | 3.48 | **0.0** |
+| Repeated-call spread, `karate` | 1.1e-14 | 7.8e-15 |
+| Graphs reproducible to 1e-9 | 18/20 | **20/20** |
+| Columns amplified from constant to unit variance | 2 | **0** |
+| Reconstruction check (independent implementation) | n/a | 2.2e-11 |
+
+Degenerate columns now standardize to exact zero, matching the section 3 table:
+12 of 12 zero on cycle and complete; 6 of 12 on path, star and complete
+bipartite; 2 of 12 (`core`, `core_score`) on Barabasi-Albert and
+Watts-Strogatz.
+
+**Impact on results.** On the 18 graphs where the old pipeline was
+deterministic, node distances are **unchanged**: Pearson r between old and new
+distance vectors is 1.0000 and the relative L2 shift is 0.0000 on every one.
+The matrices differ only at the 1e-11 level, which is the removal of the
+`+ 1e-12` epsilon. Only `ev` was ever amplified, because it alone is computed
+by an iterative solver; integer-valued columns such as `tri` and `core` are
+*exactly* constant, so `std` was exactly 0 and the old code already produced
+exactly 0.
+
+Cluster assignments are identical (ARI 1.000) on every graph whose nodes are
+structurally distinguishable, including karate, les misérables and all nine
+random graphs. They differ only where the clustering problem is ill-posed to
+begin with: `wheel_20` has 19 of its 20 nodes sharing an identical feature row,
+`star_19` 19 of 20, `complete_bipartite(5,7)` 12 of 12. Partitioning identical
+points into four clusters is decided by floating-point tie-breaking, and a
+1e-11 perturbation flips it. That is not a behavioural regression. On
+`cycle_20` and `complete_12` the old output was not reproducible at all, so
+"changed" is not well defined there; the new output is a stable all-zero matrix.
+
+The alias identities in section 2 all still hold, and the rank table in section
+3 is unchanged.
 
 ## 5. Measured effect of the duplicate weighting
 

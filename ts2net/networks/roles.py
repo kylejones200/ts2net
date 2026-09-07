@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 from typing import Dict, Tuple, Literal, List, Optional
 
+from ._standardize import standardize
 from .communities import _role_features_basic
 
 # The Rust fast path. Only the extension being absent is a reason to fall back
@@ -108,7 +109,9 @@ def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
     ego_density = _egonet_density(H, nodes).reshape(-1, 1)
     core_score = _core_periphery_scores(H, nodes).reshape(-1, 1)
     X = np.hstack([Xbasic, tri_wedge, ego_edges, ego_density, core_score])
-    X = (X - X.mean(axis=0)) / (X.std(axis=0, ddof=1) + 1e-12)
+    # Single standardization boundary for the whole matrix; the columns above
+    # are raw. See ts2net.networks._standardize.
+    X = standardize(X)
     return nodes, X
 
 

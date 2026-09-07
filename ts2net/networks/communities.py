@@ -1,7 +1,9 @@
 from __future__ import annotations
 import numpy as np
 import networkx as nx
-from typing import Dict, Tuple, Literal, Optional
+from typing import Dict, Literal, Optional, Tuple
+
+from ._standardize import standardize
 
 try:
     import igraph as ig
@@ -78,7 +80,18 @@ def detect_communities(
     return handler()
 
 
-def _role_features_basic(G: nx.Graph) -> np.ndarray:
+def _role_features_basic(G: nx.Graph) -> tuple[list, np.ndarray]:
+    """Seven raw structural features per node, in node order.
+
+    Returns ``(nodes, X)`` with X **unstandardized**. Standardization is owned
+    by :mod:`ts2net.networks._standardize`; callers apply it exactly once to
+    the final matrix they assemble. Returning raw columns is what allows
+    `role_features_extended` to concatenate these with its own features and
+    standardize the result a single time.
+
+    Columns: degree, clustering, PageRank, eigenvector centrality, k-core
+    number, betweenness, closeness.
+    """
     H = G.to_undirected()
     nodes = list(H.nodes())
     deg = np.array([H.degree(n) for n in nodes], float)
@@ -94,7 +107,6 @@ def _role_features_basic(G: nx.Graph) -> np.ndarray:
     btw = np.array(list(nx.betweenness_centrality(H, normalized=True).values()), float)
     clo = np.array(list(nx.closeness_centrality(H).values()), float)
     X = np.vstack([deg, cc, pr, ev, core, btw, clo]).T
-    X = (X - X.mean(axis=0)) / (X.std(axis=0, ddof=1) + 1e-12)
     return nodes, X
 
 
@@ -110,6 +122,7 @@ def node_roles(
     if features != "basic":
         raise ValueError("Only 'basic' features supported.")
     nodes, X = _role_features_basic(G)
+    X = standardize(X)
     km = KMeans(n_clusters=int(n_roles), n_init=n_init, random_state=seed)
     lab = km.fit_predict(X)
     assign = {n: int(c) for n, c in zip(nodes, lab)}

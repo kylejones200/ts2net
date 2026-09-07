@@ -10,10 +10,12 @@ Two families of fact are pinned here:
 1. Three of the twelve columns are exact aliases of three others. Each
    equivalence is an algebraic identity, verified on hand-built graphs that
    isolate structural regimes and on randomized graphs.
-2. Standardization is applied twice -- once inside `_role_features_basic` and
-   again over the concatenation -- which renormalizes a numerically constant
-   column to unit variance. That is the mechanism behind the observed
-   non-determinism on vertex-transitive graphs.
+2. Standardization *was* applied twice -- once inside `_role_features_basic`
+   and again over the concatenation -- which renormalized a numerically
+   constant column to unit variance and made the output non-deterministic on
+   vertex-transitive graphs. That defect is FIXED; see
+   tests/test_feature_standardization.py for the current contract. The tests
+   below retain the arithmetic that demonstrates why the fix was necessary.
 """
 
 from __future__ import annotations
@@ -208,18 +210,20 @@ class TestFeatureMatrixRank:
         np.testing.assert_allclose(feats[:, 11], 0.0, atol=1e-9)
 
 
-class TestDoubleStandardizationAmplifiesConstantColumns:
-    """Current behaviour: a numerically constant column becomes unit variance.
+class TestWhyStandardizationHappensExactlyOnce:
+    """The arithmetic that made double standardization a defect.
 
-    `_role_features_basic` standardizes its seven columns and
-    `role_features_extended` standardizes the concatenation again. The `+ 1e-12`
-    guard in the first pass keeps a near-constant column small but non-zero; the
-    second pass sees a standard deviation far above the guard and rescales that
+    Historical: `_role_features_basic` standardized its seven columns and
+    `role_features_extended` standardized the concatenation again. The `+ 1e-12`
+    guard in the first pass kept a near-constant column small but non-zero; the
+    second pass saw a standard deviation far above the guard and rescaled that
     floating-point residue to unit variance.
 
-    These assert the mechanism, which is deterministic. The visible symptom --
-    `role_features_extended` returning different matrices for the same graph --
-    depends on ARPACK's random start vector and is not asserted here.
+    The pipeline now standardizes once, through
+    `ts2net.networks._standardize.standardize`, which maps a degenerate column
+    to exactly zero. These tests keep the old arithmetic in view so the reason
+    for the single-boundary design stays legible; they operate on synthetic
+    vectors with a local helper and do not exercise production code.
     """
 
     @staticmethod
