@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`ts2net.api` return annotations now resolve.** The four `adjacency_matrix`
+  methods were annotated `"Union[csr_matrix, coo_matrix, ...]"` with neither
+  name imported, so `typing.get_type_hints()` raised `NameError` and no static
+  checker could resolve them. `scipy.sparse` is already imported during
+  `import ts2net`, so the import is free.
+
 ### Added
 - **Lint-debt baseline (`make lint`, `make lint-debt`, `make lint-baseline-update`).**
   `ruff check .` reported 6261 inherited findings, so `make check` could not
@@ -16,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   total may never rise. `make lint-debt` keeps the full outstanding total in
   view. Investigation found nothing incorrectly in scope -- no generated,
   vendored, untracked or build-artifact files -- so no paths were excluded.
+  The first cleanup slice took `ts2net/api.py` from 182 findings to 56 and the
+  committed baseline from 6261 to 6135.
 
 ### Fixed
 - **`ts2net.networks.roles` works for the first time.** The module imported

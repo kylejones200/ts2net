@@ -14,22 +14,26 @@ All builders share the same output methods after build():
   .as_networkx()        nx.Graph (optional; large graphs refused unless force=True)
 """
 
+
+import networkx as nx
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Tuple, Union, Literal, List
-import networkx as nx
+from scipy.sparse import coo_matrix, csr_matrix
+
+from ._builder_api import SklearnBuildMixin
+from ._validation import (
+    _validate_and_clean_series,
+    validate_output_mode,
+    validate_series,
+)
 from .core.graph import Graph
-from .core.visibility.weights import compute_weight, WeightMode
-from ._validation import validate_series, validate_output_mode, _validate_and_clean_series
-from ._builder_api import SklearnBuildMixin, require_built
-from .exceptions import NotBuiltError
+from .core.recurrence import RecurrenceNetwork as _RN_Old
+from .core.transition import TransitionNetwork as _TN_Old
 
 # Import existing implementations from ts2net.core
 from .core.visibility import HVG as _HVG_Old
 from .core.visibility import NVG as _NVG_Old
-from .core.recurrence import RecurrenceNetwork as _RN_Old
-from .core.transition import TransitionNetwork as _TN_Old
-
+from .core.visibility.weights import compute_weight
 
 # Re-export for backward compatibility (tests import from ts2net.api).
 __all__ = [
@@ -94,10 +98,10 @@ class HVG(SklearnBuildMixin):
     """
 
     _builder_name = "HVG"
-    
-    def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None, 
+
+    def __init__(self, weighted: bool | str = False, limit: int | None = None,
                  only_degrees: bool = False, output: str = "edges", directed: bool = False,
-                 weight_mode: Optional[str] = None):
+                 weight_mode: str | None = None):
         """
         Parameters
         ----------
@@ -140,12 +144,12 @@ class HVG(SklearnBuildMixin):
             self.output = validate_output_mode(output, "HVG")
         # For _HVG_Old, use bool weighted (it only supports absdiff)
         # We'll recompute weights after if needed
-        self._impl = _HVG_Old(weighted=(self.weighted and self.weight_mode == "absdiff"), 
+        self._impl = _HVG_Old(weighted=(self.weighted and self.weight_mode == "absdiff"),
                              limit=limit, directed=directed)
         self._graph = None
         self._x = None  # Store series for weight recomputation
-    
-    def _compute_degrees(self, G_nx: nx.Graph) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
+
+    def _compute_degrees(self, G_nx: nx.Graph) -> tuple[NDArray, NDArray | None, NDArray | None]:
         """Compute degree sequences (vectorized)."""
         if self.directed:
             out_degrees = np.array([d for _, d in G_nx.out_degree()])
@@ -153,7 +157,7 @@ class HVG(SklearnBuildMixin):
             return out_degrees, in_degrees, out_degrees
         degrees = np.array([d for _, d in G_nx.degree()])
         return degrees, None, None
-    
+
     def _build_degrees_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in degrees-only mode."""
         degrees, in_degrees, out_degrees = self._compute_degrees(G_nx)
@@ -167,7 +171,7 @@ class HVG(SklearnBuildMixin):
             _in_degrees=in_degrees,
             _out_degrees=out_degrees
         )
-    
+
     def _build_stats_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in stats-only mode."""
         degrees, in_degrees, out_degrees = self._compute_degrees(G_nx)
@@ -183,7 +187,7 @@ class HVG(SklearnBuildMixin):
         )
         graph._n_edges_cached = G_nx.number_of_edges()
         return graph
-    
+
     def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in full edges mode."""
         if self.weighted and self.weight_mode:
@@ -195,7 +199,7 @@ class HVG(SklearnBuildMixin):
             ]
         else:
             edges = [(u, v) for u, v in G_nx.edges()]
-        
+
         return Graph(
             edges=edges,
             n_nodes=len(x),
@@ -203,7 +207,7 @@ class HVG(SklearnBuildMixin):
             weighted=self.weighted,
             _adjacency=None
         )
-    
+
     def build(self, x: NDArray[np.float64]) -> "HVG":
         """
         Build HVG from time series.
@@ -222,26 +226,26 @@ class HVG(SklearnBuildMixin):
         # Validate and clean input (handles dtype contamination)
         x = validate_series(x, "HVG")
         self._x = x.copy()  # Store for weight recomputation
-        
+
         # Use old implementation
         G_nx, A = self._impl.fit_transform(x)
-        
+
         # Convert to new Graph object based on output mode
         output_handlers = {
             "degrees": lambda: self._build_degrees_graph(G_nx, x),
             "stats": lambda: self._build_stats_graph(G_nx, x),
             "edges": lambda: self._build_edges_graph(G_nx, x),
         }
-        
+
         handler = output_handlers.get(self.output)
         if handler is None:
             raise ValueError(f"Unknown output mode: {self.output}")
-        
+
         self._graph = handler()
-        
+
         self._fitted = True
         return self
-    
+
     @property
     def edges(self):
         """Edge list (None if output='degrees' or 'stats')"""
@@ -249,19 +253,19 @@ class HVG(SklearnBuildMixin):
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
-    
+
     @property
     def n_nodes(self):
         """Number of nodes"""
         self._ensure_built()
         return self._graph.n_nodes
-    
+
     @property
     def n_edges(self):
         """Number of edges"""
         self._ensure_built()
         return self._graph.n_edges
-    
+
     def degree_sequence(self) -> NDArray[np.int64]:
         """
         Node degree sequence.
@@ -273,30 +277,30 @@ class HVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.degree_sequence()
-    
+
     def in_degree_sequence(self):
         """In-degree sequence (only valid for directed graphs)"""
         self._ensure_built()
         if not self.directed:
             raise ValueError("in_degree_sequence() only valid for directed graphs")
         return self._graph.in_degree_sequence()
-    
+
     def out_degree_sequence(self):
         """Out-degree sequence (only valid for directed graphs)"""
         self._ensure_built()
         if not self.directed:
             raise ValueError("out_degree_sequence() only valid for directed graphs")
         return self._graph.out_degree_sequence()
-    
+
     def stats(self, include_triangles: bool = False) -> dict:
         """Summary statistics (memory efficient, no dense matrix)"""
         self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
-    
+
     def network_metrics(
         self,
-        include: Optional[List[str]] = None,
-        sample_size: Optional[int] = None,
+        include: list[str] | None = None,
+        sample_size: int | None = None,
         **kwargs
     ) -> dict:
         """
@@ -334,14 +338,14 @@ class HVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
-    
+
     def test_significance(
         self,
         metric: str = "density",
         method: str = "shuffle",
         n_surrogates: int = 200,
         alpha: float = 0.05,
-        rng: Optional[np.random.Generator] = None,
+        rng: np.random.Generator | None = None,
         **kwargs
     ):
         """
@@ -379,12 +383,12 @@ class HVG(SklearnBuildMixin):
         >>> print(result)
         """
         from .stats.null_models import compute_network_metric_significance
-        
+
         self._ensure_built()
-        
+
         if self._x is None:
             raise ValueError("Cannot test significance: original time series not stored")
-        
+
         # Create metric function
         def metric_fn(ts):
             hvg_temp = HVG(
@@ -399,7 +403,7 @@ class HVG(SklearnBuildMixin):
             if metric not in stats:
                 raise ValueError(f"Unknown metric: {metric}. Available: {list(stats.keys())}")
             return float(stats[metric])
-        
+
         return compute_network_metric_significance(
             self._x,
             metric_fn,
@@ -410,10 +414,10 @@ class HVG(SklearnBuildMixin):
             rng=rng,
             **kwargs
         )
-    
+
     def adjacency_matrix(
         self, format: str = "sparse"
-    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+    ) -> "csr_matrix | coo_matrix | NDArray[np.float64]":
         """
         Adjacency matrix.
 
@@ -432,10 +436,10 @@ class HVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
-    
+
     def edges_coo(
         self,
-    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+    ) -> "tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64] | None]":
         """
         Edge list in COO (coordinate) format.
 
@@ -447,7 +451,7 @@ class HVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.edges_coo()
-    
+
     def as_networkx(self, force: bool = False) -> nx.Graph:
         """
         Convert to a NetworkX graph.
@@ -506,10 +510,10 @@ class NVG(SklearnBuildMixin):
 
     _builder_name = "NVG"
 
-    def __init__(self, weighted: Union[bool, str] = False, limit: Optional[int] = None,
+    def __init__(self, weighted: bool | str = False, limit: int | None = None,
                  only_degrees: bool = False, output: str = "edges",
-                 max_edges: Optional[int] = None, max_edges_per_node: Optional[int] = None,
-                 max_memory_mb: Optional[float] = None, weight_mode: Optional[str] = None):
+                 max_edges: int | None = None, max_edges_per_node: int | None = None,
+                 max_memory_mb: float | None = None, weight_mode: str | None = None):
         """
         Parameters
         ----------
@@ -545,7 +549,7 @@ class NVG(SklearnBuildMixin):
         else:
             self.weight_mode = None
             self.weighted = False
-        
+
         self.limit = limit
         if only_degrees:
             self.output = "degrees"
@@ -559,7 +563,7 @@ class NVG(SklearnBuildMixin):
         )
         self._graph = None
         self._x = None  # Store series for weight recomputation
-    
+
     def build(self, x: NDArray[np.float64]) -> "NVG":
         """
         Build NVG from time series.
@@ -578,23 +582,23 @@ class NVG(SklearnBuildMixin):
         # Validate and clean input (handles dtype contamination)
         x = validate_series(x, "NVG")
         self._x = x.copy()  # Store for weight recomputation
-        
+
         G_nx, A = self._impl.fit_transform(x)
-        
+
         output_handlers = {
             "degrees": lambda: self._build_degrees_graph(G_nx, x),
             "stats": lambda: self._build_stats_graph(G_nx, x),
             "edges": lambda: self._build_edges_graph(G_nx, x),
         }
-        
+
         handler = output_handlers.get(self.output)
         if handler is None:
             raise ValueError(f"Unknown output mode: {self.output}")
-        
+
         self._graph = handler()
         self._fitted = True
         return self
-    
+
     def _build_degrees_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in degrees-only mode."""
         degrees = np.array([d for _, d in G_nx.degree()])
@@ -606,7 +610,7 @@ class NVG(SklearnBuildMixin):
             _adjacency=None,
             _degrees=degrees
         )
-    
+
     def _build_stats_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in stats-only mode."""
         degrees = np.array([d for _, d in G_nx.degree()])
@@ -620,7 +624,7 @@ class NVG(SklearnBuildMixin):
         )
         graph._n_edges_cached = G_nx.number_of_edges()
         return graph
-    
+
     def _build_edges_graph(self, G_nx: nx.Graph, x: NDArray) -> Graph:
         """Build graph in full edges mode."""
         if self.weighted and self.weight_mode:
@@ -632,7 +636,7 @@ class NVG(SklearnBuildMixin):
             ]
         else:
             edges = [(u, v) for u, v in G_nx.edges()]
-        
+
         return Graph(
             edges=edges,
             n_nodes=len(x),
@@ -640,14 +644,14 @@ class NVG(SklearnBuildMixin):
             weighted=self.weighted,
             _adjacency=None
         )
-    
+
     @property
     def edges(self):
         self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
-    
+
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
@@ -659,7 +663,7 @@ class NVG(SklearnBuildMixin):
         """Number of edges."""
         self._ensure_built()
         return self._graph.n_edges
-    
+
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
         self._ensure_built()
@@ -669,11 +673,11 @@ class NVG(SklearnBuildMixin):
         """Summary statistics (no dense matrix required)."""
         self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
-    
+
     def network_metrics(
         self,
-        include: Optional[List[str]] = None,
-        sample_size: Optional[int] = None,
+        include: list[str] | None = None,
+        sample_size: int | None = None,
         **kwargs
     ) -> dict:
         """
@@ -711,14 +715,14 @@ class NVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.network_metrics(include=include, sample_size=sample_size, **kwargs)
-    
+
     def test_significance(
         self,
         metric: str = "density",
         method: str = "shuffle",
         n_surrogates: int = 200,
         alpha: float = 0.05,
-        rng: Optional[np.random.Generator] = None,
+        rng: np.random.Generator | None = None,
         **kwargs
     ):
         """
@@ -756,19 +760,19 @@ class NVG(SklearnBuildMixin):
         >>> print(result)
         """
         from .stats.null_models import compute_network_metric_significance
-        
+
         self._ensure_built()
-        
+
         if self._x is None:
             raise ValueError("Cannot test significance: original time series not stored")
-        
+
         # Create metric function
         def metric_fn(ts):
             # Get parameters from implementation, with safe defaults
             max_edges = getattr(self._impl, 'max_edges', None)
             max_edges_per_node = getattr(self._impl, 'max_edges_per_node', None)
             max_memory_mb = getattr(self._impl, 'max_memory_mb', None)
-            
+
             nvg_temp = NVG(
                 weighted=self.weighted,
                 weight_mode=self.weight_mode,
@@ -783,7 +787,7 @@ class NVG(SklearnBuildMixin):
             if metric not in stats:
                 raise ValueError(f"Unknown metric: {metric}. Available: {list(stats.keys())}")
             return float(stats[metric])
-        
+
         return compute_network_metric_significance(
             self._x,
             metric_fn,
@@ -794,10 +798,10 @@ class NVG(SklearnBuildMixin):
             rng=rng,
             **kwargs
         )
-    
+
     def adjacency_matrix(
         self, format: str = "sparse"
-    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+    ) -> "csr_matrix | coo_matrix | NDArray[np.float64]":
         """
         Adjacency matrix.
 
@@ -816,10 +820,10 @@ class NVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
-    
+
     def edges_coo(
         self,
-    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+    ) -> "tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64] | None]":
         """
         Edge list in COO (coordinate) format.
 
@@ -831,7 +835,7 @@ class NVG(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.edges_coo()
-    
+
     def as_networkx(self, force: bool = False) -> nx.Graph:
         """
         Convert to a NetworkX graph.
@@ -897,7 +901,7 @@ class RecurrenceNetwork(SklearnBuildMixin):
 
     _builder_name = "RecurrenceNetwork"
 
-    def __init__(self, m: Optional[int] = None, tau: int = 1, rule: str = 'knn',
+    def __init__(self, m: int | None = None, tau: int = 1, rule: str = 'knn',
                  k: int = 5, epsilon: float = 0.1, metric: str = 'euclidean',
                  only_degrees: bool = False, output: str = "edges"):
         """
@@ -935,7 +939,7 @@ class RecurrenceNetwork(SklearnBuildMixin):
         threshold = epsilon if rule == 'epsilon' else None
         self._impl = _RN_Old(m=m, tau=tau, rule=rule, k=k, metric=metric, threshold=threshold)
         self._graph = None
-    
+
     def build(self, x: NDArray[np.float64]) -> "RecurrenceNetwork":
         """
         Build recurrence network from time series.
@@ -951,9 +955,9 @@ class RecurrenceNetwork(SklearnBuildMixin):
         """
         # Validate and clean input (handles dtype contamination)
         x = validate_series(x, "RecurrenceNetwork")
-        
+
         G_nx, A = self._impl.fit_transform(x)
-        
+
         # Convert based on output mode
         if self.output == "degrees":
             degrees = np.array([d for _, d in G_nx.degree()])
@@ -988,16 +992,16 @@ class RecurrenceNetwork(SklearnBuildMixin):
                 weighted=False,
                 _adjacency=None
             )
-        
+
         return self
-    
+
     @property
     def edges(self):
         self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
-    
+
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
@@ -1009,7 +1013,7 @@ class RecurrenceNetwork(SklearnBuildMixin):
         """Number of edges."""
         self._ensure_built()
         return self._graph.n_edges
-    
+
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
         self._ensure_built()
@@ -1019,10 +1023,10 @@ class RecurrenceNetwork(SklearnBuildMixin):
         """Summary statistics (no dense matrix required)."""
         self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
-    
+
     def adjacency_matrix(
         self, format: str = "sparse"
-    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+    ) -> "csr_matrix | coo_matrix | NDArray[np.float64]":
         """
         Adjacency matrix.
 
@@ -1041,10 +1045,10 @@ class RecurrenceNetwork(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
-    
+
     def edges_coo(
         self,
-    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+    ) -> "tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64] | None]":
         """
         Edge list in COO (coordinate) format.
 
@@ -1056,7 +1060,7 @@ class RecurrenceNetwork(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.edges_coo()
-    
+
     def as_networkx(self, force: bool = False) -> nx.Graph:
         """
         Convert to a NetworkX graph.
@@ -1163,7 +1167,7 @@ class TransitionNetwork(SklearnBuildMixin):
             tie_rule=tie_rule, bins=bins
         )
         self._graph = None
-    
+
     def build(self, x: NDArray[np.float64]) -> "TransitionNetwork":
         """
         Build transition network from time series.
@@ -1179,9 +1183,9 @@ class TransitionNetwork(SklearnBuildMixin):
         """
         # Validate and clean input (handles dtype contamination)
         x = validate_series(x, "TransitionNetwork")
-        
+
         G_nx, A = self._impl.fit_transform(x)
-        
+
         # Convert based on output mode
         if self.output == "degrees":
             degrees = np.array([d for _, d in G_nx.degree()])
@@ -1216,16 +1220,16 @@ class TransitionNetwork(SklearnBuildMixin):
                 weighted=False,
                 _adjacency=None
             )
-        
+
         return self
-    
+
     @property
     def edges(self):
         self._ensure_built()
         if self.output in ("degrees", "stats"):
             return None
         return self._graph.edges
-    
+
     @property
     def n_nodes(self) -> int:
         """Number of nodes (equals length of input series)."""
@@ -1237,7 +1241,7 @@ class TransitionNetwork(SklearnBuildMixin):
         """Number of edges."""
         self._ensure_built()
         return self._graph.n_edges
-    
+
     def degree_sequence(self) -> NDArray[np.int64]:
         """Node degree sequence — shape (n_nodes,)."""
         self._ensure_built()
@@ -1247,10 +1251,10 @@ class TransitionNetwork(SklearnBuildMixin):
         """Summary statistics (no dense matrix required)."""
         self._ensure_built()
         return self._graph.summary(include_triangles=include_triangles)
-    
+
     def adjacency_matrix(
         self, format: str = "sparse"
-    ) -> "Union[csr_matrix, coo_matrix, NDArray[np.float64]]":
+    ) -> "csr_matrix | coo_matrix | NDArray[np.float64]":
         """
         Adjacency matrix.
 
@@ -1269,10 +1273,10 @@ class TransitionNetwork(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.adjacency_matrix(format=format)
-    
+
     def edges_coo(
         self,
-    ) -> "Tuple[NDArray[np.int64], NDArray[np.int64], Optional[NDArray[np.float64]]]":
+    ) -> "tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64] | None]":
         """
         Edge list in COO (coordinate) format.
 
@@ -1284,7 +1288,7 @@ class TransitionNetwork(SklearnBuildMixin):
         """
         self._ensure_built()
         return self._graph.edges_coo()
-    
+
     def as_networkx(self, force: bool = False) -> nx.Graph:
         """
         Convert to a NetworkX graph.
@@ -1334,11 +1338,11 @@ def build_network(x: NDArray[np.float64], method: str, **kwargs):
         'recurrence': RecurrenceNetwork,
         'transition': TransitionNetwork,
     }
-    
+
     method = method.lower()
     if method not in builders:
         raise ValueError(f"Unknown method: {method}. Choose from {list(builders.keys())}")
-    
+
     builder_cls = builders[method]
     builder = builder_cls(**kwargs)
     return builder.build(x)
