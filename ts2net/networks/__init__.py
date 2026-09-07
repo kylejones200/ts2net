@@ -21,6 +21,12 @@ from .metrics import (
     network_metrics,
 )
 
+from .roles import (
+    role_features_extended,
+    node_roles_kmeans,
+    node_roles_spectral,
+)
+
 __all__ = [
     "net_enn",
     "net_knn",
@@ -31,4 +37,7 @@ __all__ = [
     "compute_path_lengths",
     "compute_modularity",
     "network_metrics",
+    "role_features_extended",
+    "node_roles_kmeans",
+    "node_roles_spectral",
 ]

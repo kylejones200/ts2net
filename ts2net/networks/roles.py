@@ -4,18 +4,25 @@ import networkx as nx
 from typing import Dict, Tuple, Literal, List, Optional
 
 from .communities import _role_features_basic
-from .utils import SKMixin
 
+# The Rust fast path. Only the extension being absent is a reason to fall back
+# to networkx: a missing symbol means the extension was built from the wrong
+# source or the binding was dropped, which is a defect that must surface rather
+# than silently degrade into a slower code path. So the module import is
+# guarded and the attribute lookups are not.
 try:
-    from ts2net_rs import (
-        node_triangles as _tri_rs,
-        ego_edge_counts as _ego_rs,
-        core_numbers as _core_rs,
-    )
-except Exception:
+    import ts2net_rs as _rs
+except ImportError:  # pragma: no cover - exercised only without the extension
+    _rs = None
+
+if _rs is None:
     _tri_rs = None
     _ego_rs = None
     _core_rs = None
+else:
+    _tri_rs = _rs.triangles_per_node
+    _ego_rs = _rs.ego_edge_counts
+    _core_rs = _rs.core_numbers
 
 
 def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
@@ -32,9 +39,9 @@ def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
 
 
 def _triangles_per_node(G: nx.Graph) -> np.ndarray:
-    n, E, undirected, _, _ = _edges_array(G)
+    n, E, _, _, _ = _edges_array(G)
     if _tri_rs is not None:
-        return np.array(_tri_rs(n, E, undirected), dtype=np.int64)
+        return np.array(_tri_rs(n, E), dtype=np.int64)
     # fallback
     H = G.to_undirected()
     tri = nx.triangles(H)
@@ -42,9 +49,9 @@ def _triangles_per_node(G: nx.Graph) -> np.ndarray:
 
 
 def _ego_edges_per_node(G: nx.Graph) -> np.ndarray:
-    n, E, undirected, nodes, _ = _edges_array(G)
+    n, E, _, nodes, _ = _edges_array(G)
     if _ego_rs is not None:
-        return np.array(_ego_rs(n, E, undirected), dtype=np.int64)
+        return np.array(_ego_rs(n, E), dtype=np.int64)
     out = np.zeros(len(nodes), dtype=np.int64)
     H = G.to_undirected()
     for i, u in enumerate(nodes):
@@ -55,9 +62,9 @@ def _ego_edges_per_node(G: nx.Graph) -> np.ndarray:
 
 
 def _core_number(G: nx.Graph) -> np.ndarray:
-    n, E, undirected, nodes, _ = _edges_array(G)
+    n, E, _, nodes, _ = _edges_array(G)
     if _core_rs is not None:
-        return np.array(_core_rs(n, E, undirected), dtype=np.int64)
+        return np.array(_core_rs(n, E), dtype=np.int64)
     core = nx.core_number(G.to_undirected())
     return np.array([core[u] for u in nodes], dtype=np.int64)
 

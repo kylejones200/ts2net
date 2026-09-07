@@ -31,6 +31,30 @@ jobs:
           uv pip install numba tslearn pynndescent pyreadr || true
           # Verify torch is installed
           uv run python -c "import torch; print(f'PyTorch {torch.__version__} (CPU-only) installed')"
+      - name: Rust checks (both feature configurations)
+        run: |
+          cargo check --manifest-path ts2net_rs/Cargo.toml --no-default-features
+          cargo check --manifest-path ts2net_rs/Cargo.toml
+      - name: Rust tests
+        # --no-default-features drops the PyO3 bindings. A test binary cannot
+        # link the symbols pyo3's extension-module feature leaves undefined, so
+        # a plain `cargo test` fails at the link step.
+        run: cargo test --manifest-path ts2net_rs/Cargo.toml --no-default-features
+      - name: Rust library has no Python dependencies
+        # Architectural contract: `default-features = false` is how another
+        # Rust crate consumes ts2net_rs, and that build must contain no pyo3
+        # and no numpy. Also asserted by tests/dependency_purity.rs; repeated
+        # here so the contract is visible as its own CI gate.
+        run: |
+          cargo tree --manifest-path ts2net_rs/Cargo.toml \
+            --no-default-features --edges normal --prefix none \
+            | awk '{print $1}' | sort -u > /tmp/rust-only-deps.txt
+          if grep -qE '^(pyo3|pyo3-ffi|pyo3-macros|pyo3-macros-backend|pyo3-build-config|numpy)$' /tmp/rust-only-deps.txt; then
+            echo "::error::PyO3 or NumPy leaked into the default-features=false build"
+            grep -E '^(pyo3|numpy)' /tmp/rust-only-deps.txt
+            exit 1
+          fi
+          echo "Rust-only dependency tree is free of pyo3 and numpy."
       - name: Lint (API hardening modules)
         run: |
           uv run ruff check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py ts2net/api_tiers.py ts2net/reports/__init__.py ts2net/causal/summary.py ts2net/dynamic/summary.py ts2net/datasets/ucr.py

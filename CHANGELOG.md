@@ -7,7 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`ts2net.networks.roles` works for the first time.** The module imported
+  `ts2net.networks.utils`, which has never existed in any commit, so it raised
+  on import and nothing in the package referenced it. The import was also
+  unused (`SKMixin` is never referenced in the module) and is removed. It now
+  imports, is exported from `ts2net.networks`, and its Rust fast path executes:
+  `ego_edge_counts` and `core_numbers` are implemented in the Rust graph API on
+  the shared adjacency builder, and `node_triangles` is served by the existing
+  `triangles_per_node` rather than adding a second name for the same result.
+  The fallback no longer catches bare `Exception`: only the extension being
+  absent falls back to networkx, while a missing binding now raises.
+- **`triangles_per_node` returns the conventional triangle count (BREAKING:
+  numerical output changes).** It returned twice `networkx.triangles`: the edge
+  sweep visits each triangle at a node once per incident edge, and a node lies
+  on two edges of every triangle containing it. Results are now pinned to
+  `networkx` on hand-computed and random graphs. No legacy variant is provided
+  because the function had no caller anywhere in the repository -- it is
+  defined in `ts2net.core.core_rust`, is not re-exported from `ts2net.core`,
+  and no test, example or doc referenced it.
+- **`iaaft` now implements IAAFT (BREAKING: numerical output changes).** The
+  rank-matching step assigned the working series' *own* sorted values instead
+  of the original's, so the surrogate carried the original's rank ordering but
+  never restored its amplitude distribution -- the defining property of the
+  iterative amplitude-adjusted Fourier transform. Both the Rust path and the
+  NumPy fallback were affected and both are fixed. Surrogates are now exact
+  permutations of the input whose power spectrum converges on the input's.
+  Any p-value or null distribution computed with `method="iaaft"` changes.
+  The docstring in `ts2net.stats.null_models` claiming IAAFT "preserves power
+  spectrum and distribution" is now accurate; before, it was not.
+
 ### Added
+- **`ts2net_rs.ego_edge_counts`** and **`ts2net_rs.core_numbers`** -- edges
+  within each node's ego network, and k-core numbers. Both match `networkx`
+  (`subgraph(neighbors).number_of_edges()` and `core_number`) and are built on
+  the same `build_adj` as the other graph metrics.
+- **Dependency-purity gate.** `ts2net_rs/tests/dependency_purity.rs` and a CI
+  step assert that a `default-features = false` build of `ts2net_rs` contains
+  no `pyo3` and no `numpy`. The Rust library being consumable without Python is
+  now a checked contract rather than a property that happens to hold. CI also
+  runs `cargo check` in both feature configurations and the Rust test suite,
+  which it previously never did despite installing a Rust toolchain.
+- **`iaaft_legacy`** (`ts2net.stats.iaaft_legacy`, `ts2net_rs.iaaft_legacy`) --
+  the pre-fix algorithm, retained solely to reproduce previously published
+  results. It is not IAAFT and should not be used for new work. Verified
+  bit-identical to the pre-fix implementation.
 - **Reports (`ts2net.reports`)**: `GraphReport`, `EdgeExplanation`, `NodeRoleSummary`, `DynamicChangeReport`, `DecisionPackage`, `build_graph_report()`, `build_decision_package()`.
 - **Domain recipes**: `examples/recipes/` — industrial, energy, finance, observability, healthcare (synthetic + real-data variants).
 - **Real-data recipes**: `energy_spain_real.py` (Spain meter panel + ItalyPowerDemand UCR), `finance_fred_real.py` (bundled FRED-style macro panel).

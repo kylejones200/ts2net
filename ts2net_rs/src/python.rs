@@ -244,6 +244,26 @@ fn triangles_per_node(
 }
 
 #[pyfunction]
+fn ego_edge_counts(
+    py: Python<'_>,
+    n: usize,
+    edges: PyReadonlyArray2<usize>,
+) -> PyResult<Py<PyArray1<usize>>> {
+    let e = as_edges(edges)?;
+    Ok(PyArray1::from_vec(py, graphs::ego_edge_counts(n, &e)).unbind())
+}
+
+#[pyfunction]
+fn core_numbers(
+    py: Python<'_>,
+    n: usize,
+    edges: PyReadonlyArray2<usize>,
+) -> PyResult<Py<PyArray1<usize>>> {
+    let e = as_edges(edges)?;
+    Ok(PyArray1::from_vec(py, graphs::core_numbers(n, &e)).unbind())
+}
+
+#[pyfunction]
 fn clustering_avg(_py: Python<'_>, n: usize, edges: PyReadonlyArray2<usize>) -> PyResult<f64> {
     let e = as_edges(edges)?;
     Ok(graphs::clustering_avg(n, &e))
@@ -278,6 +298,17 @@ fn iaaft(
 ) -> PyResult<Py<PyArray1<f64>>> {
     let v = as_1d(x)?;
     Ok(PyArray1::from_vec(py, utils::iaaft(&v, iters, seed)).unbind())
+}
+
+#[pyfunction]
+fn iaaft_legacy(
+    py: Python<'_>,
+    x: PyReadonlyArray1<f64>,
+    iters: usize,
+    seed: u64,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let v = as_1d(x)?;
+    Ok(PyArray1::from_vec(py, utils::iaaft_legacy(&v, iters, seed)).unbind())
 }
 
 //
@@ -425,11 +456,14 @@ fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cao_e1_e2, m)?)?;
 
     m.add_function(wrap_pyfunction!(triangles_per_node, m)?)?;
+    m.add_function(wrap_pyfunction!(ego_edge_counts, m)?)?;
+    m.add_function(wrap_pyfunction!(core_numbers, m)?)?;
     m.add_function(wrap_pyfunction!(clustering_avg, m)?)?;
     m.add_function(wrap_pyfunction!(mean_shortest_path, m)?)?;
 
     m.add_function(wrap_pyfunction!(surrogate_phase, m)?)?;
     m.add_function(wrap_pyfunction!(iaaft, m)?)?;
+    m.add_function(wrap_pyfunction!(iaaft_legacy, m)?)?;
 
     m.add_function(wrap_pyfunction!(corr_perm, m)?)?;
 
