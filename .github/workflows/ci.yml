@@ -55,6 +55,12 @@ jobs:
             exit 1
           fi
           echo "Rust-only dependency tree is free of pyo3 and numpy."
+      - name: Lint baseline (no new Ruff debt)
+        # The repository carries inherited Ruff debt frozen in
+        # .lint-baseline.json. This step fails only when a change adds
+        # findings, so main stays green while the debt stays visible.
+        # `make lint-debt` prints the full outstanding total.
+        run: uv run python scripts/lint_baseline.py check
       - name: Lint (API hardening modules)
         run: |
           uv run ruff check ts2net/exceptions.py ts2net/_validation.py ts2net/_builder_api.py ts2net/protocols.py ts2net/api_tiers.py ts2net/reports/__init__.py ts2net/causal/summary.py ts2net/dynamic/summary.py ts2net/datasets/ucr.py
