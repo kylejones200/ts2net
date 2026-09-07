@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 import ts2net  # noqa: F401  -- aliases the compiled extension as `ts2net_rs`
-import ts2net_rs
 import ts2net.stats.stats as st
+import ts2net_rs
 
 # Largest relative L2 error between the surrogate's amplitude spectrum and the
 # original's that we accept. IAAFT converges to a fixed point trading exact
