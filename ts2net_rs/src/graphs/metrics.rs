@@ -24,13 +24,12 @@ pub fn build_adj(n: usize, edges: &[(usize, usize)], undirected: bool) -> Vec<Ve
     adj
 }
 
-/// Triangle corners incident on each node of the undirected graph.
+/// Number of triangles incident on each node of the undirected graph.
 ///
-/// Note this is **twice** the conventional per-node triangle count that
-/// `networkx.triangles` returns: each triangle at a node is counted once per
-/// incident edge, and a node sits on two edges of every triangle it belongs
-/// to. The doubling is long-standing behaviour of the Python bindings, so it
-/// is preserved here; divide by two for the conventional count.
+/// Matches `networkx.triangles`. The edge sweep below visits each triangle at
+/// a node once per incident edge, and a node lies on exactly two edges of
+/// every triangle containing it, so the accumulated count is halved. That sum
+/// is always even, making the division exact.
 pub fn triangles_per_node(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
     let adj = build_adj(n, edges, true);
     let mut tri = vec![0usize; n];
@@ -64,6 +63,10 @@ pub fn triangles_per_node(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
             tri[u] += c;
             tri[v] += c;
         }
+    }
+    for t in tri.iter_mut() {
+        debug_assert!(*t % 2 == 0, "per-node triangle corners must be even");
+        *t /= 2;
     }
     tri
 }
@@ -160,9 +163,8 @@ mod tests {
     }
 
     #[test]
-    fn a_triangle_counts_two_corners_at_every_node() {
-        // Twice the conventional count of 1 -- see the note on the function.
-        assert_eq!(triangles_per_node(3, &TRIANGLE), vec![2, 2, 2]);
+    fn a_triangle_has_one_triangle_at_every_node() {
+        assert_eq!(triangles_per_node(3, &TRIANGLE), vec![1, 1, 1]);
         assert_relative_eq!(clustering_avg(3, &TRIANGLE), 1.0);
         assert_relative_eq!(mean_shortest_path(3, &TRIANGLE), 1.0);
     }
@@ -174,6 +176,20 @@ mod tests {
         assert_relative_eq!(clustering_avg(3, &path), 0.0);
         // Distances 1, 2, 1 over three pairs.
         assert_relative_eq!(mean_shortest_path(3, &path), 4.0 / 3.0);
+    }
+
+    #[test]
+    fn a_triangle_sharing_an_edge_with_a_second_triangle() {
+        // 0-1-2 and 0-2-3 share the edge 0-2. networkx.triangles gives
+        // {0: 2, 1: 1, 2: 2, 3: 1}.
+        let edges = [(0, 1), (1, 2), (0, 2), (2, 3), (3, 0)];
+        assert_eq!(triangles_per_node(4, &edges), vec![2, 1, 2, 1]);
+    }
+
+    #[test]
+    fn a_four_clique_has_three_triangles_at_every_node() {
+        let edges = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
+        assert_eq!(triangles_per_node(4, &edges), vec![3, 3, 3, 3]);
     }
 
     #[test]

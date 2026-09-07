@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`triangles_per_node` returns the conventional triangle count (BREAKING:
+  numerical output changes).** It returned twice `networkx.triangles`: the edge
+  sweep visits each triangle at a node once per incident edge, and a node lies
+  on two edges of every triangle containing it. Results are now pinned to
+  `networkx` on hand-computed and random graphs. No legacy variant is provided
+  because the function had no caller anywhere in the repository -- it is
+  defined in `ts2net.core.core_rust`, is not re-exported from `ts2net.core`,
+  and no test, example or doc referenced it.
 - **`iaaft` now implements IAAFT (BREAKING: numerical output changes).** The
   rank-matching step assigned the working series' *own* sorted values instead
   of the original's, so the surrogate carried the original's rank ordering but
