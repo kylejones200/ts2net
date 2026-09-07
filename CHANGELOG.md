@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spectrum and distribution" is now accurate; before, it was not.
 
 ### Added
+- **Dependency-purity gate.** `ts2net_rs/tests/dependency_purity.rs` and a CI
+  step assert that a `default-features = false` build of `ts2net_rs` contains
+  no `pyo3` and no `numpy`. The Rust library being consumable without Python is
+  now a checked contract rather than a property that happens to hold. CI also
+  runs `cargo check` in both feature configurations and the Rust test suite,
+  which it previously never did despite installing a Rust toolchain.
 - **`iaaft_legacy`** (`ts2net.stats.iaaft_legacy`, `ts2net_rs.iaaft_legacy`) --
   the pre-fix algorithm, retained solely to reproduce previously published
   results. It is not IAAFT and should not be used for new work. Verified
