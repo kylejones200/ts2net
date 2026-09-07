@@ -22,6 +22,7 @@ try:
         cao as _cao_rs,
         surrogate_phase as _surr_phase_rs,
         iaaft as _iaaft_rs,
+        iaaft_legacy as _iaaft_legacy_rs,
         corr_perm as _corr_perm_rs,
     )
 except ImportError:
@@ -30,6 +31,7 @@ except ImportError:
     _cao_rs = None
     _surr_phase_rs = None
     _iaaft_rs = None
+    _iaaft_legacy_rs = None
     _corr_perm_rs = None
 
 
@@ -212,10 +214,48 @@ def surrogate_phase(x: np.ndarray, rng=None) -> np.ndarray:
 
 
 def iaaft(x: np.ndarray, iters: int = 50, rng=None) -> np.ndarray:
-    """Iterative amplitude adjusted Fourier transform. Uses Rust implementation if available."""
+    """Iterative amplitude adjusted Fourier transform.
+
+    Each iteration imposes the amplitude spectrum of ``x`` on the working
+    series, then restores the exact value distribution of ``x`` by rank. The
+    result is always a permutation of ``x`` whose power spectrum approaches
+    that of ``x`` as ``iters`` grows.
+
+    Uses the Rust implementation if available.
+
+    See :func:`iaaft_legacy` for the pre-0.10 behaviour, which did not restore
+    the original amplitudes.
+    """
     if _iaaft_rs is not None:
         seed = int(rng) if rng is not None else 3363
         return _iaaft_rs(x, iters, seed)
+    # Python fallback
+    rng = np.random.default_rng(None if rng is None else rng)
+    x = _nz(x)
+    sorted_x = np.sort(x)
+    y = sorted_x[np.argsort(rng.standard_normal(x.size))]
+    Xmag = np.abs(np.fft.rfft(x))
+    for _ in range(iters):
+        Y = np.fft.rfft(y)
+        Y = Xmag * np.exp(1j * np.angle(Y))
+        y = np.fft.irfft(Y, n=x.size)
+        # Amplitude adjustment: give each position the original value whose
+        # rank matches the rank y holds there.
+        y = sorted_x[np.argsort(np.argsort(y))]
+    return y
+
+
+def iaaft_legacy(x: np.ndarray, iters: int = 50, rng=None) -> np.ndarray:
+    """The pre-0.10 ``iaaft``, kept only to reproduce previously published results.
+
+    This is **not** IAAFT. Its rank-matching step assigns the working series'
+    own sorted values rather than those of ``x``, so the surrogate carries the
+    rank ordering of ``x`` and the amplitudes of the spectrum-corrected series;
+    it never restores the value distribution of ``x``. Prefer :func:`iaaft`.
+    """
+    if _iaaft_legacy_rs is not None:
+        seed = int(rng) if rng is not None else 3363
+        return _iaaft_legacy_rs(x, iters, seed)
     # Python fallback
     rng = np.random.default_rng(None if rng is None else rng)
     x = _nz(x)

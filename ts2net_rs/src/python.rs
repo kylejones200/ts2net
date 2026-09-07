@@ -280,6 +280,17 @@ fn iaaft(
     Ok(PyArray1::from_vec(py, utils::iaaft(&v, iters, seed)).unbind())
 }
 
+#[pyfunction]
+fn iaaft_legacy(
+    py: Python<'_>,
+    x: PyReadonlyArray1<f64>,
+    iters: usize,
+    seed: u64,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let v = as_1d(x)?;
+    Ok(PyArray1::from_vec(py, utils::iaaft_legacy(&v, iters, seed)).unbind())
+}
+
 //
 // --------- Permutation tests ----------
 //
@@ -430,6 +441,7 @@ fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(surrogate_phase, m)?)?;
     m.add_function(wrap_pyfunction!(iaaft, m)?)?;
+    m.add_function(wrap_pyfunction!(iaaft_legacy, m)?)?;
 
     m.add_function(wrap_pyfunction!(corr_perm, m)?)?;
 

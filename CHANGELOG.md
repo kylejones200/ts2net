@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`iaaft` now implements IAAFT (BREAKING: numerical output changes).** The
+  rank-matching step assigned the working series' *own* sorted values instead
+  of the original's, so the surrogate carried the original's rank ordering but
+  never restored its amplitude distribution -- the defining property of the
+  iterative amplitude-adjusted Fourier transform. Both the Rust path and the
+  NumPy fallback were affected and both are fixed. Surrogates are now exact
+  permutations of the input whose power spectrum converges on the input's.
+  Any p-value or null distribution computed with `method="iaaft"` changes.
+  The docstring in `ts2net.stats.null_models` claiming IAAFT "preserves power
+  spectrum and distribution" is now accurate; before, it was not.
+
 ### Added
+- **`iaaft_legacy`** (`ts2net.stats.iaaft_legacy`, `ts2net_rs.iaaft_legacy`) --
+  the pre-fix algorithm, retained solely to reproduce previously published
+  results. It is not IAAFT and should not be used for new work. Verified
+  bit-identical to the pre-fix implementation.
 - **Reports (`ts2net.reports`)**: `GraphReport`, `EdgeExplanation`, `NodeRoleSummary`, `DynamicChangeReport`, `DecisionPackage`, `build_graph_report()`, `build_decision_package()`.
 - **Domain recipes**: `examples/recipes/` — industrial, energy, finance, observability, healthcare (synthetic + real-data variants).
 - **Real-data recipes**: `energy_spain_real.py` (Spain meter panel + ItalyPowerDemand UCR), `finance_fred_real.py` (bundled FRED-style macro panel).

@@ -18,6 +18,7 @@ from ts2net_rs import (
     mean_shortest_path as _mspl_rs,
     surrogate_phase as _surr_phase_rs,
     iaaft as _iaaft_rs,
+    iaaft_legacy as _iaaft_legacy_rs,
     corr_perm as _corr_perm_rs,
     moran_i as _moran_rs,
     hvg_edges as _hvg_edges_rs,
@@ -97,6 +98,13 @@ def surrogate_phase(x: np.ndarray, seed: int = 3363) -> np.ndarray:
 
 def iaaft(x: np.ndarray, iters: int = 50, seed: int = 3363) -> np.ndarray:
     return np.array(_iaaft_rs(np.asarray(x, float), int(iters), int(seed)), dtype=float)
+
+
+def iaaft_legacy(x: np.ndarray, iters: int = 50, seed: int = 3363) -> np.ndarray:
+    """Pre-0.10 iaaft. See ts2net.stats.iaaft_legacy."""
+    return np.array(
+        _iaaft_legacy_rs(np.asarray(x, float), int(iters), int(seed)), dtype=float
+    )
 
 
 def corr_perm(

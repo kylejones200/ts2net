@@ -7,8 +7,9 @@ corresponding test with one asserting correct behaviour.
 
 Defects captured:
 
-1. ``iaaft`` does not restore the original amplitude distribution, so it is not
-   the iterative amplitude-adjusted Fourier transform its name claims.
+1. ``iaaft`` did not restore the original amplitude distribution, so it was not
+   the iterative amplitude-adjusted Fourier transform its name claims. FIXED --
+   replaced by tests/test_surrogate_correctness.py.
 2. ``triangles_per_node`` returns twice the conventional per-node triangle
    count that ``networkx.triangles`` returns.
 3. ``ts2net.networks.roles`` advertises a Rust fast path that has never
@@ -28,39 +29,6 @@ import ts2net_rs
 def _signal(n=128):
     i = np.arange(n)
     return np.sin(i * 0.37) + 0.25 * np.cos(i * 1.1)
-
-
-class TestIaaftDefect:
-    """`iaaft` imposes the original's rank order, not its amplitudes."""
-
-    def test_rust_iaaft_does_not_preserve_the_amplitude_distribution(self):
-        x = _signal()
-        surrogate = ts2net_rs.iaaft(x, 50, 3)
-        assert not np.allclose(np.sort(x), np.sort(surrogate)), (
-            "iaaft unexpectedly preserved the value distribution; if this "
-            "fails the defect is fixed and this test should be replaced"
-        )
-
-    def test_rust_iaaft_preserves_the_rank_ordering_instead(self):
-        x = _signal()
-        surrogate = ts2net_rs.iaaft(x, 50, 3)
-        np.testing.assert_array_equal(np.argsort(np.argsort(x)),
-                                      np.argsort(np.argsort(surrogate)))
-
-    def test_python_fallback_has_the_same_defect(self):
-        from ts2net.stats.stats import iaaft as _dispatcher  # noqa: F401
-        import ts2net.stats.stats as st
-
-        # Force the NumPy fallback rather than the Rust path.
-        rust, st._iaaft_rs = st._iaaft_rs, None
-        try:
-            x = _signal()
-            surrogate = st.iaaft(x, iters=50, rng=3)
-        finally:
-            st._iaaft_rs = rust
-        assert not np.allclose(np.sort(x), np.sort(surrogate))
-        np.testing.assert_array_equal(np.argsort(np.argsort(x)),
-                                      np.argsort(np.argsort(surrogate)))
 
 
 class TestTrianglesDefect:

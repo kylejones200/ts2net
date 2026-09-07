@@ -1,10 +1,50 @@
 //! Surrogate series for hypothesis testing.
 
+use std::sync::Arc;
+
 use ndarray::Array1;
 use num_complex::Complex;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
-use rustfft::FftPlanner;
+use rustfft::{Fft, FftPlanner};
+
+/// Amplitude spectrum of `x` under an already-planned forward transform.
+fn amplitude_spectrum(x: &[f64], fft: &Arc<dyn Fft<f64>>) -> Vec<f64> {
+    let mut spec: Vec<Complex<f64>> = x.iter().map(|&r| Complex { re: r, im: 0.0 }).collect();
+    fft.process(&mut spec);
+    spec.iter()
+        .map(|c| (c.re.powi(2) + c.im.powi(2)).sqrt())
+        .collect()
+}
+
+/// Replace the amplitude spectrum of `y` with `mag_target`, keeping its phases.
+fn impose_spectrum(
+    y: &[f64],
+    mag_target: &[f64],
+    fft: &Arc<dyn Fft<f64>>,
+    ifft: &Arc<dyn Fft<f64>>,
+) -> Vec<f64> {
+    let n = y.len();
+    let mut spec: Vec<Complex<f64>> = y.iter().map(|&r| Complex { re: r, im: 0.0 }).collect();
+    fft.process(&mut spec);
+    for k in 0..n {
+        let c = &spec[k];
+        let phase = c.im.atan2(c.re);
+        spec[k] = Complex {
+            re: mag_target[k] * phase.cos(),
+            im: mag_target[k] * phase.sin(),
+        };
+    }
+    ifft.process(&mut spec);
+    spec.iter().map(|c| c.re / (n as f64)).collect()
+}
+
+/// Indices sorting `x` ascending: element `k` is the index of the k-th smallest.
+fn argsort(x: &[f64]) -> Vec<usize> {
+    let mut idx: Vec<usize> = (0..x.len()).collect();
+    idx.sort_by(|&i, &j| x[i].partial_cmp(&x[j]).unwrap());
+    idx
+}
 
 /// Phase-randomised surrogate: keeps the amplitude spectrum, randomises phases.
 ///
@@ -47,17 +87,15 @@ pub fn surrogate_phase(v: &Array1<f64>, seed: u64) -> Vec<f64> {
     spec.iter().map(|c| c.re / (n as f64)).collect()
 }
 
-/// Iterative Fourier-transform surrogate with rank matching.
+/// Iterative amplitude-adjusted Fourier transform (IAAFT) surrogate.
 ///
-/// Each iteration imposes the amplitude spectrum of `v` on the working series,
-/// then reorders the result to carry the rank ordering of `v`.
+/// Starting from a random permutation of `v`, each iteration imposes the
+/// amplitude spectrum of `v` on the working series and then restores `v`'s
+/// exact value distribution by rank. The returned surrogate is therefore
+/// always a permutation of `v`, and its power spectrum approaches `v`'s as
+/// `iters` grows -- the two defining properties of IAAFT.
 ///
-/// Note the rank-matching step assigns the working series' **own** sorted
-/// values, not `v`'s, so the surrogate reproduces the rank ordering and the
-/// power spectrum of `v` but not its value distribution -- textbook IAAFT
-/// restores the original amplitudes. This matches the NumPy fallback in
-/// `ts2net.stats.stats.iaaft` (`np.sort(y)[np.argsort(np.argsort(x))]`); the
-/// two implementations must agree, so neither should be changed alone.
+/// `seed` makes the run deterministic.
 pub fn iaaft(v: &Array1<f64>, iters: usize, seed: u64) -> Vec<f64> {
     let n = v.len();
     if n == 0 {
@@ -66,33 +104,52 @@ pub fn iaaft(v: &Array1<f64>, iters: usize, seed: u64) -> Vec<f64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(n);
     let ifft = planner.plan_fft_inverse(n);
-    let mut spec_t: Vec<Complex<f64>> = v.iter().map(|&r| Complex { re: r, im: 0.0 }).collect();
-    fft.process(&mut spec_t);
-    let mag_t: Vec<f64> = spec_t
-        .iter()
-        .map(|c| (c.re.powi(2) + c.im.powi(2)).sqrt())
-        .collect();
+    let original: Vec<f64> = v.iter().copied().collect();
+    let mag_t = amplitude_spectrum(&original, &fft);
+    let mut sorted_v = original.clone();
+    sorted_v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
     let mut rng = StdRng::seed_from_u64(seed);
-    let mut y: Vec<f64> = v.iter().copied().collect();
+    let mut y = original;
     y.shuffle(&mut rng);
     for _ in 0..iters {
-        let mut spec: Vec<Complex<f64>> = y.iter().map(|&r| Complex { re: r, im: 0.0 }).collect();
-        fft.process(&mut spec);
+        let y2 = impose_spectrum(&y, &mag_t, &fft, &ifft);
+        // Amplitude adjustment: the position holding the k-th smallest value
+        // of y2 takes the k-th smallest value of the original series.
+        let ridx = argsort(&y2);
+        let mut out = vec![0.0; n];
         for k in 0..n {
-            let c = &spec[k];
-            let phase = c.im.atan2(c.re);
-            spec[k] = Complex {
-                re: mag_t[k] * phase.cos(),
-                im: mag_t[k] * phase.sin(),
-            };
+            out[ridx[k]] = sorted_v[k];
         }
-        ifft.process(&mut spec);
-        let y2: Vec<f64> = spec.iter().map(|c| c.re / (n as f64)).collect();
-        // rank-order match original
-        let mut idx: Vec<usize> = (0..n).collect();
-        idx.sort_by(|&i, &j| v[i].partial_cmp(&v[j]).unwrap());
-        let mut ridx: Vec<usize> = (0..n).collect();
-        ridx.sort_by(|&i, &j| y2[i].partial_cmp(&y2[j]).unwrap());
+        y = out;
+    }
+    y
+}
+
+/// The pre-0.10 `iaaft`, kept only to reproduce previously published results.
+///
+/// This is **not** IAAFT. Its rank-matching step assigns the working series'
+/// own sorted values rather than the original's, so the surrogate carries the
+/// rank ordering of `v` and the amplitudes of the spectrum-corrected series --
+/// it never restores `v`'s value distribution. Prefer [`iaaft`].
+pub fn iaaft_legacy(v: &Array1<f64>, iters: usize, seed: u64) -> Vec<f64> {
+    let n = v.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut planner = FftPlanner::<f64>::new();
+    let fft = planner.plan_fft_forward(n);
+    let ifft = planner.plan_fft_inverse(n);
+    let original: Vec<f64> = v.iter().copied().collect();
+    let mag_t = amplitude_spectrum(&original, &fft);
+
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut y = original.clone();
+    y.shuffle(&mut rng);
+    for _ in 0..iters {
+        let y2 = impose_spectrum(&y, &mag_t, &fft, &ifft);
+        let idx = argsort(&original);
+        let ridx = argsort(&y2);
         let mut out = vec![0.0; n];
         for k in 0..n {
             out[idx[k]] = y2[ridx[k]];
@@ -113,24 +170,24 @@ mod tests {
 
     /// Rank of every element, ties broken by position.
     fn ranks(x: &[f64]) -> Vec<usize> {
-        let mut order: Vec<usize> = (0..x.len()).collect();
-        order.sort_by(|&i, &j| x[i].partial_cmp(&x[j]).unwrap());
         let mut r = vec![0usize; x.len()];
-        for (rank, &i) in order.iter().enumerate() {
+        for (rank, &i) in argsort(x).iter().enumerate() {
             r[i] = rank;
         }
         r
     }
 
     fn spectrum(x: &[f64]) -> Vec<f64> {
-        let n = x.len();
         let mut planner = FftPlanner::<f64>::new();
-        let fft = planner.plan_fft_forward(n);
-        let mut buf: Vec<Complex<f64>> = x.iter().map(|&r| Complex { re: r, im: 0.0 }).collect();
-        fft.process(&mut buf);
-        buf.iter()
-            .map(|c| (c.re.powi(2) + c.im.powi(2)).sqrt())
-            .collect()
+        let fft = planner.plan_fft_forward(x.len());
+        amplitude_spectrum(x, &fft)
+    }
+
+    /// Relative L2 distance between two amplitude spectra.
+    fn spectral_error(a: &[f64], b: &[f64]) -> f64 {
+        let num: f64 = a.iter().zip(b).map(|(p, q)| (p - q) * (p - q)).sum();
+        let den: f64 = a.iter().map(|p| p * p).sum();
+        (num / den).sqrt()
     }
 
     #[test]
@@ -138,6 +195,7 @@ mod tests {
         let empty = Array1::<f64>::zeros(0);
         assert!(surrogate_phase(&empty, 1).is_empty());
         assert!(iaaft(&empty, 10, 1).is_empty());
+        assert!(iaaft_legacy(&empty, 10, 1).is_empty());
     }
 
     #[test]
@@ -145,7 +203,9 @@ mod tests {
         let v = signal(64);
         assert_eq!(surrogate_phase(&v, 7), surrogate_phase(&v, 7));
         assert_eq!(iaaft(&v, 20, 7), iaaft(&v, 20, 7));
+        assert_eq!(iaaft_legacy(&v, 20, 7), iaaft_legacy(&v, 20, 7));
         assert_ne!(surrogate_phase(&v, 7), surrogate_phase(&v, 8));
+        assert_ne!(iaaft(&v, 20, 7), iaaft(&v, 20, 8));
     }
 
     #[test]
@@ -160,28 +220,90 @@ mod tests {
     }
 
     #[test]
-    fn iaaft_reproduces_the_rank_ordering_of_the_original() {
+    fn iaaft_preserves_the_exact_value_distribution() {
         let v = signal(64);
         let s = iaaft(&v, 50, 3);
         assert_eq!(s.len(), v.len());
-        assert_eq!(ranks(v.as_slice().unwrap()), ranks(&s));
+        let mut original: Vec<f64> = v.to_vec();
+        let mut surrogate = s;
+        original.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        surrogate.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for k in 0..original.len() {
+            assert_relative_eq!(original[k], surrogate[k], epsilon = 1e-12);
+        }
     }
 
     #[test]
-    fn iaaft_does_not_restore_the_original_amplitudes() {
-        // Guards the documented deviation from textbook IAAFT: the surrogate
-        // carries its own values, not a permutation of the original's.
+    fn iaaft_is_a_permutation_of_the_original() {
+        let v = signal(48);
+        let s = iaaft(&v, 30, 11);
+        let mut seen = vec![false; v.len()];
+        for value in &s {
+            let pos = v
+                .iter()
+                .enumerate()
+                .find(|(i, o)| !seen[*i] && (*o - value).abs() < 1e-12)
+                .map(|(i, _)| i);
+            assert!(pos.is_some(), "surrogate value {value} is not in the original");
+            seen[pos.unwrap()] = true;
+        }
+        assert!(seen.iter().all(|&s| s));
+    }
+
+    #[test]
+    fn iaaft_targets_the_original_power_spectrum() {
+        // IAAFT converges to a fixed point that trades exact amplitudes
+        // against an exact spectrum, so the residual spectral error is small
+        // but never zero. Judge it against a shuffle -- same value
+        // distribution, spectrum destroyed -- rather than a magic constant.
+        let v = signal(128);
+        let target = spectrum(v.as_slice().unwrap());
+
+        let mut shuffled: Vec<f64> = v.to_vec();
+        shuffled.shuffle(&mut StdRng::seed_from_u64(5));
+        let baseline = spectral_error(&target, &spectrum(&shuffled));
+
+        let one = spectral_error(&target, &spectrum(&iaaft(&v, 1, 5)));
+        let many = spectral_error(&target, &spectrum(&iaaft(&v, 200, 5)));
+
+        assert!(
+            many < baseline / 5.0,
+            "iaaft should recover the spectrum far better than a shuffle: \
+             {many} vs baseline {baseline}"
+        );
+        assert!(
+            many <= one,
+            "more iterations should not worsen the spectrum: {one} -> {many}"
+        );
+    }
+
+    #[test]
+    fn iaaft_is_not_the_identity() {
         let v = signal(64);
+        let s = iaaft(&v, 50, 3);
+        assert!(
+            v.iter().zip(&s).any(|(a, b)| (a - b).abs() > 1e-9),
+            "surrogate is identical to the input"
+        );
+    }
+
+    #[test]
+    fn legacy_reproduces_the_pre_fix_behaviour() {
+        // The legacy path keeps the original's rank ordering and does not
+        // restore its amplitudes -- the defect the canonical fn no longer has.
+        let v = signal(64);
+        let s = iaaft_legacy(&v, 50, 3);
+        assert_eq!(ranks(v.as_slice().unwrap()), ranks(&s));
         let mut original: Vec<f64> = v.to_vec();
-        let mut surrogate = iaaft(&v, 50, 3);
+        let mut surrogate = s;
         original.sort_by(|a, b| a.partial_cmp(b).unwrap());
         surrogate.sort_by(|a, b| a.partial_cmp(b).unwrap());
         assert!(
             original
                 .iter()
-                .zip(surrogate.iter())
+                .zip(&surrogate)
                 .any(|(a, b)| (a - b).abs() > 1e-9),
-            "value distribution unexpectedly preserved; see the note on iaaft"
+            "legacy unexpectedly preserved the value distribution"
         );
     }
 }
