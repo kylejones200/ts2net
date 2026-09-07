@@ -9,13 +9,17 @@ license = "MIT"
 
 [lib]
 name = "ts2net_rs"
-crate-type = ["cdylib"]
+# cdylib for the CPython extension maturin builds; rlib so the algorithm
+# modules can be used as an ordinary Rust dependency.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
-numpy = "0.28"
-# ndarray is provided transitively via numpy — use numpy::ndarray throughout lib.rs
-# to guarantee type compatibility regardless of which version Cargo resolves
+# ndarray is pinned to the same major version numpy re-exports, so cargo
+# unifies them to one crate and `ndarray::Array2` and `numpy::ndarray::Array2`
+# stay the same type. Bump both together.
+ndarray = "0.17"
+pyo3 = { version = "0.28", optional = true }
+numpy = { version = "0.28", optional = true }
 rayon = "1.10"
 kiddo = "4"   # Fast k-d tree with constant dimension support
 rand = "0.8"  # Random number generation
@@ -25,8 +29,18 @@ num-complex = "0.4"  # Complex number support
 approx = "0.5"  # Approximate equality comparisons
 
 [features]
-default = []
-python = ["pyo3/auto-initialize"]
+# `python` builds src/python.rs, the PyO3 binding layer, and is what maturin
+# compiles. `extension-module` is part of it because the artifact is always
+# loaded by a host interpreter rather than linked against libpython.
+#
+# Rust consumers depend on this crate with `default-features = false` and get
+# the algorithm modules with no PyO3 or NumPy in the tree. That is also the
+# configuration the Rust unit tests run under, since a test binary cannot link
+# against the symbols `extension-module` deliberately leaves undefined:
+#
+#     cargo test --no-default-features
+default = ["python"]
+python = ["dep:pyo3", "dep:numpy", "pyo3/extension-module"]
 
 [dev-dependencies]
 approx = "0.5"

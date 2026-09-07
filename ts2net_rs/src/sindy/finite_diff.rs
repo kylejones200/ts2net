@@ -1,6 +1,6 @@
 //! Finite-difference time derivatives (PySINDy-compatible for uniform grids).
 
-use numpy::ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 
 fn factorial(n: usize) -> f64 {
     (1..=n).product::<usize>() as f64
@@ -244,13 +244,13 @@ pub fn finite_difference_stack(
         return parts.into_iter().next().unwrap();
     }
     let views: Vec<_> = parts.iter().map(|a| a.view()).collect();
-    numpy::ndarray::concatenate(Axis(0), &views).expect("concatenate derivatives")
+    ndarray::concatenate(Axis(0), &views).expect("concatenate derivatives")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use numpy::ndarray::Array2;
+    use ndarray::Array2;
 
     #[test]
     fn central_diff_coeffs() {

@@ -1,6 +1,6 @@
 //! Polynomial feature library matching PySINDy / sklearn defaults.
 
-use numpy::ndarray::{Array2, Axis};
+use ndarray::{Array2, Axis};
 
 fn combination_counts(degree: usize, n_features: usize, include_bias: bool) -> Vec<Vec<usize>> {
     let mut powers = Vec::new();
@@ -88,14 +88,14 @@ pub fn polynomial_library_stack(
         return polynomial_library(&trajectories[0], degree, state_names);
     }
     let views: Vec<_> = trajectories.iter().map(|a| a.view()).collect();
-    let stacked = numpy::ndarray::concatenate(Axis(0), &views).expect("stack trajectories");
+    let stacked = ndarray::concatenate(Axis(0), &views).expect("stack trajectories");
     polynomial_library(&stacked, degree, state_names)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use numpy::ndarray::array;
+    use ndarray::array;
 
     #[test]
     fn degree_one_names() {
