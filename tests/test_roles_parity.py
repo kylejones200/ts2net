@@ -19,11 +19,11 @@ import ts2net_rs
 from ts2net.networks import roles
 
 
-def _edges_for_rust(G):
-    nodes = list(G.nodes())
+def _edges_for_rust(graph):
+    nodes = list(graph.nodes())
     idx = {u: i for i, u in enumerate(nodes)}
-    edges = np.empty((G.number_of_edges(), 2), dtype=np.uint64)
-    for k, (u, v) in enumerate(G.edges()):
+    edges = np.empty((graph.number_of_edges(), 2), dtype=np.uint64)
+    for k, (u, v) in enumerate(graph.edges()):
         edges[k, 0] = idx[u]
         edges[k, 1] = idx[v]
     return len(nodes), edges, nodes
@@ -76,11 +76,11 @@ class TestExtensionExportsTheSymbols:
 class TestEgoEdgeCountsMatchNetworkX:
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_against_networkx_subgraph_edge_count(self, name):
-        G = GRAPHS[name]
-        n, edges, nodes = _edges_for_rust(G)
+        graph = GRAPHS[name]
+        n, edges, nodes = _edges_for_rust(graph)
         got = np.asarray(ts2net_rs.ego_edge_counts(n, edges), dtype=np.int64)
         expected = np.array(
-            [G.subgraph(list(G.neighbors(u))).number_of_edges() for u in nodes],
+            [graph.subgraph(list(graph.neighbors(u))).number_of_edges() for u in nodes],
             dtype=np.int64,
         )
         np.testing.assert_array_equal(got, expected)
@@ -88,8 +88,8 @@ class TestEgoEdgeCountsMatchNetworkX:
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_equals_triangles_per_node(self, name):
         # An edge between two neighbours of u is a triangle through u.
-        G = GRAPHS[name]
-        n, edges, _ = _edges_for_rust(G)
+        graph = GRAPHS[name]
+        n, edges, _ = _edges_for_rust(graph)
         np.testing.assert_array_equal(
             np.asarray(ts2net_rs.ego_edge_counts(n, edges)),
             np.asarray(ts2net_rs.triangles_per_node(n, edges)),
@@ -99,19 +99,19 @@ class TestEgoEdgeCountsMatchNetworkX:
 class TestCoreNumbersMatchNetworkX:
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_against_networkx_core_number(self, name):
-        G = GRAPHS[name]
-        n, edges, nodes = _edges_for_rust(G)
+        graph = GRAPHS[name]
+        n, edges, nodes = _edges_for_rust(graph)
         got = np.asarray(ts2net_rs.core_numbers(n, edges), dtype=np.int64)
-        core = nx.core_number(G)
+        core = nx.core_number(graph)
         expected = np.array([core[u] for u in nodes], dtype=np.int64)
         np.testing.assert_array_equal(got, expected)
 
     @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
     def test_on_random_graphs(self, seed):
-        G = nx.gnp_random_graph(30, 0.18, seed=seed)
-        n, edges, nodes = _edges_for_rust(G)
+        graph = nx.gnp_random_graph(30, 0.18, seed=seed)
+        n, edges, nodes = _edges_for_rust(graph)
         got = np.asarray(ts2net_rs.core_numbers(n, edges), dtype=np.int64)
-        core = nx.core_number(G)
+        core = nx.core_number(graph)
         np.testing.assert_array_equal(got, [core[u] for u in nodes])
 
 
@@ -120,46 +120,46 @@ class TestRustPathMatchesFallback:
 
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_triangles(self, name, networkx_fallback):
-        G = GRAPHS[name]
-        with_fallback = roles._triangles_per_node(G)
+        graph = GRAPHS[name]
+        with_fallback = roles._triangles_per_node(graph)
         roles._tri_rs = ts2net_rs.triangles_per_node
-        np.testing.assert_array_equal(roles._triangles_per_node(G), with_fallback)
+        np.testing.assert_array_equal(roles._triangles_per_node(graph), with_fallback)
 
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_ego_edges(self, name, networkx_fallback):
-        G = GRAPHS[name]
-        with_fallback = roles._ego_edges_per_node(G)
+        graph = GRAPHS[name]
+        with_fallback = roles._ego_edges_per_node(graph)
         roles._ego_rs = ts2net_rs.ego_edge_counts
-        np.testing.assert_array_equal(roles._ego_edges_per_node(G), with_fallback)
+        np.testing.assert_array_equal(roles._ego_edges_per_node(graph), with_fallback)
 
     @pytest.mark.parametrize("name", sorted(GRAPHS))
     def test_core_numbers(self, name, networkx_fallback):
-        G = GRAPHS[name]
-        with_fallback = roles._core_number(G)
+        graph = GRAPHS[name]
+        with_fallback = roles._core_number(graph)
         roles._core_rs = ts2net_rs.core_numbers
-        np.testing.assert_array_equal(roles._core_number(G), with_fallback)
+        np.testing.assert_array_equal(roles._core_number(graph), with_fallback)
 
     def test_feature_matrix_is_identical_either_way(self, networkx_fallback):
-        G = nx.karate_club_graph()
-        nodes_fb, X_fb = roles.role_features_extended(G)
+        graph = nx.karate_club_graph()
+        nodes_fb, feats_fb = roles.role_features_extended(graph)
         roles._tri_rs = ts2net_rs.triangles_per_node
         roles._ego_rs = ts2net_rs.ego_edge_counts
         roles._core_rs = ts2net_rs.core_numbers
-        nodes_rs, X_rs = roles.role_features_extended(G)
+        nodes_rs, feats_rs = roles.role_features_extended(graph)
         assert nodes_fb == nodes_rs
-        np.testing.assert_allclose(X_fb, X_rs, atol=1e-12)
+        np.testing.assert_allclose(feats_fb, feats_rs, atol=1e-12)
 
 
 class TestNonIntegerNodeLabels:
     """`_edges_array` remaps labels to indices; results stay in node order."""
 
     def test_string_labelled_graph(self):
-        G = nx.Graph([("a", "b"), ("b", "c"), ("a", "c"), ("c", "d")])
-        tri = roles._triangles_per_node(G)
-        core = roles._core_number(G)
-        nodes = list(G.nodes())
-        nx_tri = nx.triangles(G)
-        nx_core = nx.core_number(G)
+        graph = nx.Graph([("a", "b"), ("b", "c"), ("a", "c"), ("c", "d")])
+        tri = roles._triangles_per_node(graph)
+        core = roles._core_number(graph)
+        nodes = list(graph.nodes())
+        nx_tri = nx.triangles(graph)
+        nx_core = nx.core_number(graph)
         np.testing.assert_array_equal(tri, [nx_tri[u] for u in nodes])
         np.testing.assert_array_equal(core, [nx_core[u] for u in nodes])
 
@@ -178,7 +178,7 @@ class TestRolesArePubliclyUsable:
         )
 
     def test_clustering_runs_end_to_end(self):
-        G = nx.karate_club_graph()
-        labels = roles.node_roles_kmeans(G, n_roles=4, seed=3363)
-        assert set(labels) == set(G.nodes())
+        graph = nx.karate_club_graph()
+        labels = roles.node_roles_kmeans(graph, n_roles=4, seed=3363)
+        assert set(labels) == set(graph.nodes())
         assert 1 < len(set(labels.values())) <= 4
