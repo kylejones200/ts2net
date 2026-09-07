@@ -1,5 +1,5 @@
 # Makefile
-.PHONY: dev docs test test-ci rust-test rust-check check lint format
+.PHONY: dev docs test test-ci rust-test rust-check check lint lint-debt lint-baseline-update format
 
 dev:
 	uv sync --group dev
@@ -32,9 +32,21 @@ check: test-ci rust-test lint
 	@echo "All checks passed!"
 
 lint:
-	@echo "Running linters..."
-	uv run ruff check .
+	@echo "Enforcing the lint baseline (no NEW Ruff debt)..."
+	# The repository carries inherited Ruff debt, frozen in .lint-baseline.json.
+	# This gate fails only if a change adds findings. Use `make lint-debt` to see
+	# the full outstanding debt, which is deliberately not a gate yet.
+	uv run python scripts/lint_baseline.py check
 	uv run flake8 ts2net/ tests/ || true
+
+lint-debt:
+	@echo "Full outstanding Ruff debt (informational -- this is NOT a gate):"
+	uv run python scripts/lint_baseline.py report
+
+lint-baseline-update:
+	@echo "Recording reduced lint debt in .lint-baseline.json..."
+	@echo "Only run this after genuinely fixing findings; it refuses increases."
+	uv run python scripts/lint_baseline.py update
 
 format:
 	@echo "Formatting code..."

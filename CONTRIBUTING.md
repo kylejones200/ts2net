@@ -74,6 +74,33 @@ pytest --cov=ts2net --cov-report=html
 - **Mark slow tests** - Use `@pytest.mark.slow` for tests that take >1 second
 - **Mark benchmark tests** - Use `@pytest.mark.benchmark` for performance tests
 
+## Linting and the lint baseline
+
+`ruff` reports a large number of findings inherited from before the linter was
+enforced. Rather than rewrite the tree in one pass, that debt is frozen in a
+committed baseline and CI enforces only that it never grows.
+
+| Command | What it does | Gate? |
+|---|---|---|
+| `make lint` | Fails if your change **adds** any Ruff finding | yes, and part of `make check` |
+| `make lint-debt` | Prints all outstanding debt, by rule, path and worst files | no, informational |
+| `make lint-baseline-update` | Records debt you have **reduced** | no |
+
+The rule enforced is per file *and* per rule: a file already failing `W293` is
+not thereby allowed to gain an `F401`. Swapping one violation for another keeps
+the total flat but still fails, by design. The global total may never rise.
+
+If you fix findings, run `make lint-baseline-update` to lock the improvement in
+so it cannot be spent later. The command refuses to record an increase; use
+`--allow-increase` only for a deliberate, explained event such as a Ruff upgrade
+or a newly enabled rule.
+
+Do not silence findings with blanket `# noqa`, per-file ignores, or by removing
+paths from Ruff's scope. Every path currently linted is hand-written, committed
+source: there are no generated, vendored or build-artifact files in the count.
+
+New code is expected to be clean. The baseline is for inherited debt only.
+
 ## Release process
 
 Maintainers follow this checklist for each release:

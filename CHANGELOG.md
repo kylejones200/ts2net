@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Lint-debt baseline (`make lint`, `make lint-debt`, `make lint-baseline-update`).**
+  `ruff check .` reported 6261 inherited findings, so `make check` could not
+  pass and a genuine regression could hide among them. The debt is now frozen
+  in a committed `.lint-baseline.json` and enforced per file *and* per rule: a
+  change may not add a finding, even to an already-failing file, and the global
+  total may never rise. `make lint-debt` keeps the full outstanding total in
+  view. Investigation found nothing incorrectly in scope -- no generated,
+  vendored, untracked or build-artifact files -- so no paths were excluded.
+
 ### Fixed
 - **`ts2net.networks.roles` works for the first time.** The module imported
   `ts2net.networks.utils`, which has never existed in any commit, so it raised
