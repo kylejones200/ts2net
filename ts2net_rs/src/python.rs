@@ -244,6 +244,26 @@ fn triangles_per_node(
 }
 
 #[pyfunction]
+fn ego_edge_counts(
+    py: Python<'_>,
+    n: usize,
+    edges: PyReadonlyArray2<usize>,
+) -> PyResult<Py<PyArray1<usize>>> {
+    let e = as_edges(edges)?;
+    Ok(PyArray1::from_vec(py, graphs::ego_edge_counts(n, &e)).unbind())
+}
+
+#[pyfunction]
+fn core_numbers(
+    py: Python<'_>,
+    n: usize,
+    edges: PyReadonlyArray2<usize>,
+) -> PyResult<Py<PyArray1<usize>>> {
+    let e = as_edges(edges)?;
+    Ok(PyArray1::from_vec(py, graphs::core_numbers(n, &e)).unbind())
+}
+
+#[pyfunction]
 fn clustering_avg(_py: Python<'_>, n: usize, edges: PyReadonlyArray2<usize>) -> PyResult<f64> {
     let e = as_edges(edges)?;
     Ok(graphs::clustering_avg(n, &e))
@@ -436,6 +456,8 @@ fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cao_e1_e2, m)?)?;
 
     m.add_function(wrap_pyfunction!(triangles_per_node, m)?)?;
+    m.add_function(wrap_pyfunction!(ego_edge_counts, m)?)?;
+    m.add_function(wrap_pyfunction!(core_numbers, m)?)?;
     m.add_function(wrap_pyfunction!(clustering_avg, m)?)?;
     m.add_function(wrap_pyfunction!(mean_shortest_path, m)?)?;
 

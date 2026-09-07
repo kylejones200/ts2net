@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`ts2net.networks.roles` works for the first time.** The module imported
+  `ts2net.networks.utils`, which has never existed in any commit, so it raised
+  on import and nothing in the package referenced it. The import was also
+  unused (`SKMixin` is never referenced in the module) and is removed. It now
+  imports, is exported from `ts2net.networks`, and its Rust fast path executes:
+  `ego_edge_counts` and `core_numbers` are implemented in the Rust graph API on
+  the shared adjacency builder, and `node_triangles` is served by the existing
+  `triangles_per_node` rather than adding a second name for the same result.
+  The fallback no longer catches bare `Exception`: only the extension being
+  absent falls back to networkx, while a missing binding now raises.
 - **`triangles_per_node` returns the conventional triangle count (BREAKING:
   numerical output changes).** It returned twice `networkx.triangles`: the edge
   sweep visits each triangle at a node once per incident edge, and a node lies
@@ -28,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spectrum and distribution" is now accurate; before, it was not.
 
 ### Added
+- **`ts2net_rs.ego_edge_counts`** and **`ts2net_rs.core_numbers`** -- edges
+  within each node's ego network, and k-core numbers. Both match `networkx`
+  (`subgraph(neighbors).number_of_edges()` and `core_number`) and are built on
+  the same `build_adj` as the other graph metrics.
 - **Dependency-purity gate.** `ts2net_rs/tests/dependency_purity.rs` and a CI
   step assert that a `default-features = false` build of `ts2net_rs` contains
   no `pyo3` and no `numpy`. The Rust library being consumable without Python is

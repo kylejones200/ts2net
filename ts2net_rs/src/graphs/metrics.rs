@@ -71,6 +71,77 @@ pub fn triangles_per_node(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
     tri
 }
 
+/// Number of edges among the neighbours of each node (its ego network,
+/// excluding the node itself).
+///
+/// For a simple undirected graph this equals [`triangles_per_node`]: an edge
+/// between two neighbours of `u` is exactly a triangle through `u`. It is kept
+/// as its own entry point because callers ask for it under that name, and a
+/// test pins the two to each other.
+pub fn ego_edge_counts(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
+    let adj = build_adj(n, edges, true);
+    let mut out = vec![0usize; n];
+    for u in 0..n {
+        let nbrs = &adj[u];
+        let mut count = 0usize;
+        for (i, &a) in nbrs.iter().enumerate() {
+            if a == u {
+                continue;
+            }
+            for &b in nbrs.iter().skip(i + 1) {
+                if b == u {
+                    continue;
+                }
+                // Neighbour lists are sorted, so membership is a binary search.
+                if adj[a].binary_search(&b).is_ok() {
+                    count += 1;
+                }
+            }
+        }
+        out[u] = count;
+    }
+    out
+}
+
+/// k-core number of each node: the largest k for which the node survives in
+/// the k-core.
+///
+/// Matches `networkx.core_number`. Uses the standard peeling algorithm --
+/// repeatedly remove a node of minimum remaining degree, recording the running
+/// maximum of those degrees.
+///
+/// Self-loops are ignored rather than rejected; `networkx` raises on them.
+pub fn core_numbers(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+
+    let adj = build_adj(n, edges, true);
+    let mut deg: Vec<usize> = adj.iter().map(|a| a.len()).collect();
+    let mut core = vec![0usize; n];
+    let mut removed = vec![false; n];
+
+    let mut heap: BinaryHeap<Reverse<(usize, usize)>> =
+        (0..n).map(|v| Reverse((deg[v], v))).collect();
+
+    let mut k = 0usize;
+    while let Some(Reverse((d, v))) = heap.pop() {
+        // Entries are pushed on each degree decrement, so skip stale ones.
+        if removed[v] || d != deg[v] {
+            continue;
+        }
+        k = k.max(deg[v]);
+        core[v] = k;
+        removed[v] = true;
+        for &u in &adj[v] {
+            if !removed[u] && deg[u] > 0 {
+                deg[u] -= 1;
+                heap.push(Reverse((deg[u], u)));
+            }
+        }
+    }
+    core
+}
+
 /// Mean local clustering coefficient over nodes of degree at least two.
 ///
 /// Returns `0.0` when no node qualifies.
@@ -197,6 +268,65 @@ mod tests {
         // Two isolated edges: both pairs are at distance 1, the cross pairs
         // are unreachable and excluded.
         assert_relative_eq!(mean_shortest_path(4, &[(0, 1), (2, 3)]), 1.0);
+    }
+
+    #[test]
+    fn ego_edge_counts_match_triangles_per_node() {
+        // An edge between two neighbours of u is a triangle through u.
+        for (n, edges) in [
+            (3usize, &[(0usize, 1usize), (1, 2), (0, 2)][..]),
+            (4, &[(0, 1), (1, 2), (0, 2), (2, 3), (3, 0)][..]),
+            (4, &[(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)][..]),
+            (5, &[(0, 1), (0, 2), (0, 3), (0, 4)][..]),
+            (4, &[][..]),
+        ] {
+            assert_eq!(
+                ego_edge_counts(n, edges),
+                triangles_per_node(n, edges),
+                "mismatch on n={n} edges={edges:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ego_edge_counts_on_a_star_and_a_clique() {
+        // A star's centre has no edges among its leaves.
+        assert_eq!(
+            ego_edge_counts(4, &[(0, 1), (0, 2), (0, 3)]),
+            vec![0, 0, 0, 0]
+        );
+        // In K4 every node's three neighbours are mutually adjacent.
+        let k4 = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
+        assert_eq!(ego_edge_counts(4, &k4), vec![3, 3, 3, 3]);
+    }
+
+    #[test]
+    fn core_numbers_on_hand_computable_graphs() {
+        // A path: the endpoints and interior all sit in the 1-core.
+        assert_eq!(core_numbers(3, &[(0, 1), (1, 2)]), vec![1, 1, 1]);
+        // A triangle is a 2-core throughout.
+        assert_eq!(core_numbers(3, &TRIANGLE), vec![2, 2, 2]);
+        // K4 is a 3-core throughout.
+        let k4 = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
+        assert_eq!(core_numbers(4, &k4), vec![3, 3, 3, 3]);
+        // Isolated nodes have core number 0.
+        assert_eq!(core_numbers(3, &[]), vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn core_numbers_separate_a_dense_core_from_a_pendant() {
+        // K4 on 0..3 plus a pendant node 4 hanging off node 0.
+        let edges = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3), (0, 4)];
+        assert_eq!(core_numbers(5, &edges), vec![3, 3, 3, 3, 1]);
+    }
+
+    #[test]
+    fn core_numbers_never_exceed_degree() {
+        let edges = [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)];
+        let adj = build_adj(4, &edges, true);
+        for (v, c) in core_numbers(4, &edges).into_iter().enumerate() {
+            assert!(c <= adj[v].len(), "core {c} exceeds degree at {v}");
+        }
     }
 
     #[test]
