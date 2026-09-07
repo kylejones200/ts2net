@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Audit: `role_features_extended` feature matrix** (`docs/audits/role_features_audit.md`,
+  reproduce with `scripts/audit_role_features.py`). Characterization only; no
+  production behaviour changed. Findings: the twelve columns span at most nine
+  independent directions, because `ego_edges` is exactly `tri`, `ego_density`
+  is exactly `cc`, and `core_score` is `core` rescaled — which standardization
+  erases. The aliasing acts as an undocumented weight of 2 on the triangle,
+  clustering and coreness signals, shifting node distances 6–11% and changing
+  cluster assignments (KMeans ARI as low as 0.424, spectral 0.118). Separately,
+  standardization is applied twice, which rescales numerically constant columns
+  to unit variance and makes the function non-deterministic on vertex-transitive
+  graphs (spread up to 3.48 across identical calls).
+
 ### Fixed
 - **`ts2net.api` return annotations now resolve.** The four `adjacency_matrix`
   methods were annotated `"Union[csr_matrix, coo_matrix, ...]"` with neither
