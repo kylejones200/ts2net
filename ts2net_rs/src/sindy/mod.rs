@@ -4,18 +4,24 @@ mod finite_diff;
 mod polynomial;
 mod stlsq;
 
-use numpy::ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 
 use finite_diff::finite_difference_stack;
 use polynomial::polynomial_library_stack;
 use stlsq::{drop_nan_rows, stlsq, StlsqConfig};
 
+/// Hyperparameters for a SINDy fit.
 #[derive(Debug, Clone)]
 pub struct SindyConfig {
+    /// Highest total degree in the polynomial candidate library.
     pub polynomial_degree: usize,
+    /// Coefficients below this magnitude are zeroed on each STLSQ pass.
     pub threshold: f64,
+    /// Ridge regularisation strength for the least-squares solve.
     pub alpha: f64,
+    /// Order of the finite-difference stencil used to estimate derivatives.
     pub differentiation_order: usize,
+    /// Maximum number of sequential-thresholding iterations.
     pub max_iter: usize,
 }
 
@@ -31,11 +37,19 @@ impl Default for SindyConfig {
     }
 }
 
+/// Result of a SINDy fit.
 pub struct SindyFit {
+    /// Sparse coefficient matrix, one row per library term and one column per
+    /// state variable.
     pub coefficients: Array2<f64>,
+    /// Names of the library terms, in row order of `coefficients`.
     pub feature_names: Vec<String>,
 }
 
+/// Fit governing equations to a single trajectory.
+///
+/// Supply `x_dot` to use measured derivatives; otherwise they are estimated by
+/// finite differences at `config.differentiation_order`.
 pub fn fit_single(
     x: &Array2<f64>,
     t: &Array1<f64>,
@@ -46,6 +60,11 @@ pub fn fit_single(
     fit_many(&[x.clone()], &[t.clone()], x_dot.map(|d| vec![d.clone()]), state_names, config)
 }
 
+/// Fit governing equations jointly to several trajectories.
+///
+/// The trajectories are differentiated separately and then stacked, so
+/// derivatives are never taken across a discontinuity between them. Errors if
+/// no trajectory is given or if `state_names` does not match the column count.
 pub fn fit_many(
     trajectories: &[Array2<f64>],
     times: &[Array1<f64>],
@@ -74,7 +93,7 @@ pub fn fit_many(
                 dots.into_iter().next().unwrap()
             } else {
                 let views: Vec<_> = dots.iter().map(|a| a.view()).collect();
-                numpy::ndarray::concatenate(Axis(0), &views).map_err(|e| e.to_string())?
+                ndarray::concatenate(Axis(0), &views).map_err(|e| e.to_string())?
             }
         }
         None => finite_difference_stack(trajectories, times, config.differentiation_order),
@@ -101,7 +120,7 @@ pub fn fit_many(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use numpy::ndarray::Array1;
+    use ndarray::Array1;
 
     fn linspace(start: f64, end: f64, n: usize) -> Array1<f64> {
         Array1::from_iter((0..n).map(|i| start + (end - start) * i as f64 / (n - 1) as f64))

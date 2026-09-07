@@ -1,5 +1,5 @@
 # Makefile
-.PHONY: dev docs test test-ci check lint format
+.PHONY: dev docs test test-ci rust-test rust-check check lint format
 
 dev:
 	uv sync --group dev
@@ -15,7 +15,20 @@ test-ci:
 	@echo "This may take longer but catches more issues."
 	PYTHONHASHSEED=0 uv run pytest -q
 
-check: test-ci lint
+rust-test:
+	@echo "Running Rust unit tests..."
+	# --no-default-features drops the PyO3 bindings. A test binary cannot link
+	# against the symbols pyo3's extension-module feature leaves undefined, so a
+	# plain `cargo test` fails at the link step; the algorithm modules under test
+	# have no Python dependency anyway.
+	cargo test --manifest-path ts2net_rs/Cargo.toml --no-default-features
+
+rust-check:
+	@echo "Checking both feature configurations..."
+	cargo check --manifest-path ts2net_rs/Cargo.toml --no-default-features
+	cargo check --manifest-path ts2net_rs/Cargo.toml
+
+check: test-ci rust-test lint
 	@echo "All checks passed!"
 
 lint:

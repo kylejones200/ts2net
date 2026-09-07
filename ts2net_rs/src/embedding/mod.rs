@@ -1,3 +1,5 @@
-//! Time series embedding utilities
+//! Phase-space reconstruction: choosing an embedding dimension.
 
-// This module is currently empty but reserved for future embedding functions
+mod fnn;
+
+pub use fnn::{cao_e1_e2, false_nearest_neighbors};

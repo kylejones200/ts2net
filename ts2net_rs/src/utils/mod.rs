@@ -1,3 +1,7 @@
-//! General utility functions
+//! Surrogate generation and significance testing.
 
-// This module is currently empty but reserved for future utility functions
+mod stats;
+mod surrogates;
+
+pub use stats::{corr_perm, moran_i};
+pub use surrogates::{iaaft, surrogate_phase};

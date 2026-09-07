@@ -1,6 +1,6 @@
 //! Sequentially thresholded least squares (STLSQ) with optional unbiasing.
 
-use numpy::ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2};
 
 #[derive(Debug, Clone)]
 pub struct StlsqConfig {
@@ -241,7 +241,7 @@ mod tests {
     use super::*;
     use crate::sindy::finite_diff::finite_difference;
     use crate::sindy::polynomial::polynomial_library;
-    use numpy::ndarray::{array, Array2};
+    use ndarray::{array, Array2};
 
     #[test]
     fn recovers_linear_relation() {
