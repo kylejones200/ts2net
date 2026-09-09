@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`ts2net.networks.feature_schema`** -- an authoritative, inspectable
+  definition of the role-feature columns. Column order previously existed only
+  implicitly across two modules, so nothing could state what a given column
+  meant. `ROLE_FEATURES_V1` records the shipped twelve columns with each one's
+  mathematical definition, units and provenance; `ROLE_FEATURES_V2` proposes a
+  nine-column non-redundant schema. **v2 is not produced by any public
+  function yet and no default has changed.**
+- **Schema/bandwidth design study** (`docs/audits/role_schema_v2_design.md`,
+  reproduce with `scripts/experiment_role_schema.py`). A four-way factorial
+  separates the feature-schema effect from the spectral kernel-bandwidth
+  effect, which are currently confounded because `node_roles_spectral` sets
+  `gamma = 1 / X.shape[1]`. Holding gamma fixed, de-duplication still changes
+  6 of 11 well-posed graphs (median ARI 0.863); holding the schema fixed,
+  1/12 -> 1/9 leaves 8 of 11 unchanged; the two interact, with per-graph
+  differences up to 0.882, and the naive migration that changes both at once
+  is the worst of the four cells. `gamma = 1 / X.shape[1]` is traced to
+  scikit-learn's `rbf_kernel` default, present verbatim since the initial
+  commit with no comment, test or reference; note `SpectralClustering`'s own
+  gamma default is 1.0, materially different.
+
 ### Fixed
 - **Role features are deterministic again; standardization happens exactly once.**
   `_role_features_basic` standardized its seven columns and
