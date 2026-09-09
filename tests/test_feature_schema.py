@@ -12,6 +12,8 @@ bandwidth values, which are deterministic, not partitions.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -167,13 +169,22 @@ class TestSchemaMatchesTheImplementation:
         )
 
 
-class TestSchemaWidthCurrentlyControlsKernelBandwidth:
-    """The coupling this investigation exists to expose.
+class TestKernelBandwidthIsIndependentOfSchemaWidth:
+    """Bandwidth is a named policy, not a consequence of matrix shape.
 
-    `node_roles_spectral` sets ``gamma = 1 / X.shape[1]`` when the caller does
-    not pass one, so dropping redundant columns silently retunes the kernel.
-    These assert the mechanism, not any partition.
+    `node_roles_spectral` used to set ``gamma = 1 / X.shape[1]``, so dropping
+    redundant columns silently retuned the kernel. It now uses
+    :data:`roles.DEFAULT_SPECTRAL_GAMMA`. These assert kernel matrices and
+    bandwidth values, which are deterministic; no partition is frozen.
     """
+
+    def test_the_default_does_not_depend_on_column_count(self):
+        assert roles.DEFAULT_SPECTRAL_GAMMA == pytest.approx(1 / 12)
+        source = Path(roles.__file__).read_text()
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "X.shape[1]" not in code, "bandwidth must not read the matrix width"
 
     def test_the_implicit_rule_is_scikit_learns_rbf_default(self):
         rng = np.random.default_rng(0)

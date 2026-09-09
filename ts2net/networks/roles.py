@@ -26,6 +26,27 @@ else:
     _core_rs = _rs.core_numbers
 
 
+#: Default RBF kernel bandwidth for :func:`node_roles_spectral`.
+#:
+#: This is a named policy, deliberately independent of the feature matrix'
+#: width. It previously read ``1 / X.shape[1]``, which made the number of
+#: feature columns a hyperparameter of the clustering algorithm: adding or
+#: removing a column silently retuned the kernel. See
+#: ``docs/audits/role_schema_v2_design.md``, whose factorial experiment shows
+#: the schema effect and the bandwidth effect interact by up to 0.882 ARI per
+#: graph, so a change to one must not drag the other along.
+#:
+#: The value is the historical ``1/12`` that the twelve-column schema produced,
+#: pinned so that removing the three redundant columns changes the feature
+#: geometry and nothing else. It is not derived from the current column count
+#: and must not be.
+#:
+#: Pass ``gamma`` explicitly to override. A data-driven bandwidth such as the
+#: median heuristic is a reasonable future default, but it is a separate
+#: decision with its own evidence.
+DEFAULT_SPECTRAL_GAMMA = 1.0 / 12.0
+
+
 def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
     nodes = list(G.nodes())
     idx = {u: i for i, u in enumerate(nodes)}
@@ -131,6 +152,12 @@ def node_roles_spectral(
     affinity: Literal["rbf", "cosine"] = "rbf",
     gamma: Optional[float] = None,
 ) -> Dict:
+    """Cluster nodes into roles by spectral clustering of the feature matrix.
+
+    ``gamma`` is the RBF kernel bandwidth. When omitted,
+    :data:`DEFAULT_SPECTRAL_GAMMA` is used -- a fixed, named value that does
+    not depend on how many feature columns arrive.
+    """
     from sklearn.cluster import SpectralClustering
 
     nodes, X = role_features_extended(G)
@@ -138,7 +165,7 @@ def node_roles_spectral(
         from sklearn.metrics.pairwise import rbf_kernel
 
         if gamma is None:
-            gamma = 1.0 / X.shape[1]
+            gamma = DEFAULT_SPECTRAL_GAMMA
         A = rbf_kernel(X, gamma=float(gamma))
     else:
         from sklearn.metrics.pairwise import cosine_similarity

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Spectral kernel bandwidth is now a named policy, not a function of matrix
+  width.** `node_roles_spectral` derived `gamma = 1 / X.shape[1]`, which made
+  the number of feature columns a hyperparameter of the clustering algorithm:
+  adding or removing a column silently retuned the kernel. It now uses
+  `ts2net.networks.roles.DEFAULT_SPECTRAL_GAMMA`, pinned to the historical
+  `1/12`. **This change is a no-op on its own** -- the feature matrix has
+  twelve columns, so the old rule already yielded `1/12` -- and exists so that
+  the following schema change alters the feature geometry and nothing else.
+
 ### Added
 - **`ts2net.networks.feature_schema`** -- an authoritative, inspectable
   definition of the role-feature columns. Column order previously existed only
