@@ -119,10 +119,12 @@ class TestSchemaMatchesTheImplementation:
     def test_each_declared_column_holds_what_its_name_says(self, name):
         graph = GRAPHS[name]
         _, produced = roles.role_features_extended(graph)
-        assert produced.shape[1] == len(V1_NAMES)
+        assert produced.shape[1] == len(V2_NAMES)
         expected = self._independent_columns(graph)
         for column_name, raw in expected.items():
-            position = index_of(column_name)
+            if column_name not in V2_NAMES:
+                continue
+            position = index_of(column_name, ROLE_FEATURES_V2)
             np.testing.assert_allclose(
                 produced[:, position],
                 self._standardize(raw),
@@ -131,42 +133,20 @@ class TestSchemaMatchesTheImplementation:
             )
 
     @pytest.mark.parametrize("name", sorted(GRAPHS))
-    def test_declared_aliases_are_identical_columns_in_practice(self, name):
-        _, produced = roles.role_features_extended(GRAPHS[name])
+    def test_the_declared_aliases_really_were_aliases(self, name):
+        """Why v2 drops three columns, verified from the raw definitions.
+
+        The alias columns are no longer produced, so this checks the identity
+        at the level of the quantities themselves rather than of the matrix.
+        """
+        raw = self._independent_columns(GRAPHS[name])
         for alias, canonical in REDUNDANT_V1_COLUMNS.items():
             np.testing.assert_allclose(
-                produced[:, index_of(alias)],
-                produced[:, index_of(canonical)],
+                self._standardize(raw[alias]),
+                self._standardize(raw[canonical]),
                 atol=1e-9,
                 err_msg=f"{name}: {alias} should equal {canonical}",
             )
-
-    def test_redundant_columns_is_exactly_the_set_of_corpus_wide_aliases(self):
-        """An alias must coincide on *every* graph, not merely on some.
-
-        Highly symmetric graphs produce coincidences that are not aliases: on a
-        star, degree, pagerank, eigenvector, betweenness and closeness all take
-        only two distinct values and therefore standardize to the same vector.
-        Those pairs separate on other graphs. A genuine alias never separates,
-        which is what makes it removable.
-        """
-        always_equal = None
-        for graph in GRAPHS.values():
-            _, produced = roles.role_features_extended(graph)
-            equal_here = {
-                frozenset((V1_NAMES[i], V1_NAMES[j]))
-                for i in range(len(V1_NAMES))
-                for j in range(i + 1, len(V1_NAMES))
-                if np.allclose(produced[:, i], produced[:, j], atol=1e-9)
-            }
-            always_equal = (
-                equal_here if always_equal is None else always_equal & equal_here
-            )
-
-        declared = {frozenset((a, c)) for a, c in REDUNDANT_V1_COLUMNS.items()}
-        assert always_equal == declared, (
-            f"schema declares {declared} but the corpus shows {always_equal}"
-        )
 
 
 class TestKernelBandwidthIsIndependentOfSchemaWidth:
@@ -228,10 +208,14 @@ class TestKernelBandwidthIsIndependentOfSchemaWidth:
         assert 1 < len(set(labels.values())) <= 3
 
 
-class TestV2IsNotProducedYet:
-    """This batch defines v2; it does not ship it."""
-
-    def test_the_public_function_still_returns_v1(self):
+class TestV2IsTheDefault:
+    def test_the_public_function_returns_v2(self):
         _, produced = roles.role_features_extended(nx.karate_club_graph())
-        assert produced.shape[1] == 12
-        assert produced.shape[1] == len(ROLE_FEATURES_V1)
+        assert produced.shape[1] == 9
+        assert produced.shape[1] == len(ROLE_FEATURES_V2)
+
+    def test_no_alias_column_survives(self):
+        _, produced = roles.role_features_extended(nx.karate_club_graph())
+        assert produced.shape[1] == len(V2_NAMES)
+        for alias in REDUNDANT_V1_COLUMNS:
+            assert alias not in V2_NAMES

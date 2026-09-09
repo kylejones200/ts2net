@@ -27,6 +27,11 @@ from ts2net.networks import roles
 
 warnings.filterwarnings("ignore")
 
+# Number of leading v1 columns that survive into the v2 schema production now
+# emits. v1 order places the three aliases last, so the survivors are the first
+# nine and the slice is contiguous.
+N_V2 = 9
+
 # Column order produced by role_features_extended: seven from
 # _role_features_basic, then tri, wedges, ego_edges, ego_density, core_score.
 NAMES = [
@@ -38,6 +43,37 @@ NAMES = [
 # canonical. Used only to build comparison matrices.
 ALIASES = {"ego_edges": "tri", "ego_density": "cc", "core_score": "core"}
 CANONICAL = [n for n in NAMES if n not in ALIASES]
+
+
+# The three alias columns were removed from production in the v2 schema, so
+# this script -- which characterizes v1 -- defines them itself. They are simple
+# closed forms; keeping them here lets the historical analysis stay
+# reproducible without resurrecting dead code in the package.
+
+
+def _v1_ego_edges(und, nodes) -> np.ndarray:
+    """Edges among the neighbours of each node (v1 column `ego_edges`)."""
+    return np.array(
+        [und.subgraph(list(und.neighbors(u))).number_of_edges() for u in nodes],
+        dtype=float,
+    )
+
+
+def _v1_ego_density(und, nodes) -> np.ndarray:
+    """2*m_u / (k(k-1)) for k >= 2 else 0 (v1 column `ego_density`)."""
+    out = np.zeros(len(nodes), dtype=float)
+    for i, u in enumerate(nodes):
+        nbrs = list(und.neighbors(u))
+        k = len(nbrs)
+        if k <= 1:
+            continue
+        out[i] = 2.0 * und.subgraph(nbrs).number_of_edges() / (k * (k - 1))
+    return out
+
+
+def _v1_core_score(core: np.ndarray) -> np.ndarray:
+    """core / max(core) (v1 column `core_score`)."""
+    return core / core.max() if core.max() > 0 else core.copy()
 
 
 def zscore(x: np.ndarray) -> np.ndarray:
@@ -87,9 +123,9 @@ def raw_feature_matrix(graph: nx.Graph):
 
     tri_wedge = roles._motif_features(und, nodes)
     tri, wedges = tri_wedge[:, 0], tri_wedge[:, 1]
-    ego_edges = roles._ego_edges_per_node(und).astype(float)
-    ego_density = roles._egonet_density(und, nodes)
-    core_score = roles._core_periphery_scores(und, nodes).astype(float)
+    ego_edges = _v1_ego_edges(und, nodes)
+    ego_density = _v1_ego_density(und, nodes)
+    core_score = _v1_core_score(core)
 
     raw = np.vstack([
         deg, cc, pr, ev, core, btw, clo,
@@ -99,10 +135,15 @@ def raw_feature_matrix(graph: nx.Graph):
 
 
 def validate_reconstruction(graph: nx.Graph) -> float:
-    """Max abs difference between z(raw) and what production returns."""
+    """Max abs difference between z(raw) and what production returns.
+
+    Production emits the v2 schema, so only the surviving columns are
+    comparable; the three alias columns this script still reconstructs have no
+    counterpart there.
+    """
     _, raw = raw_feature_matrix(graph)
     _, prod = roles.role_features_extended(graph)
-    return float(np.max(np.abs(zscore(raw) - prod)))
+    return float(np.max(np.abs(zscore(raw)[:, :N_V2] - prod)))
 
 
 def determinism(graph: nx.Graph, repeats: int = 5) -> float:
@@ -128,7 +169,7 @@ def noise_amplification(graph: nx.Graph) -> list:
     _, raw = raw_feature_matrix(graph)
     _, prod = roles.role_features_extended(graph)
     out = []
-    for i, name in enumerate(NAMES):
+    for i, name in enumerate(NAMES[:N_V2]):
         raw_std = float(np.std(raw[:, i], ddof=1))
         scale = max(abs(float(np.mean(raw[:, i]))), 1.0)
         out_std = float(np.std(prod[:, i], ddof=1))
@@ -168,8 +209,8 @@ def check_identities(graph: nx.Graph) -> dict:
     nodes = list(und.nodes())
     deg = np.array([und.degree(n) for n in nodes], float)
     tri = roles._triangles_per_node(und).astype(float)
-    ego = roles._ego_edges_per_node(und).astype(float)
-    dens = roles._egonet_density(und, nodes)
+    ego = _v1_ego_edges(und, nodes)
+    dens = _v1_ego_density(und, nodes)
     cc = np.array(list(nx.clustering(und).values()), float)
 
     with np.errstate(divide="ignore", invalid="ignore"):

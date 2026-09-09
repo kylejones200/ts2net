@@ -18,12 +18,8 @@ except ImportError:  # pragma: no cover - exercised only without the extension
 
 if _rs is None:
     _tri_rs = None
-    _ego_rs = None
-    _core_rs = None
 else:
     _tri_rs = _rs.triangles_per_node
-    _ego_rs = _rs.ego_edge_counts
-    _core_rs = _rs.core_numbers
 
 
 #: Default RBF kernel bandwidth for :func:`node_roles_spectral`.
@@ -70,41 +66,6 @@ def _triangles_per_node(G: nx.Graph) -> np.ndarray:
     return np.array([tri[u] for u in H.nodes()], dtype=np.int64)
 
 
-def _ego_edges_per_node(G: nx.Graph) -> np.ndarray:
-    n, E, _, nodes, _ = _edges_array(G)
-    if _ego_rs is not None:
-        return np.array(_ego_rs(n, E), dtype=np.int64)
-    out = np.zeros(len(nodes), dtype=np.int64)
-    H = G.to_undirected()
-    for i, u in enumerate(nodes):
-        nbrs = list(H.neighbors(u))
-        sub = H.subgraph(nbrs)
-        out[i] = sub.number_of_edges()
-    return out
-
-
-def _core_number(G: nx.Graph) -> np.ndarray:
-    n, E, _, nodes, _ = _edges_array(G)
-    if _core_rs is not None:
-        return np.array(_core_rs(n, E), dtype=np.int64)
-    core = nx.core_number(G.to_undirected())
-    return np.array([core[u] for u in nodes], dtype=np.int64)
-
-
-def _egonet_density(G: nx.Graph, nodes: List) -> np.ndarray:
-    H = G.to_undirected()
-    out = np.zeros(len(nodes), float)
-    for i, u in enumerate(nodes):
-        nbrs = list(H.neighbors(u))
-        k = len(nbrs)
-        if k <= 1:
-            out[i] = 0.0
-            continue
-        m = H.subgraph(nbrs).number_of_edges()
-        out[i] = 2.0 * m / (k * (k - 1))
-    return out
-
-
 def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     H = G.to_undirected()
     tri = _triangles_per_node(H)
@@ -113,23 +74,28 @@ def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     return np.vstack([tri, wedges]).T.astype(float)
 
 
-def _core_periphery_scores(G: nx.Graph, nodes: List) -> np.ndarray:
-    H = G.to_undirected()
-    c = _core_number(H).astype(float)
-    if c.max() > 0:
-        c = c / c.max()
-    return c
-
-
 def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
+    """Structural role features per node, standardized.
+
+    Returns ``(nodes, X)`` where ``X`` has one row per node and one column per
+    entry of :data:`ts2net.networks.feature_schema.ROLE_FEATURES_V2`, in that
+    order. Import the schema to address a column by meaning rather than by
+    position.
+
+    The columns are nine independent signals. Three further columns shipped
+    before this release -- ``ego_edges``, ``ego_density`` and ``core_score`` --
+    were exact aliases of ``triangles``, ``clustering`` and ``core_number``
+    respectively, and are removed; see
+    ``docs/audits/role_schema_v2_design.md``. ``wedges`` is retained although
+    it is determined by ``degree`` and ``triangles`` as
+    ``C(degree, 2) - triangles``, because it is quadratic in degree and so
+    spans a direction neither parent does.
+    """
     H = G.to_undirected()
     nodes, Xbasic = _role_features_basic(H)
     nodes = list(nodes)
     tri_wedge = _motif_features(H, nodes)
-    ego_edges = _ego_edges_per_node(H).astype(float).reshape(-1, 1)
-    ego_density = _egonet_density(H, nodes).reshape(-1, 1)
-    core_score = _core_periphery_scores(H, nodes).reshape(-1, 1)
-    X = np.hstack([Xbasic, tri_wedge, ego_edges, ego_density, core_score])
+    X = np.hstack([Xbasic, tri_wedge])
     # Single standardization boundary for the whole matrix; the columns above
     # are raw. See ts2net.networks._standardize.
     X = standardize(X)
