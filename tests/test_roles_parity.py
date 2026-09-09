@@ -32,14 +32,12 @@ def _edges_for_rust(graph):
 @pytest.fixture
 def networkx_fallback():
     """Force roles.py onto its networkx path for the duration of a test."""
-    saved = (roles._tri_rs, roles._ego_rs, roles._core_rs)
+    saved = roles._tri_rs
     roles._tri_rs = None
-    roles._ego_rs = None
-    roles._core_rs = None
     try:
         yield roles
     finally:
-        roles._tri_rs, roles._ego_rs, roles._core_rs = saved
+        roles._tri_rs = saved
 
 
 GRAPHS = {
@@ -66,11 +64,12 @@ class TestExtensionExportsTheSymbols:
         assert hasattr(ts2net_rs, symbol)
 
     def test_roles_bound_the_rust_path(self):
-        # If a future build drops one of these bindings, importing roles.py
-        # now raises AttributeError instead of silently using networkx.
+        # If a future build drops this binding, importing roles.py raises
+        # AttributeError instead of silently using networkx. Only triangles is
+        # wired now: the v2 schema dropped the columns that consumed
+        # ego_edge_counts and core_numbers, though both remain part of the
+        # Rust graph API and are covered by the classes above.
         assert roles._tri_rs is not None
-        assert roles._ego_rs is not None
-        assert roles._core_rs is not None
 
 
 class TestEgoEdgeCountsMatchNetworkX:
@@ -125,26 +124,10 @@ class TestRustPathMatchesFallback:
         roles._tri_rs = ts2net_rs.triangles_per_node
         np.testing.assert_array_equal(roles._triangles_per_node(graph), with_fallback)
 
-    @pytest.mark.parametrize("name", sorted(GRAPHS))
-    def test_ego_edges(self, name, networkx_fallback):
-        graph = GRAPHS[name]
-        with_fallback = roles._ego_edges_per_node(graph)
-        roles._ego_rs = ts2net_rs.ego_edge_counts
-        np.testing.assert_array_equal(roles._ego_edges_per_node(graph), with_fallback)
-
-    @pytest.mark.parametrize("name", sorted(GRAPHS))
-    def test_core_numbers(self, name, networkx_fallback):
-        graph = GRAPHS[name]
-        with_fallback = roles._core_number(graph)
-        roles._core_rs = ts2net_rs.core_numbers
-        np.testing.assert_array_equal(roles._core_number(graph), with_fallback)
-
     def test_feature_matrix_is_identical_either_way(self, networkx_fallback):
         graph = nx.karate_club_graph()
         nodes_fb, feats_fb = roles.role_features_extended(graph)
         roles._tri_rs = ts2net_rs.triangles_per_node
-        roles._ego_rs = ts2net_rs.ego_edge_counts
-        roles._core_rs = ts2net_rs.core_numbers
         nodes_rs, feats_rs = roles.role_features_extended(graph)
         assert nodes_fb == nodes_rs
         np.testing.assert_allclose(feats_fb, feats_rs, atol=1e-12)
@@ -156,12 +139,9 @@ class TestNonIntegerNodeLabels:
     def test_string_labelled_graph(self):
         graph = nx.Graph([("a", "b"), ("b", "c"), ("a", "c"), ("c", "d")])
         tri = roles._triangles_per_node(graph)
-        core = roles._core_number(graph)
         nodes = list(graph.nodes())
         nx_tri = nx.triangles(graph)
-        nx_core = nx.core_number(graph)
         np.testing.assert_array_equal(tri, [nx_tri[u] for u in nodes])
-        np.testing.assert_array_equal(core, [nx_core[u] for u in nodes])
 
 
 class TestRolesArePubliclyUsable:

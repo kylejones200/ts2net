@@ -1,9 +1,11 @@
-"""Characterization of the `role_features_extended` feature matrix.
+"""Mathematical contracts behind the role-feature schema.
 
-These tests document mathematical contracts and current behaviour. They do not
-freeze clustering assignments, and they do not assert that the schema should
-change -- the audit in docs/audits/role_features_audit.md makes recommendations
-but no production change has been made.
+These document why the v2 schema drops three columns. The identities are
+properties of the underlying graph quantities and remain true whether or not
+any column exposes them, so they are asserted against `ts2net_rs` and
+`networkx` directly -- the level at which those quantities still live.
+
+They do not freeze clustering assignments.
 
 Two families of fact are pinned here:
 
@@ -25,6 +27,7 @@ import numpy as np
 import pytest
 
 import ts2net  # noqa: F401  -- aliases the compiled extension as `ts2net_rs`
+import ts2net_rs
 from ts2net.networks import roles
 
 
@@ -62,6 +65,18 @@ def _degrees(graph, nodes):
     return np.array([graph.degree(u) for u in nodes], dtype=float)
 
 
+def _rust_edges(graph):
+    """`(n, edges, nodes)` in the [m, 2] uint64 form the Rust bindings take."""
+    und = graph.to_undirected()
+    nodes = list(und.nodes())
+    index = {u: i for i, u in enumerate(nodes)}
+    edges = np.empty((und.number_of_edges(), 2), dtype=np.uint64)
+    for k, (u, v) in enumerate(und.edges()):
+        edges[k, 0] = index[u]
+        edges[k, 1] = index[v]
+    return len(nodes), edges, nodes
+
+
 class TestEgoEdgesEqualsTriangles:
     """`ego_edge_counts(u) == triangles_per_node(u)` for simple graphs.
 
@@ -73,58 +88,48 @@ class TestEgoEdgesEqualsTriangles:
     @NAMES
     def test_identity_holds(self, name):
         graph = CORPUS[name]
+        n, edges, _ = _rust_edges(graph)
         np.testing.assert_array_equal(
-            roles._ego_edges_per_node(graph), roles._triangles_per_node(graph)
+            ts2net_rs.ego_edge_counts(n, edges), ts2net_rs.triangles_per_node(n, edges)
         )
 
     @pytest.mark.parametrize("seed", range(6))
     def test_identity_holds_on_random_graphs(self, seed):
         graph = nx.gnp_random_graph(30, 0.2, seed=seed)
+        n, edges, _ = _rust_edges(graph)
         np.testing.assert_array_equal(
-            roles._ego_edges_per_node(graph), roles._triangles_per_node(graph)
+            ts2net_rs.ego_edge_counts(n, edges), ts2net_rs.triangles_per_node(n, edges)
         )
 
     def test_both_are_zero_for_degree_zero_and_one_nodes(self):
         graph = _isolated_plus_triangle()
-        nodes = list(graph.nodes())
-        deg = _degrees(graph, nodes)
-        low = deg <= 1
+        n, edges, nodes = _rust_edges(graph)
+        low = _degrees(graph, nodes) <= 1
         assert low.sum() >= 3, "fixture should contain isolated nodes"
-        assert np.all(roles._triangles_per_node(graph)[low] == 0)
-        assert np.all(roles._ego_edges_per_node(graph)[low] == 0)
+        assert np.all(np.asarray(ts2net_rs.triangles_per_node(n, edges))[low] == 0)
+        assert np.all(np.asarray(ts2net_rs.ego_edge_counts(n, edges))[low] == 0)
 
 
 class TestEgonetDensityIsTheClusteringCoefficient:
     """`_egonet_density(u) == 2*T(u) / (k(u) * (k(u)-1))`, i.e. `nx.clustering`."""
 
     @NAMES
-    def test_matches_the_closed_form(self, name):
+    def test_ego_density_closed_form_is_the_clustering_coefficient(self, name):
         graph = CORPUS[name]
         nodes = list(graph.nodes())
         deg = _degrees(graph, nodes)
-        tri = roles._triangles_per_node(graph).astype(float)
+        n, edges, _ = _rust_edges(graph)
+        tri = np.asarray(ts2net_rs.triangles_per_node(n, edges), dtype=float)
         with np.errstate(divide="ignore", invalid="ignore"):
-            expected = np.where(deg >= 2, 2.0 * tri / (deg * (deg - 1)), 0.0)
-        np.testing.assert_allclose(
-            roles._egonet_density(graph, nodes), expected, atol=1e-12
-        )
-
-    @NAMES
-    def test_matches_networkx_clustering(self, name):
-        graph = CORPUS[name]
-        nodes = list(graph.nodes())
-        expected = np.array([nx.clustering(graph)[u] for u in nodes], dtype=float)
-        np.testing.assert_allclose(
-            roles._egonet_density(graph, nodes), expected, atol=1e-12
-        )
+            ego_density = np.where(deg >= 2, 2.0 * tri / (deg * (deg - 1)), 0.0)
+        clustering = np.array([nx.clustering(graph)[u] for u in nodes], dtype=float)
+        np.testing.assert_allclose(ego_density, clustering, atol=1e-12)
 
     def test_degree_zero_and_one_are_defined_as_zero(self):
-        """The denominator k(k-1) vanishes; both implementations return 0."""
+        """The denominator k(k-1) vanishes; the convention is 0 on both sides."""
         graph = _isolated_plus_triangle()
         nodes = list(graph.nodes())
-        deg = _degrees(graph, nodes)
-        low = deg <= 1
-        assert np.all(roles._egonet_density(graph, nodes)[low] == 0.0)
+        low = _degrees(graph, nodes) <= 1
         assert np.all([nx.clustering(graph)[u] == 0.0 for u in np.array(nodes)[low]])
 
 
@@ -132,21 +137,12 @@ class TestCoreScoreIsARescalingOfCore:
     """`core_score = core / max(core)`, which standardization then erases."""
 
     @NAMES
-    def test_is_a_positive_rescaling(self, name):
+    def test_standardization_makes_core_score_identical_to_core(self, name):
+        """z(a*x) == z(x) for a > 0, so the two columns coincided downstream."""
         graph = CORPUS[name]
-        nodes = list(graph.nodes())
-        core = roles._core_number(graph).astype(float)
-        score = roles._core_periphery_scores(graph, nodes)
-        expected = core / core.max() if core.max() > 0 else core
-        np.testing.assert_allclose(score, expected, atol=1e-12)
-
-    @NAMES
-    def test_standardization_makes_it_identical_to_core(self, name):
-        """z(a*x) == z(x) for a > 0, so the two columns coincide downstream."""
-        graph = CORPUS[name]
-        nodes = list(graph.nodes())
-        core = roles._core_number(graph).astype(float)
-        score = roles._core_periphery_scores(graph, nodes)
+        n, edges, _ = _rust_edges(graph)
+        core = np.asarray(ts2net_rs.core_numbers(n, edges), dtype=float)
+        score = core / core.max() if core.max() > 0 else core
 
         def z(x):
             return (x - x.mean()) / (x.std(ddof=1) + 1e-12)
@@ -175,24 +171,25 @@ class TestWedgesIsDeterminedByDegreeAndTriangles:
 
 
 class TestFeatureMatrixRank:
-    """Twelve columns, at most nine independent directions."""
+    """Nine columns, and after the v2 change the rank can reach all nine."""
 
     @NAMES
-    def test_rank_never_exceeds_nine(self, name):
+    def test_rank_never_exceeds_the_column_count(self, name):
         _, feats = roles.role_features_extended(CORPUS[name])
-        assert feats.shape[1] == 12
+        assert feats.shape[1] == 9
         assert np.linalg.matrix_rank(feats, tol=1e-9) <= 9
 
     @pytest.mark.parametrize("name", ["karate", "les_mis", "er_40"])
     def test_rank_is_exactly_nine_when_all_nine_signals_vary(self, name):
         graph = CORPUS[name]
-        core = roles._core_number(graph).astype(float)
+        n, edges, _ = _rust_edges(graph)
+        core = np.asarray(ts2net_rs.core_numbers(n, edges), dtype=float)
         assert core.std(ddof=1) > 1e-12, "fixture must have varying coreness"
         _, feats = roles.role_features_extended(graph)
         assert np.linalg.matrix_rank(feats, tol=1e-9) == 9
 
     @pytest.mark.parametrize("name", ["ba_40", "ws_40"])
-    def test_coreness_is_constant_on_ba_and_ws_so_rank_drops_further(self, name):
+    def test_coreness_is_constant_on_ba_and_ws_so_rank_drops(self, name):
         """Documented degeneracy, not a defect in the rank contract.
 
         Barabasi-Albert with fixed m, and Watts-Strogatz with fixed k, produce
@@ -201,13 +198,13 @@ class TestFeatureMatrixRank:
         and contribute nothing to any distance.
         """
         graph = CORPUS[name]
-        core = roles._core_number(graph).astype(float)
+        n, edges, _ = _rust_edges(graph)
+        core = np.asarray(ts2net_rs.core_numbers(n, edges), dtype=float)
         assert core.std(ddof=1) == 0.0
         _, feats = roles.role_features_extended(graph)
         assert np.linalg.matrix_rank(feats, tol=1e-9) == 8
-        # Columns 4 (core) and 11 (core_score) are identically zero.
+        # Column 4 is core_number; v2 no longer carries its core_score alias.
         np.testing.assert_allclose(feats[:, 4], 0.0, atol=1e-9)
-        np.testing.assert_allclose(feats[:, 11], 0.0, atol=1e-9)
 
 
 class TestWhyStandardizationHappensExactlyOnce:

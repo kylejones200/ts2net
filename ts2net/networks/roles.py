@@ -1,10 +1,12 @@
 from __future__ import annotations
 import numpy as np
 import networkx as nx
-from typing import Dict, Tuple, Literal, List, Optional
+from collections.abc import Mapping
+from typing import Dict, List, Literal, Tuple
 
 from ._standardize import standardize
 from .communities import _role_features_basic
+from .feature_schema import V2_NAMES
 
 # The Rust fast path. Only the extension being absent is a reason to fall back
 # to networkx: a missing symbol means the extension was built from the wrong
@@ -18,12 +20,29 @@ except ImportError:  # pragma: no cover - exercised only without the extension
 
 if _rs is None:
     _tri_rs = None
-    _ego_rs = None
-    _core_rs = None
 else:
     _tri_rs = _rs.triangles_per_node
-    _ego_rs = _rs.ego_edge_counts
-    _core_rs = _rs.core_numbers
+
+
+#: Default RBF kernel bandwidth for :func:`node_roles_spectral`.
+#:
+#: This is a named policy, deliberately independent of the feature matrix'
+#: width. It previously read ``1 / X.shape[1]``, which made the number of
+#: feature columns a hyperparameter of the clustering algorithm: adding or
+#: removing a column silently retuned the kernel. See
+#: ``docs/audits/role_schema_v2_design.md``, whose factorial experiment shows
+#: the schema effect and the bandwidth effect interact by up to 0.882 ARI per
+#: graph, so a change to one must not drag the other along.
+#:
+#: The value is the historical ``1/12`` that the twelve-column schema produced,
+#: pinned so that removing the three redundant columns changes the feature
+#: geometry and nothing else. It is not derived from the current column count
+#: and must not be.
+#:
+#: Pass ``gamma`` explicitly to override. A data-driven bandwidth such as the
+#: median heuristic is a reasonable future default, but it is a separate
+#: decision with its own evidence.
+DEFAULT_SPECTRAL_GAMMA = 1.0 / 12.0
 
 
 def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
@@ -49,41 +68,6 @@ def _triangles_per_node(G: nx.Graph) -> np.ndarray:
     return np.array([tri[u] for u in H.nodes()], dtype=np.int64)
 
 
-def _ego_edges_per_node(G: nx.Graph) -> np.ndarray:
-    n, E, _, nodes, _ = _edges_array(G)
-    if _ego_rs is not None:
-        return np.array(_ego_rs(n, E), dtype=np.int64)
-    out = np.zeros(len(nodes), dtype=np.int64)
-    H = G.to_undirected()
-    for i, u in enumerate(nodes):
-        nbrs = list(H.neighbors(u))
-        sub = H.subgraph(nbrs)
-        out[i] = sub.number_of_edges()
-    return out
-
-
-def _core_number(G: nx.Graph) -> np.ndarray:
-    n, E, _, nodes, _ = _edges_array(G)
-    if _core_rs is not None:
-        return np.array(_core_rs(n, E), dtype=np.int64)
-    core = nx.core_number(G.to_undirected())
-    return np.array([core[u] for u in nodes], dtype=np.int64)
-
-
-def _egonet_density(G: nx.Graph, nodes: List) -> np.ndarray:
-    H = G.to_undirected()
-    out = np.zeros(len(nodes), float)
-    for i, u in enumerate(nodes):
-        nbrs = list(H.neighbors(u))
-        k = len(nbrs)
-        if k <= 1:
-            out[i] = 0.0
-            continue
-        m = H.subgraph(nbrs).number_of_edges()
-        out[i] = 2.0 * m / (k * (k - 1))
-    return out
-
-
 def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     H = G.to_undirected()
     tri = _triangles_per_node(H)
@@ -92,33 +76,80 @@ def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     return np.vstack([tri, wedges]).T.astype(float)
 
 
-def _core_periphery_scores(G: nx.Graph, nodes: List) -> np.ndarray:
-    H = G.to_undirected()
-    c = _core_number(H).astype(float)
-    if c.max() > 0:
-        c = c / c.max()
-    return c
+def _apply_weights(
+    features: np.ndarray, weights: Mapping[str, float] | None
+) -> np.ndarray:
+    """Scale standardized columns by an explicit, named weight vector.
+
+    Feature weighting is a modelling decision and is stated here rather than
+    emerging from the shape of the matrix. ``None`` means uniform weights,
+    which is the default: the historical 2x on three signals came from
+    duplicated columns and there is no evidence it was intended.
+    """
+    if weights is None:
+        return features
+    unknown = set(weights) - set(V2_NAMES)
+    if unknown:
+        raise ValueError(
+            f"unknown feature name(s) {sorted(unknown)}; "
+            f"expected any of {list(V2_NAMES)}"
+        )
+    scale = np.array([float(weights.get(name, 1.0)) for name in V2_NAMES])
+    if np.any(scale < 0):
+        raise ValueError("feature weights must be non-negative")
+    return features * scale
 
 
-def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
+def role_features_extended(
+    G: nx.Graph, weights: Mapping[str, float] | None = None
+) -> Tuple[List, np.ndarray]:
+    """Structural role features per node, standardized.
+
+    Returns ``(nodes, X)`` where ``X`` has one row per node and one column per
+    entry of :data:`ts2net.networks.feature_schema.ROLE_FEATURES_V2`, in that
+    order. Import the schema to address a column by meaning rather than by
+    position.
+
+    The columns are nine independent signals. Three further columns shipped
+    before this release -- ``ego_edges``, ``ego_density`` and ``core_score`` --
+    were exact aliases of ``triangles``, ``clustering`` and ``core_number``
+    respectively, and are removed; see
+    ``docs/audits/role_schema_v2_design.md``. ``wedges`` is retained although
+    it is determined by ``degree`` and ``triangles`` as
+    ``C(degree, 2) - triangles``, because it is quadratic in degree and so
+    spans a direction neither parent does.
+
+    ``weights`` optionally scales the standardized columns by name. The default
+    is uniform. To reproduce the geometry of the pre-v2 schema, pass
+    :data:`ts2net.networks.feature_schema.V1_EQUIVALENT_WEIGHTS`, which applies
+    ``2**0.5`` to the three signals the old schema duplicated.
+    """
     H = G.to_undirected()
     nodes, Xbasic = _role_features_basic(H)
     nodes = list(nodes)
     tri_wedge = _motif_features(H, nodes)
-    ego_edges = _ego_edges_per_node(H).astype(float).reshape(-1, 1)
-    ego_density = _egonet_density(H, nodes).reshape(-1, 1)
-    core_score = _core_periphery_scores(H, nodes).reshape(-1, 1)
-    X = np.hstack([Xbasic, tri_wedge, ego_edges, ego_density, core_score])
+    X = np.hstack([Xbasic, tri_wedge])
     # Single standardization boundary for the whole matrix; the columns above
-    # are raw. See ts2net.networks._standardize.
-    X = standardize(X)
+    # are raw. See ts2net.networks._standardize. Weighting is applied after
+    # standardization so a weight means the same thing for every feature.
+    X = _apply_weights(standardize(X), weights)
     return nodes, X
 
 
-def node_roles_kmeans(G: nx.Graph, n_roles: int = 6, seed: int = 3363) -> Dict:
+def node_roles_kmeans(
+    G: nx.Graph,
+    n_roles: int = 6,
+    seed: int = 3363,
+    weights: Mapping[str, float] | None = None,
+) -> Dict:
+    """Cluster nodes into roles by k-means over the role-feature matrix.
+
+    ``weights`` is forwarded to :func:`role_features_extended`; the default is
+    uniform.
+    """
     from sklearn.cluster import KMeans
 
-    nodes, X = role_features_extended(G)
+    nodes, X = role_features_extended(G, weights=weights)
     km = KMeans(n_clusters=int(n_roles), n_init=20, random_state=seed)
     lab = km.fit_predict(X)
     return {n: int(r) for n, r in zip(nodes, lab)}
@@ -129,16 +160,26 @@ def node_roles_spectral(
     n_roles: int = 6,
     seed: int = 3363,
     affinity: Literal["rbf", "cosine"] = "rbf",
-    gamma: Optional[float] = None,
+    gamma: float | None = None,
+    weights: Mapping[str, float] | None = None,
 ) -> Dict:
+    """Cluster nodes into roles by spectral clustering of the feature matrix.
+
+    ``gamma`` is the RBF kernel bandwidth. When omitted,
+    :data:`DEFAULT_SPECTRAL_GAMMA` is used -- a fixed, named value that does
+    not depend on how many feature columns arrive.
+
+    ``weights`` is forwarded to :func:`role_features_extended`; the default is
+    uniform.
+    """
     from sklearn.cluster import SpectralClustering
 
-    nodes, X = role_features_extended(G)
+    nodes, X = role_features_extended(G, weights=weights)
     if affinity == "rbf":
         from sklearn.metrics.pairwise import rbf_kernel
 
         if gamma is None:
-            gamma = 1.0 / X.shape[1]
+            gamma = DEFAULT_SPECTRAL_GAMMA
         A = rbf_kernel(X, gamma=float(gamma))
     else:
         from sklearn.metrics.pairwise import cosine_similarity

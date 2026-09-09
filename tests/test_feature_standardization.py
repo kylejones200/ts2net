@@ -27,11 +27,9 @@ from ts2net.networks._standardize import (
     degenerate_columns,
     standardize,
 )
+from ts2net.networks.feature_schema import V2_NAMES
 
-NAMES = [
-    "deg", "cc", "pr", "ev", "core", "btw", "clo",
-    "tri", "wedges", "ego_edges", "ego_density", "core_score",
-]
+NAMES = list(V2_NAMES)
 
 
 class TestDegeneracyCriterion:
@@ -138,29 +136,29 @@ class TestRegularGraphsProduceZeroColumns:
             (
                 "path_20",
                 nx.path_graph(20),
-                {"cc", "core", "tri", "ego_edges", "ego_density", "core_score"},
+                {"clustering", "core_number", "triangles"},
             ),
             (
                 "star_19",
                 nx.star_graph(19),
-                {"cc", "core", "tri", "ego_edges", "ego_density", "core_score"},
+                {"clustering", "core_number", "triangles"},
             ),
             (
                 "bipartite_5_7",
                 nx.complete_bipartite_graph(5, 7),
-                {"cc", "core", "tri", "ego_edges", "ego_density", "core_score"},
+                {"clustering", "core_number", "triangles"},
             ),
-            ("ba_40", nx.barabasi_albert_graph(40, 3, seed=3), {"core", "core_score"}),
+            ("ba_40", nx.barabasi_albert_graph(40, 3, seed=3), {"core_number"}),
             (
                 "ws_40",
                 nx.watts_strogatz_graph(40, 4, 0.1, seed=2),
-                {"core", "core_score"},
+                {"core_number"},
             ),
         ],
     )
     def test_degenerate_columns_are_exactly_zero(self, name, graph, expect_zero):
         _, feats = roles.role_features_extended(graph)
-        zeroed = {NAMES[i] for i in range(12) if np.all(feats[:, i] == 0.0)}
+        zeroed = {NAMES[i] for i in range(len(NAMES)) if np.all(feats[:, i] == 0.0)}
         assert expect_zero <= zeroed, f"{name}: expected zeroed {expect_zero - zeroed}"
 
     @pytest.mark.parametrize(
@@ -213,17 +211,13 @@ class TestReconstructionInvariant:
 
     @staticmethod
     def _raw_columns(graph):
-        """The twelve raw columns, mirroring role_features_extended's assembly."""
+        """The nine raw columns, mirroring role_features_extended's assembly."""
         from ts2net.networks.communities import _role_features_basic
 
         und = graph.to_undirected()
         nodes, basic = _role_features_basic(und)
-        nodes = list(nodes)
-        motif = roles._motif_features(und, nodes)
-        ego = roles._ego_edges_per_node(und).astype(float).reshape(-1, 1)
-        density = roles._egonet_density(und, nodes).reshape(-1, 1)
-        core = roles._core_periphery_scores(und, nodes).reshape(-1, 1)
-        return np.hstack([basic, motif, ego, density, core])
+        motif = roles._motif_features(und, list(nodes))
+        return np.hstack([basic, motif])
 
     @pytest.mark.parametrize(
         "name, graph",

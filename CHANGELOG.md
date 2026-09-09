@@ -8,6 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Explicit feature weighting.** `role_features_extended`, `node_roles_kmeans`
+  and `node_roles_spectral` accept a `weights` mapping applied after
+  standardization; the default is uniform. The pre-v2 schema's duplicated
+  columns were exactly a weight vector -- duplicating a standardized column
+  contributes `(dx)^2` twice to a squared distance, which equals a multiplier
+  of `sqrt(2)` -- so `feature_schema.V1_EQUIVALENT_WEIGHTS` reproduces the old
+  geometry from the new columns to 1.8e-15. It documents what the old schema
+  did and is not a recommended setting.
+
+### Changed
+- **BREAKING: `role_features_extended` now returns nine columns, not twelve.**
+  `ego_edges`, `ego_density` and `core_score` were exact aliases of
+  `triangles`, `clustering` and `core_number`, so the matrix carried nine
+  independent signals in twelve columns and silently weighted three of them
+  double in every Euclidean distance. The columns are removed; the order of
+  the survivors is unchanged and is declared by
+  `ts2net.networks.feature_schema.ROLE_FEATURES_V2`. `wedges` is retained and
+  documented as derived: it is `C(degree,2) - triangles` but quadratic in
+  degree, so it spans a direction neither parent does. No replacement feature
+  was invented to restore a width of twelve.
+
+  This changes `node_roles_kmeans` and `node_roles_spectral` output; see
+  `docs/audits/role_schema_v2_design.md` for the measured effect (median
+  KMeans ARI 0.910, min 0.424 against the old schema). No legacy path is
+  provided: the functions sit in no stability tier, the package is pre-1.0,
+  the module was unimportable in every released version, and nothing is
+  serialized. `ROLE_FEATURES_V1` remains in `feature_schema` as the documented
+  record of what the old columns were.
+
+  The private helpers `_ego_edges_per_node`, `_egonet_density`,
+  `_core_number` and `_core_periphery_scores` are removed with their columns.
+  `ts2net_rs.ego_edge_counts` and `ts2net_rs.core_numbers` remain part of the
+  Rust graph API and are still tested against networkx.
+
+### Changed
+- **Spectral kernel bandwidth is now a named policy, not a function of matrix
+  width.** `node_roles_spectral` derived `gamma = 1 / X.shape[1]`, which made
+  the number of feature columns a hyperparameter of the clustering algorithm:
+  adding or removing a column silently retuned the kernel. It now uses
+  `ts2net.networks.roles.DEFAULT_SPECTRAL_GAMMA`, pinned to the historical
+  `1/12`. **This change is a no-op on its own** -- the feature matrix has
+  twelve columns, so the old rule already yielded `1/12` -- and exists so that
+  the following schema change alters the feature geometry and nothing else.
+
+### Added
 - **`ts2net.networks.feature_schema`** -- an authoritative, inspectable
   definition of the role-feature columns. Column order previously existed only
   implicitly across two modules, so nothing could state what a given column
