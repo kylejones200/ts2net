@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Audit: state-space reconstruction** (`docs/audits/state_space_reconstruction_audit.md`,
+  `tests/test_state_space_reconstruction.py`). Characterization and design only;
+  no production change. The five delay-embedding implementations all share one
+  convention and agree. The Rust FNN and Cao paths are validated against systems
+  with known embedding dimension (sine unfolds at 2, Lorenz at 3, white noise
+  never; Cao E2 ~1.14 for noise vs ~0.04 for Lorenz). Two defects captured, not
+  fixed: the NumPy fallbacks for `false_nearest_neighbors` and `cao_e1_e2` both
+  index the (m+1)-dimensional embedding with neighbour indices from the
+  m-dimensional one and always fail, and the FNN fallback additionally collapses
+  a per-point criterion to a scalar. Neither is reachable while the extension is
+  installed. Documents the absence of any delay (tau) selection, which blocks a
+  no-argument `reconstruct()`, and the six-dimension ceiling on
+  `ts2net_rs.knn`/`radius`.
+
+### Added
 - **Median-heuristic spectral bandwidth, opt-in.**
   `node_roles_spectral(..., gamma="median")` selects
   `roles.median_heuristic_gamma`, which sets `sigma**2` to the median squared
