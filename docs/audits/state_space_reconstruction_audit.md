@@ -1,8 +1,8 @@
 # Audit: state-space reconstruction, and a design for `reconstruct()`
 
-**Status:** characterization and design. **No production code changed.** No new
-public API added. Two defects are captured by tests but not fixed; the fix is
-the next slice.
+**Status:** characterization and design. No new public API added. The two
+defects in section 4 have since been **fixed** -- see section 4a. Everything
+else stands as written, including the blocking gap in section 8.
 
 **Reproduce:** `uv run pytest tests/test_state_space_reconstruction.py`
 
@@ -33,7 +33,7 @@ and what is missing.
 | Delay embedding | 5 implementations (below) | present, all agree |
 | Embedding dimension: FNN | `ts2net_rs::embedding::false_nearest_neighbors` | **validated correct** |
 | Embedding dimension: Cao E1/E2 | `ts2net_rs::embedding::cao_e1_e2` | **validated correct** |
-| FNN / Cao NumPy fallbacks | `ts2net/stats/stats.py` | **both non-functional** |
+| FNN / Cao NumPy fallbacks | `ts2net/stats/stats.py` | **fixed** (section 4a) |
 | Neighbour queries | `ts2net_rs.knn`, `.radius` (kiddo k-d tree) | present, capped at 6 dimensions |
 | Recurrence adjacency | `ts2net_rs.rn_adj_epsilon` + 5 Python modules | present, contracts differ |
 | **Delay (tau) selection** | — | **absent** |
@@ -113,6 +113,34 @@ independent of the data. Two independent defects in one function.
 
 Neither is reachable while the extension is installed -- the same shape as
 `roles.py`'s phantom Rust fast path: a fallback that has never run.
+
+## 4a. Both fallbacks fixed
+
+Both now embed at a common length of `n - m*tau`, as the Rust implementation
+does, so the m- and (m+1)-dimensional reconstructions span the same points and
+a neighbour index is valid in both. `false_nearest_neighbors` applies its
+criterion per point rather than collapsing it to a scalar.
+
+Two shared private helpers were added: `_embed_fixed_length`, which takes the
+row count rather than deriving it, and `_nearest_neighbour`, a blocked
+brute-force search that computes distances from coordinate differences directly
+rather than through a Gram matrix, and resolves ties to the lowest index. Both
+choices are what make the result match the Rust path exactly rather than
+approximately.
+
+| | agreement with Rust |
+|---|---|
+| `false_nearest_neighbors` | **bit-identical** over 3 signals x 3 `(m_max, tau)` settings |
+| `cao_e1_e2` | E1 to 3.5e-11, E2 to 2.9e-15 -- summation order only |
+
+The fallback is also verified correct in its own right, not merely equal to
+Rust: FNN falls below 0.01 at m=2 for a sine and m=3 for Lorenz, and stays
+above 0.05 through m=5 for white noise. A regression test asserts the fractions
+take intermediate values, which the scalar-criterion defect made impossible.
+
+`m_max < 2` now raises in the NumPy path as it already did in Rust, and an
+embedding longer than the series degrades to 1.0 (FNN) and NaN (Cao) instead of
+failing.
 
 ## 5. The neighbour-query dimension ceiling
 
