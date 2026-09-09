@@ -22,6 +22,9 @@ from .api import HVG, NVG, RecurrenceNetwork, TransitionNetwork, build_network
 from .core import graph_summary
 from .exceptions import NotBuiltError, ValidationError, Ts2NetError
 from .protocols import NetworkBuilder
+# Redundant aliases mark these as intentional re-exports (PEP 484).
+from .state import StateSpace as StateSpace
+from .state import reconstruct as reconstruct
 
 __version__ = "0.9.0"
 
@@ -79,6 +82,7 @@ except ImportError:
 # Windowed graphs API
 from .api_windows import build_windows
 __all__.append('build_windows')
+__all__.extend(['reconstruct', 'StateSpace'])
 
 # Multiscale graphs API
 from .multiscale import MultiscaleGraphs, coarse_grain
