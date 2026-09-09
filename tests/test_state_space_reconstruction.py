@@ -2,8 +2,11 @@
 
 `ts2net` has the pieces of a delay-embedding / manifold layer -- embedding,
 embedding-dimension selection, neighbour queries, recurrence networks -- but no
-type that owns them. This pins what currently holds, and captures two defects,
-before any `reconstruct()` API is designed on top.
+type that owns them. This pins what currently holds.
+
+The two defects this file originally captured, in both NumPy fallbacks for
+embedding-dimension selection, are now fixed; the tests below assert their
+correctness instead.
 
 See docs/audits/state_space_reconstruction_audit.md.
 """
@@ -146,80 +149,119 @@ class TestNeighbourQueryDimensionCeiling:
         assert adjacency.shape == (300, 300)
 
 
-class TestNumpyFallbacksAreBroken:
-    """Characterization, captured before any fix.
+class TestNumpyFallbacksMatchRust:
+    """The NumPy fallbacks, fixed.
 
-    `false_nearest_neighbors` and `cao_e1_e2` in `ts2net.stats.stats` each have
-    a NumPy fallback used when the compiled extension is absent. Neither works.
-    Both take neighbour indices computed on the m-dimensional embedding, which
-    has ``n-(m-1)*tau`` rows, and use them to index the (m+1)-dimensional
-    embedding, which has ``tau`` fewer rows.
+    Both previously took neighbour indices computed on the m-dimensional
+    embedding, which has ``n-(m-1)*tau`` rows, and used them to index the
+    (m+1)-dimensional embedding, which has ``tau`` fewer. Both always failed.
+    `false_nearest_neighbors` additionally collapsed a per-point criterion to a
+    single scalar via `np.linalg.norm` without `axis=`.
 
-    These assert the present failure so the defect is demonstrable in version
-    control. The commit that fixes them should replace these with correctness
-    tests against the Rust results.
+    Both now embed at a common length of ``n - m*tau``, as the Rust
+    implementation does, and apply the criterion per point.
     """
 
     @staticmethod
-    def _force_numpy(monkeypatch):
+    def _numpy_only(monkeypatch):
         import ts2net.stats.stats as stats_module
 
         monkeypatch.setattr(stats_module, "_fnn_rs", None)
         monkeypatch.setattr(stats_module, "_cao_rs", None)
         return stats_module
 
-    def test_fnn_fallback_raises_index_error(self, monkeypatch):
-        stats_module = self._force_numpy(monkeypatch)
-        with pytest.raises(IndexError, match="out of bounds"):
-            stats_module.false_nearest_neighbors(sine(600), m_max=6, tau=1)
+    SIGNALS = {
+        "sine": sine(800, 0.05),
+        "noisy_sine": (
+            sine(800, 0.21)
+            + 0.05 * np.random.default_rng(0).standard_normal(800)
+        ),
+        "white_noise": white_noise(800),
+    }
 
-    @pytest.mark.parametrize(
-        "series, m_max, tau",
-        [
-            (sine(400, 0.05), 4, 3),
-            (sine(400, 0.21), 4, 3),
-            (sine(600, 0.05), 5, 1),
-            (white_noise(500), 4, 2),
-        ],
-    )
-    def test_cao_fallback_always_fails(self, monkeypatch, series, m_max, tau):
-        """The exception type is data dependent; the root cause is not.
-
-        Whether the mismatched lengths surface as an out-of-range neighbour
-        index or as a broadcast failure depends on where the nearest neighbour
-        happens to fall, so both are accepted here. Neither is recoverable.
-        """
-        stats_module = self._force_numpy(monkeypatch)
-        with pytest.raises((IndexError, ValueError)):
-            stats_module.cao_e1_e2(series, m_max=m_max, tau=tau)
-
-    def test_the_fnn_fallback_collapses_the_criterion_to_a_scalar(self):
-        """Second defect, independent of the indexing crash.
-
-        FNN needs one ratio per point. The fallback takes a single L2 norm over
-        the whole difference vector, so the criterion becomes one number
-        compared against every neighbour distance.
-        """
-        x = sine(400)
-        n, tau, m = x.size, 1, 2
-
-        def embed(dim):
-            length = n - (dim - 1) * tau
-            out = np.empty((length, dim))
-            for i in range(dim):
-                out[:, i] = x[i * tau : i * tau + length]
-            return out
-
-        higher = embed(m + 1)
-        # The expression the fallback evaluates, with indices clipped so the
-        # crash above does not mask this one.
-        collapsed = np.linalg.norm(
-            higher[np.arange(higher.shape[0]), -1] - higher[:, -1], ord=2
+    @pytest.mark.parametrize("name", sorted(SIGNALS))
+    @pytest.mark.parametrize("m_max, tau", [(6, 1), (5, 3), (4, 7)])
+    def test_fnn_is_bit_identical_to_rust(self, monkeypatch, name, m_max, tau):
+        series = self.SIGNALS[name]
+        expected = np.asarray(
+            ts2net_rs.false_nearest_neighbors(series, m_max, tau, 10.0, 2.0)
         )
-        assert np.isscalar(collapsed) or collapsed.ndim == 0
+        stats_module = self._numpy_only(monkeypatch)
+        got = np.asarray(
+            stats_module.false_nearest_neighbors(series, m_max=m_max, tau=tau)
+        )
+        np.testing.assert_array_equal(got, expected)
 
-    def test_the_rust_path_is_the_one_that_runs(self):
-        """Both defects are unreachable while the extension is installed."""
+    @pytest.mark.parametrize("name", sorted(SIGNALS))
+    @pytest.mark.parametrize("m_max, tau", [(6, 1), (5, 3)])
+    def test_cao_matches_rust_to_accumulation_error(
+        self, monkeypatch, name, m_max, tau
+    ):
+        """Not bit-identical: the two sum the same terms in a different order."""
+        series = self.SIGNALS[name]
+        want_e1, want_e2 = [
+            np.asarray(v) for v in ts2net_rs.cao_e1_e2(series, m_max, tau)
+        ]
+        stats_module = self._numpy_only(monkeypatch)
+        got_e1, got_e2 = [
+            np.asarray(v)
+            for v in stats_module.cao_e1_e2(series, m_max=m_max, tau=tau)
+        ]
+        np.testing.assert_allclose(got_e1, want_e1, rtol=1e-9)
+        np.testing.assert_allclose(got_e2, want_e2, rtol=1e-9, atol=1e-15)
+
+    def test_the_fallback_gives_the_right_answer_on_known_systems(self, monkeypatch):
+        """Independently correct, not merely equal to the Rust path."""
+        stats_module = self._numpy_only(monkeypatch)
+        fnn_sine = np.asarray(
+            stats_module.false_nearest_neighbors(sine(), m_max=6, tau=15)
+        )
+        assert fnn_sine[1] < 0.01, f"sine should unfold at m=2, got {fnn_sine[1]}"
+
+        fnn_lorenz = np.asarray(
+            stats_module.false_nearest_neighbors(lorenz_x(), m_max=6, tau=10)
+        )
+        assert fnn_lorenz[0] > 0.5
+        assert fnn_lorenz[2] < 0.01, f"Lorenz should unfold at m=3, got {fnn_lorenz[2]}"
+
+        fnn_noise = np.asarray(
+            stats_module.false_nearest_neighbors(white_noise(), m_max=6, tau=1)
+        )
+        assert fnn_noise[-1] > 0.05, "noise has no finite embedding dimension"
+
+    def test_the_fallback_criterion_is_per_point_not_scalar(self, monkeypatch):
+        """The second FNN defect: a scalar criterion forces 0.0 or 1.0 for all m.
+
+        A signal that unfolds partway must produce intermediate fractions.
+        """
+        stats_module = self._numpy_only(monkeypatch)
+        fractions = np.asarray(
+            stats_module.false_nearest_neighbors(white_noise(), m_max=6, tau=1)
+        )
+        assert np.any((fractions > 0.01) & (fractions < 0.99)), fractions
+        assert len(set(np.round(fractions, 6))) > 1, "criterion collapsed"
+
+    @pytest.mark.parametrize("m_max", [0, 1])
+    def test_m_max_below_two_is_rejected_like_the_rust_path(self, monkeypatch, m_max):
+        stats_module = self._numpy_only(monkeypatch)
+        with pytest.raises(ValueError, match="m_max"):
+            stats_module.false_nearest_neighbors(sine(400), m_max=m_max)
+        with pytest.raises(ValueError, match="m_max"):
+            stats_module.cao_e1_e2(sine(400), m_max=m_max)
+
+    def test_an_embedding_longer_than_the_series_degrades_gracefully(
+        self, monkeypatch
+    ):
+        stats_module = self._numpy_only(monkeypatch)
+        short = sine(30, 0.3)
+        fnn = np.asarray(
+            stats_module.false_nearest_neighbors(short, m_max=5, tau=20)
+        )
+        np.testing.assert_array_equal(fnn[1:], np.ones(3))
+        e1, e2 = stats_module.cao_e1_e2(short, m_max=5, tau=20)
+        assert np.all(np.isnan(np.asarray(e1)[1:]))
+
+    def test_the_rust_path_is_still_the_default(self):
         import ts2net.stats.stats as stats_module
 
         assert stats_module._fnn_rs is not None

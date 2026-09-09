@@ -587,68 +587,125 @@ def ccf_sig(x: np.ndarray, y: np.ndarray, max_lag: int = 20, alpha: float = 0.05
     )
 
 
+def _embed_fixed_length(
+    x: np.ndarray, dim: int, tau: int, length: int
+) -> np.ndarray:
+    """Delay-embed `x` into `dim` columns of exactly `length` rows.
+
+    ``E[:, i] = x[i*tau : i*tau + length]``, so a row is a state vector. The
+    length is supplied rather than derived because the embedding-dimension
+    criteria compare an m- and an (m+1)-dimensional reconstruction of the *same*
+    points, which requires both to have the same number of rows.
+    """
+    out = np.empty((length, dim), dtype=float)
+    for i in range(dim):
+        out[:, i] = x[i * tau : i * tau + length]
+    return out
+
+
+def _nearest_neighbour(points: np.ndarray, block: int = 256):
+    """Euclidean nearest neighbour of each row, excluding the row itself.
+
+    Returns ``(distances, indices)``. Ties resolve to the lowest index, and
+    distances are computed from coordinate differences directly rather than via
+    a Gram matrix, so this matches the Rust implementation bit for bit.
+    Evaluated in row blocks to bound peak memory.
+    """
+    n_points = points.shape[0]
+    distances = np.empty(n_points, dtype=float)
+    indices = np.empty(n_points, dtype=np.intp)
+    for start in range(0, n_points, block):
+        stop = min(start + block, n_points)
+        diff = points[start:stop, None, :] - points[None, :, :]
+        squared = np.einsum("ijk,ijk->ij", diff, diff)
+        rows = np.arange(stop - start)
+        squared[rows, np.arange(start, stop)] = np.inf
+        nearest = np.argmin(squared, axis=1)
+        indices[start:stop] = nearest
+        distances[start:stop] = np.sqrt(squared[rows, nearest])
+    return distances, indices
+
+
 def false_nearest_neighbors(
     x: np.ndarray, m_max: int = 10, tau: int = 1, Rtol: float = 10.0, Atol: float = 2.0
 ):
-    """False nearest neighbors analysis. Uses Rust implementation if available."""
+    """False-nearest-neighbour fraction for embedding dimensions ``1..m_max-1``.
+
+    A neighbour is false when unfolding into one more dimension separates it by
+    more than ``Rtol`` relative to its current distance, or by more than
+    ``Atol`` in absolute terms. Dimensions with fewer than two embedded points
+    score 1.0.
+
+    Uses the Rust implementation when available; the NumPy path below is
+    numerically equivalent.
+    """
     if _fnn_rs is not None:
         return _fnn_rs(x, m_max, tau, Rtol, Atol)
     # Python fallback
     x = np.asarray(x, float)
     n = x.size
-
-    def embed(m):
-        L = n - (m - 1) * tau
-        E = np.empty((L, m))
-        for i in range(m):
-            E[:, i] = x[i * tau : i * tau + L]
-        return E
+    if m_max < 2:
+        raise ValueError("m_max >= 2")
 
     out = []
     for m in range(1, m_max):
-        Xm = embed(m)
-        Xmp = embed(m + 1)
-        from sklearn.neighbors import NearestNeighbors
+        # Both reconstructions must span the same points, so the length is the
+        # one valid for m + 1 dimensions.
+        length = n - m * tau
+        if length < 2:
+            out.append(1.0)
+            continue
+        lower = _embed_fixed_length(x, m, tau, length)
+        higher = _embed_fixed_length(x, m + 1, tau, length)
 
-        nn = NearestNeighbors(n_neighbors=2).fit(Xm)
-        dist, idx = nn.kneighbors(Xm, n_neighbors=2)
-        r = dist[:, 1]
-        j = idx[:, 1]
-        num = np.linalg.norm(Xmp[np.arange(Xmp.shape[0]), -1] - Xmp[j, -1], ord=2)
-        fnn = np.mean((num / r > Rtol) | (np.abs(num) > Atol))
-        out.append(fnn)
+        distance, neighbour = _nearest_neighbour(lower)
+        # The coordinate the extra dimension adds, for the point and its
+        # neighbour. One value per point: the criterion is per point.
+        added = np.abs(higher[:, m] - higher[neighbour, m])
+
+        degenerate = (distance == 0.0) | np.isnan(added)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = added / distance
+        false = degenerate | (ratio > Rtol) | (added > Atol)
+        out.append(float(np.count_nonzero(false)) / length)
     return np.array(out)
 
 
 def cao_e1_e2(x: np.ndarray, m_max: int = 10, tau: int = 1):
-    """Cao's method for embedding dimension. Uses Rust implementation if available."""
+    """Cao's E1 and E2 statistics for embedding dimensions ``1..m_max-1``.
+
+    E1 saturates at the minimum sufficient embedding dimension. E2 stays near
+    1.0 for stochastic data and departs from it for deterministic data. E1 has
+    ``m_max - 1`` entries and E2 has ``m_max - 2``.
+
+    Uses the Rust implementation when available; the NumPy path below is
+    numerically equivalent.
+    """
     if _cao_rs is not None:
         return _cao_rs(x, m_max, tau)
     # Python fallback
     x = np.asarray(x, float)
-
-    def embed(m):
-        L = x.size - (m - 1) * tau
-        E = np.empty((L, m))
-        for i in range(m):
-            E[:, i] = x[i * tau : i * tau + L]
-        return E
+    n = x.size
+    if m_max < 2:
+        raise ValueError("m_max >= 2")
 
     E1 = []
     E2 = []
-    from sklearn.neighbors import NearestNeighbors
-
     for m in range(1, m_max):
-        Xm = embed(m)
-        Xmp = embed(m + 1)
-        nn = NearestNeighbors(n_neighbors=2).fit(Xm)
-        _, idx = nn.kneighbors(Xm, n_neighbors=2)
-        j = idx[:, 1]
-        num = np.linalg.norm(Xmp - Xmp[j], axis=1)
-        den = np.linalg.norm(Xm - Xm[j], axis=1) + 1e-12
-        E1.append(np.mean(num / den))
+        length = n - m * tau
+        if length < 2:
+            E1.append(np.nan)
+            if m > 1:
+                E2.append(np.nan)
+            continue
+        lower = _embed_fixed_length(x, m, tau, length)
+        higher = _embed_fixed_length(x, m + 1, tau, length)
+
+        distance, neighbour = _nearest_neighbour(lower)
+        separation = np.linalg.norm(higher - higher[neighbour], axis=1)
+        E1.append(float(np.mean(separation / np.maximum(distance, 1e-12))))
         if m > 1:
-            E2.append(np.mean(np.abs(Xmp[:, -1] - Xmp[j, -1])))
+            E2.append(float(np.mean(np.abs(higher[:, m] - higher[neighbour, m]))))
     return np.array(E1), np.array(E2)
 
 

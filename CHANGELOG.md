@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The NumPy fallbacks for `false_nearest_neighbors` and `cao_e1_e2` now
+  work.** Both took neighbour indices computed on the m-dimensional embedding,
+  which has `n-(m-1)*tau` rows, and used them to index the (m+1)-dimensional
+  embedding, which has `tau` fewer, so both always failed -- with `IndexError`
+  or a broadcast `ValueError` depending on the data. `false_nearest_neighbors`
+  had a second defect: `np.linalg.norm` without `axis=` returned a scalar where
+  the criterion needs one ratio per point, collapsing the result to 0.0 or 1.0
+  for the whole series. Both now embed at the common length `n - m*tau` as the
+  Rust path does. FNN is bit-identical to Rust across three signals and three
+  parameter settings; Cao agrees to 3.5e-11 (summation order). Reachable only
+  when the compiled extension is absent, so no default behaviour changes.
+
 ### Added
 - **Audit: state-space reconstruction** (`docs/audits/state_space_reconstruction_audit.md`,
   `tests/test_state_space_reconstruction.py`). Characterization and design only;
