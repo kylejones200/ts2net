@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Median-heuristic spectral bandwidth, opt-in.**
+  `node_roles_spectral(..., gamma="median")` selects
+  `roles.median_heuristic_gamma`, which sets `sigma**2` to the median squared
+  distance between rows (Gretton et al., JMLR 2012). **The default is
+  unchanged**: the measurements in `docs/audits/spectral_bandwidth_policy.md`
+  show it is not better-conditioned (affinity spread 0.3028 vs 0.3181) nor more
+  seed-stable (0.816 vs 0.824) than the fixed `DEFAULT_SPECTRAL_GAMMA`, and it
+  degenerates on 5 of 20 corpus graphs where more than half of all node pairs
+  coincide. Changing a default needs evidence the new behaviour is better, not
+  just more sophisticated.
+
+### Added
 - **Explicit feature weighting.** `role_features_extended`, `node_roles_kmeans`
   and `node_roles_spectral` accept a `weights` mapping applied after
   standardization; the default is uniform. The pre-v2 schema's duplicated

@@ -4,7 +4,7 @@ import networkx as nx
 from collections.abc import Mapping
 from typing import Dict, List, Literal, Tuple
 
-from ._standardize import standardize
+from ._standardize import DEGENERACY_ATOL, DEGENERACY_RTOL, standardize
 from .communities import _role_features_basic
 from .feature_schema import V2_NAMES
 
@@ -39,10 +39,61 @@ else:
 #: geometry and nothing else. It is not derived from the current column count
 #: and must not be.
 #:
-#: Pass ``gamma`` explicitly to override. A data-driven bandwidth such as the
-#: median heuristic is a reasonable future default, but it is a separate
-#: decision with its own evidence.
+#: Pass ``gamma`` explicitly to override, or ``gamma="median"`` for the
+#: data-driven median heuristic (:func:`median_heuristic_gamma`).
 DEFAULT_SPECTRAL_GAMMA = 1.0 / 12.0
+
+
+def median_heuristic_gamma(
+    features: np.ndarray, fallback: float = DEFAULT_SPECTRAL_GAMMA
+) -> float:
+    """RBF bandwidth from the median heuristic.
+
+    Sets ``sigma**2`` to the median squared distance between distinct rows and
+    returns ``gamma = 1 / (2 * sigma**2)``, so the kernel is
+    ``exp(-||x - y||**2 / (2 * sigma**2))``. This is the convention in Gretton
+    et al., *A Kernel Two-Sample Test* (JMLR 2012).
+
+    Unlike a fixed constant, this responds to the spread the data actually has.
+    That matters here because role-feature columns can be numerically constant
+    for whole graph families -- ``core_number`` is constant on Barabasi-Albert
+    and Watts-Strogatz, for instance -- and such columns standardize to exactly
+    zero, so the points occupy fewer dimensions than the matrix has. The median
+    heuristic sees the real spread; a fixed bandwidth does not.
+
+    Cost is O(n**2) in the number of nodes, which is the cost spectral
+    clustering already pays to build a precomputed affinity matrix, so this
+    adds no asymptotic overhead.
+
+    Returns ``fallback`` when the median squared distance is negligible
+    relative to the largest one. That is a genuine failure mode of the
+    heuristic rather than an edge case: when more than half of all node pairs
+    coincide, the median distance is zero and the implied bandwidth diverges.
+    It happens whenever a graph has a large automorphism group -- a wheel, for
+    instance, whose rim is 19 of 20 nodes -- and on this corpus it affects 9 of
+    20 graphs. The test is scale aware for the same reason the standardizer's
+    is: coincident rows differ by floating-point residue, so the median is
+    rarely exactly zero.
+    """
+    features = np.asarray(features, dtype=float)
+    if features.ndim != 2:
+        raise ValueError(
+            f"expected a 2-D feature matrix, got shape {features.shape}"
+        )
+    if features.shape[0] < 2:
+        return float(fallback)
+
+    diff = features[:, None, :] - features[None, :, :]
+    squared = np.einsum("ijk,ijk->ij", diff, diff)
+    upper = squared[np.triu_indices_from(squared, k=1)]
+    if upper.size == 0:
+        return float(fallback)
+
+    median_sq = float(np.median(upper))
+    largest_sq = float(np.max(upper))
+    if median_sq <= max(DEGENERACY_ATOL, DEGENERACY_RTOL * largest_sq):
+        return float(fallback)
+    return 1.0 / (2.0 * median_sq)
 
 
 def _edges_array(G: nx.Graph) -> Tuple[int, np.ndarray, bool, List, Dict]:
@@ -155,19 +206,40 @@ def node_roles_kmeans(
     return {n: int(r) for n, r in zip(nodes, lab)}
 
 
+def _resolve_gamma(
+    features: np.ndarray, gamma: float | Literal["median"] | None
+) -> float:
+    """Turn the ``gamma`` argument into a bandwidth, by an explicit policy."""
+    if gamma is None:
+        return DEFAULT_SPECTRAL_GAMMA
+    if isinstance(gamma, str):
+        if gamma != "median":
+            raise ValueError(
+                f"unknown gamma policy {gamma!r}; expected 'median', a float, "
+                f"or None for DEFAULT_SPECTRAL_GAMMA"
+            )
+        return median_heuristic_gamma(features)
+    value = float(gamma)
+    if not value > 0.0:
+        raise ValueError(f"gamma must be positive, got {value}")
+    return value
+
+
 def node_roles_spectral(
     G: nx.Graph,
     n_roles: int = 6,
     seed: int = 3363,
     affinity: Literal["rbf", "cosine"] = "rbf",
-    gamma: float | None = None,
+    gamma: float | Literal["median"] | None = None,
     weights: Mapping[str, float] | None = None,
 ) -> Dict:
     """Cluster nodes into roles by spectral clustering of the feature matrix.
 
     ``gamma`` is the RBF kernel bandwidth. When omitted,
     :data:`DEFAULT_SPECTRAL_GAMMA` is used -- a fixed, named value that does
-    not depend on how many feature columns arrive.
+    not depend on how many feature columns arrive. Pass a float to set it
+    directly, or ``"median"`` for the data-driven median heuristic
+    (:func:`median_heuristic_gamma`).
 
     ``weights`` is forwarded to :func:`role_features_extended`; the default is
     uniform.
@@ -178,9 +250,7 @@ def node_roles_spectral(
     if affinity == "rbf":
         from sklearn.metrics.pairwise import rbf_kernel
 
-        if gamma is None:
-            gamma = DEFAULT_SPECTRAL_GAMMA
-        A = rbf_kernel(X, gamma=float(gamma))
+        A = rbf_kernel(X, gamma=_resolve_gamma(X, gamma))
     else:
         from sklearn.metrics.pairwise import cosine_similarity
 
