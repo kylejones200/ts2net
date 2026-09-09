@@ -1,9 +1,11 @@
 # Design: a non-redundant role-feature schema, and an independent spectral bandwidth
 
-**Status:** characterization and schema contract only. **No default changed.**
-`role_features_extended` still returns the twelve-column v1 matrix, and
-`node_roles_spectral` still derives gamma from matrix width. v2 is defined and
-measured; it is not produced by any public function.
+**Status:** **applied.** All five recommendations in section 7 have been
+implemented; see section 9 for what shipped and what deliberately did not.
+`role_features_extended` now returns the nine-column v2 matrix, and
+`node_roles_spectral` uses a named bandwidth constant that does not read the
+matrix width. Sections 1-6 describe the investigation that led there and are
+left as written.
 
 **Reproduce:** `uv run python scripts/experiment_role_schema.py`
 **Contracts:** `tests/test_feature_schema.py`
@@ -235,3 +237,57 @@ weighting, normalization and clustering policy should each carry their own
 named contract, so that changing one is a decision rather than a side effect.
 `gamma = 1 / X.shape[1]` violated this: it made the number of columns a
 hyperparameter of the clustering algorithm.
+
+
+---
+
+## 9. Transition applied
+
+The five recommendations landed as three commits on one branch, in the order
+the factorial required.
+
+**1. Bandwidth first, as a deliberate no-op.** `gamma = 1 / X.shape[1]` became
+`roles.DEFAULT_SPECTRAL_GAMMA = 1/12`. Because the schema still had twelve
+columns at that point, the old rule already evaluated to 1/12 and spectral
+labels were verified identical to passing `gamma=1/12` explicitly. Landing it
+first means the schema change that follows is attributable to feature geometry
+alone -- which matters, since section 4 showed the two effects interact by up
+to 0.882 ARI per graph. A test asserts no non-comment line of `roles.py` reads
+`X.shape[1]`.
+
+**2. v2 as the default basis.** `ego_edges`, `ego_density` and `core_score` are
+gone. `wedges` is kept and documented as derived. Nothing was invented to
+restore a width of twelve. The private helpers that produced the removed
+columns were deleted with them; `ts2net_rs.ego_edge_counts` and
+`ts2net_rs.core_numbers` remain part of the Rust graph API and are still tested
+against networkx, since they are general graph primitives independent of this
+schema.
+
+**3. No legacy path.** v1 is not preserved as a code path, for the reasons in
+section 6: no stability tier, pre-1.0, unimportable in every released version,
+nothing serialized. `ROLE_FEATURES_V1` stays in `feature_schema` as the
+documented record of what the columns were.
+
+**4. Weighting is now explicit.** `role_features_extended`, `node_roles_kmeans`
+and `node_roles_spectral` accept `weights`, a mapping from feature name to
+multiplier applied after standardization. **The default is uniform.** Unknown
+names and negative weights are rejected.
+
+The old duplication turns out to be *exactly* a weight vector, which closes the
+investigation. Duplicating a standardized column adds `(dx)^2` twice to a
+squared distance; a weight `w` on one column adds `w^2 (dx)^2`. So duplication
+is precisely `w = sqrt(2)`. Verified: v1 pairwise distances equal v2 pairwise
+distances under `sqrt(2)` weights on `triangles`, `clustering` and
+`core_number` to **1.8e-15** on karate, les misérables, Erdős-Rényi and
+Barabási-Albert. That vector is published as
+`feature_schema.V1_EQUIVALENT_WEIGHTS`, documented as a record of what the old
+schema did and explicitly *not* a recommended setting.
+
+This is the concrete form of the principle: the package did encode a weighting
+scheme, and it is now a named parameter with a uniform default rather than an
+accident of column count.
+
+**5. Not done, deliberately.** A data-driven bandwidth such as the median
+heuristic remains a separate decision needing its own evidence.
+`DEFAULT_SPECTRAL_GAMMA` is pinned at the historical `1/12` so that exactly one
+thing changed in this transition.

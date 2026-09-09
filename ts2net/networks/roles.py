@@ -1,10 +1,12 @@
 from __future__ import annotations
 import numpy as np
 import networkx as nx
-from typing import Dict, Tuple, Literal, List, Optional
+from collections.abc import Mapping
+from typing import Dict, List, Literal, Tuple
 
 from ._standardize import standardize
 from .communities import _role_features_basic
+from .feature_schema import V2_NAMES
 
 # The Rust fast path. Only the extension being absent is a reason to fall back
 # to networkx: a missing symbol means the extension was built from the wrong
@@ -74,7 +76,33 @@ def _motif_features(G: nx.Graph, nodes: List) -> np.ndarray:
     return np.vstack([tri, wedges]).T.astype(float)
 
 
-def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
+def _apply_weights(
+    features: np.ndarray, weights: Mapping[str, float] | None
+) -> np.ndarray:
+    """Scale standardized columns by an explicit, named weight vector.
+
+    Feature weighting is a modelling decision and is stated here rather than
+    emerging from the shape of the matrix. ``None`` means uniform weights,
+    which is the default: the historical 2x on three signals came from
+    duplicated columns and there is no evidence it was intended.
+    """
+    if weights is None:
+        return features
+    unknown = set(weights) - set(V2_NAMES)
+    if unknown:
+        raise ValueError(
+            f"unknown feature name(s) {sorted(unknown)}; "
+            f"expected any of {list(V2_NAMES)}"
+        )
+    scale = np.array([float(weights.get(name, 1.0)) for name in V2_NAMES])
+    if np.any(scale < 0):
+        raise ValueError("feature weights must be non-negative")
+    return features * scale
+
+
+def role_features_extended(
+    G: nx.Graph, weights: Mapping[str, float] | None = None
+) -> Tuple[List, np.ndarray]:
     """Structural role features per node, standardized.
 
     Returns ``(nodes, X)`` where ``X`` has one row per node and one column per
@@ -90,6 +118,11 @@ def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
     it is determined by ``degree`` and ``triangles`` as
     ``C(degree, 2) - triangles``, because it is quadratic in degree and so
     spans a direction neither parent does.
+
+    ``weights`` optionally scales the standardized columns by name. The default
+    is uniform. To reproduce the geometry of the pre-v2 schema, pass
+    :data:`ts2net.networks.feature_schema.V1_EQUIVALENT_WEIGHTS`, which applies
+    ``2**0.5`` to the three signals the old schema duplicated.
     """
     H = G.to_undirected()
     nodes, Xbasic = _role_features_basic(H)
@@ -97,15 +130,26 @@ def role_features_extended(G: nx.Graph) -> Tuple[List, np.ndarray]:
     tri_wedge = _motif_features(H, nodes)
     X = np.hstack([Xbasic, tri_wedge])
     # Single standardization boundary for the whole matrix; the columns above
-    # are raw. See ts2net.networks._standardize.
-    X = standardize(X)
+    # are raw. See ts2net.networks._standardize. Weighting is applied after
+    # standardization so a weight means the same thing for every feature.
+    X = _apply_weights(standardize(X), weights)
     return nodes, X
 
 
-def node_roles_kmeans(G: nx.Graph, n_roles: int = 6, seed: int = 3363) -> Dict:
+def node_roles_kmeans(
+    G: nx.Graph,
+    n_roles: int = 6,
+    seed: int = 3363,
+    weights: Mapping[str, float] | None = None,
+) -> Dict:
+    """Cluster nodes into roles by k-means over the role-feature matrix.
+
+    ``weights`` is forwarded to :func:`role_features_extended`; the default is
+    uniform.
+    """
     from sklearn.cluster import KMeans
 
-    nodes, X = role_features_extended(G)
+    nodes, X = role_features_extended(G, weights=weights)
     km = KMeans(n_clusters=int(n_roles), n_init=20, random_state=seed)
     lab = km.fit_predict(X)
     return {n: int(r) for n, r in zip(nodes, lab)}
@@ -116,17 +160,21 @@ def node_roles_spectral(
     n_roles: int = 6,
     seed: int = 3363,
     affinity: Literal["rbf", "cosine"] = "rbf",
-    gamma: Optional[float] = None,
+    gamma: float | None = None,
+    weights: Mapping[str, float] | None = None,
 ) -> Dict:
     """Cluster nodes into roles by spectral clustering of the feature matrix.
 
     ``gamma`` is the RBF kernel bandwidth. When omitted,
     :data:`DEFAULT_SPECTRAL_GAMMA` is used -- a fixed, named value that does
     not depend on how many feature columns arrive.
+
+    ``weights`` is forwarded to :func:`role_features_extended`; the default is
+    uniform.
     """
     from sklearn.cluster import SpectralClustering
 
-    nodes, X = role_features_extended(G)
+    nodes, X = role_features_extended(G, weights=weights)
     if affinity == "rbf":
         from sklearn.metrics.pairwise import rbf_kernel
 

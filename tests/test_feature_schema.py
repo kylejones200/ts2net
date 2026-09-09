@@ -25,6 +25,7 @@ from ts2net.networks.feature_schema import (
     REDUNDANT_V1_COLUMNS,
     ROLE_FEATURES_V1,
     ROLE_FEATURES_V2,
+    V1_EQUIVALENT_WEIGHTS,
     V1_NAMES,
     V2_NAMES,
     index_of,
@@ -219,3 +220,78 @@ class TestV2IsTheDefault:
         assert produced.shape[1] == len(V2_NAMES)
         for alias in REDUNDANT_V1_COLUMNS:
             assert alias not in V2_NAMES
+
+
+class TestExplicitFeatureWeighting:
+    """Weighting is a stated modelling decision, not a consequence of shape.
+
+    The pre-v2 schema weighted three signals by duplicating their columns.
+    That is expressible exactly as a weight vector, so the mechanism is now
+    explicit and defaults to uniform.
+    """
+
+    def test_the_default_is_uniform(self):
+        # Compared at the pipeline's documented determinism tolerance rather
+        # than bit-exactly: `eigenvector` comes from an iterative solver and
+        # reproduces to ~1e-15, not to the last bit.
+        graph = nx.karate_club_graph()
+        _, plain = roles.role_features_extended(graph)
+        _, explicit = roles.role_features_extended(graph, weights=None)
+        np.testing.assert_allclose(plain, explicit, atol=1e-12)
+
+        uniform = {name: 1.0 for name in V2_NAMES}
+        _, ones = roles.role_features_extended(graph, weights=uniform)
+        np.testing.assert_allclose(plain, ones, atol=1e-12)
+
+    def test_a_weight_scales_only_its_own_column(self):
+        graph = nx.karate_club_graph()
+        _, plain = roles.role_features_extended(graph)
+        _, weighted = roles.role_features_extended(graph, weights={"triangles": 3.0})
+        position = index_of("triangles", ROLE_FEATURES_V2)
+        for column in range(len(V2_NAMES)):
+            expected = 3.0 if column == position else 1.0
+            np.testing.assert_allclose(
+                weighted[:, column], expected * plain[:, column], atol=1e-11
+            )
+
+    def test_unknown_and_negative_weights_are_rejected(self):
+        graph = nx.karate_club_graph()
+        with pytest.raises(ValueError, match="unknown feature name"):
+            roles.role_features_extended(graph, weights={"ego_edges": 2.0})
+        with pytest.raises(ValueError, match="non-negative"):
+            roles.role_features_extended(graph, weights={"degree": -1.0})
+
+    def test_v1_equivalent_weights_target_exactly_the_duplicated_signals(self):
+        assert set(V1_EQUIVALENT_WEIGHTS) == set(REDUNDANT_V1_COLUMNS.values())
+        for weight in V1_EQUIVALENT_WEIGHTS.values():
+            assert weight == pytest.approx(2.0**0.5)
+
+    def test_duplicating_a_column_equals_weighting_it_by_root_two(self):
+        """The algebraic identity behind V1_EQUIVALENT_WEIGHTS.
+
+        A duplicated standardized column adds ``(dx)^2`` twice to a squared
+        distance; a weight ``w`` on one column adds ``w^2 (dx)^2``. So the
+        duplication is exactly ``w = sqrt(2)``.
+        """
+        rng = np.random.default_rng(0)
+        base = rng.standard_normal((25, 4))
+
+        duplicated = np.hstack([base, base[:, [1]]])
+        weighted = base * np.array([1.0, 2.0**0.5, 1.0, 1.0])
+
+        def pdist(mat):
+            dist = np.linalg.norm(mat[:, None, :] - mat[None, :, :], axis=-1)
+            return dist[np.triu_indices_from(dist, k=1)]
+
+        np.testing.assert_allclose(pdist(duplicated), pdist(weighted), atol=1e-12)
+
+    def test_clustering_entry_points_forward_weights(self):
+        graph = nx.karate_club_graph()
+        labels = roles.node_roles_kmeans(
+            graph, n_roles=3, weights=V1_EQUIVALENT_WEIGHTS
+        )
+        assert set(labels) == set(graph.nodes())
+        spectral = roles.node_roles_spectral(
+            graph, n_roles=3, weights=V1_EQUIVALENT_WEIGHTS
+        )
+        assert set(spectral) == set(graph.nodes())

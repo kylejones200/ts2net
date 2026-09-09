@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Explicit feature weighting.** `role_features_extended`, `node_roles_kmeans`
+  and `node_roles_spectral` accept a `weights` mapping applied after
+  standardization; the default is uniform. The pre-v2 schema's duplicated
+  columns were exactly a weight vector -- duplicating a standardized column
+  contributes `(dx)^2` twice to a squared distance, which equals a multiplier
+  of `sqrt(2)` -- so `feature_schema.V1_EQUIVALENT_WEIGHTS` reproduces the old
+  geometry from the new columns to 1.8e-15. It documents what the old schema
+  did and is not a recommended setting.
+
 ### Changed
 - **BREAKING: `role_features_extended` now returns nine columns, not twelve.**
   `ego_edges`, `ego_density` and `core_score` were exact aliases of

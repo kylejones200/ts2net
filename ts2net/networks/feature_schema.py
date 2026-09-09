@@ -181,6 +181,20 @@ REDUNDANT_V1_COLUMNS: Mapping[str, str] = MappingProxyType(
     }
 )
 
+#: The v1 duplication expressed as an explicit weight vector over the v2
+#: schema. Duplicating a standardized column contributes ``(dx)^2`` twice to a
+#: squared Euclidean distance, and a multiplicative weight ``w`` on a single
+#: column contributes ``w^2 (dx)^2``, so the duplication is exactly ``w = 2**0.5``
+#: on each duplicated signal. Passing this to ``role_features_extended``
+#: reproduces v1's geometry from v2's columns, to machine precision.
+#:
+#: This documents what the old schema did. It is **not** a recommended
+#: setting: nothing indicates the weighting was deliberate, and the default is
+#: uniform.
+V1_EQUIVALENT_WEIGHTS: Mapping[str, float] = MappingProxyType(
+    {canonical: 2.0**0.5 for canonical in REDUNDANT_V1_COLUMNS.values()}
+)
+
 V1_NAMES: tuple[str, ...] = tuple(f.name for f in ROLE_FEATURES_V1)
 V2_NAMES: tuple[str, ...] = tuple(f.name for f in ROLE_FEATURES_V2)
 
