@@ -25,6 +25,8 @@ from .protocols import NetworkBuilder
 # Redundant aliases mark these as intentional re-exports (PEP 484).
 from .state import StateSpace as StateSpace
 from .state import reconstruct as reconstruct
+from .ccm import ccm as ccm
+from .ccm import ccm_test as ccm_test
 
 __version__ = "0.9.0"
 
@@ -82,7 +84,7 @@ except ImportError:
 # Windowed graphs API
 from .api_windows import build_windows
 __all__.append('build_windows')
-__all__.extend(['reconstruct', 'StateSpace'])
+__all__.extend(['reconstruct', 'StateSpace', 'ccm', 'ccm_test'])
 
 # Multiscale graphs API
 from .multiscale import MultiscaleGraphs, coarse_grain
