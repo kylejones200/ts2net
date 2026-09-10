@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`ts2net.reconstruct()`** -- the reconstructed state space as a first-class
+  object, owning the delay-embedding convention that was previously written out
+  in five places. Chooses the delay (mutual information first minimum, or
+  autocorrelation first zero) and the dimension (false nearest neighbours,
+  corroborated by Cao E1/E2) by named rules, and reports when it could not:
+  white noise returns *no finite embedding dimension found* rather than a
+  fallback presented as a result. Lorenz reconstructs in 3 dimensions at delay
+  16, a sine in 2.
+- **`ts2net.ccm()` and `ts2net.ccm_test()`** -- convergent cross mapping with
+  surrogate-backed significance. Reports five claims separately (correlated,
+  predictive, convergent, asymmetric, significant) because CCM is evidence for
+  only some of them, and marks significance as untested rather than false when
+  no null was run. A Theiler window defaulting to the embedding delay
+  suppresses the autocorrelation trap. Validated on the coupled logistic system
+  of Sugihara et al. (2012): forward skill 0.981 against backward 0.590 where
+  the Pearson correlation is 0.147.
+- **Delay selection** (`ts2net_rs.select_delay`, `mutual_information_curve`,
+  `autocorrelation_curve`). The two rules disagree by an order of magnitude on
+  a chaotic attractor, so the rule used is carried in the result.
+- **`ts2net_rs.knn`/`radius` now support up to 16 dimensions**, raised from 6,
+  which was below what the package's own embedding routines produce and below
+  what cross mapping needs.
+
+### Fixed
+- **`recurrence_quantification` ignored `m` and `tau`.** They reached the
+  builder and the epsilon search but not the matrix the RQA was measured on, so
+  asking for an 8-dimensional embedding returned RQA bit-identical to
+  1-dimensional, with no warning. `recurrence_matrix` now takes optional `m`
+  and `tau`; omitting them is bit-identical to the previous behaviour, and the
+  embedded path agrees exactly with `StateSpace.recurrence`. **This changes
+  results for any caller that passed `m` or `tau`.**
+
 ### Fixed
 - **The NumPy fallbacks for `false_nearest_neighbors` and `cao_e1_e2` now
   work.** Both took neighbour indices computed on the m-dimensional embedding,

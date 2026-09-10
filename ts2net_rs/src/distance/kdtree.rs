@@ -6,8 +6,13 @@ use ndarray::{Array2, Axis};
 /// Largest embedding dimension the k-d tree backend is instantiated for.
 ///
 /// `kiddo` takes the dimension as a const generic, so each width has to be
-/// monomorphised explicitly; widths above this fall back to the caller.
-pub const MAX_KDTREE_DIM: usize = 6;
+/// monomorphised explicitly. The limit is therefore an implementation choice,
+/// not a mathematical one, and it used to sit at 6 -- below the dimension real
+/// signals frequently reconstruct into, and below what convergent cross
+/// mapping needs, since that is nearest-neighbour search in a shadow manifold.
+/// Raised to 16, which covers the reconstructions this library produces; the
+/// cost is compile time and binary size for the unused widths.
+pub const MAX_KDTREE_DIM: usize = 16;
 
 fn knn_impl<const M: usize>(pts: &Array2<f64>, k: usize) -> (Array2<usize>, Array2<f64>) {
     let n = pts.len_of(Axis(0));
@@ -78,35 +83,46 @@ fn radius_impl<const M: usize>(pts: &Array2<f64>, eps: f64) -> Vec<Vec<usize>> {
 ///
 /// Returns `(indices, distances)`, both shaped `[n, k]`. Errors when the
 /// column count exceeds [`MAX_KDTREE_DIM`].
+/// Dispatch a call on the runtime dimension to its monomorphised instance.
+///
+/// One arm per supported width, because the width is a const generic. Written
+/// as a macro so `knn` and `radius` cannot drift apart, which is how a ceiling
+/// ends up applying to one entry point and not the other.
+macro_rules! dispatch_on_dimension {
+    ($dim:expr, $call:ident, $($arg:expr),* $(,)?) => {
+        match $dim {
+            1 => Ok($call::<1>($($arg),*)),
+            2 => Ok($call::<2>($($arg),*)),
+            3 => Ok($call::<3>($($arg),*)),
+            4 => Ok($call::<4>($($arg),*)),
+            5 => Ok($call::<5>($($arg),*)),
+            6 => Ok($call::<6>($($arg),*)),
+            7 => Ok($call::<7>($($arg),*)),
+            8 => Ok($call::<8>($($arg),*)),
+            9 => Ok($call::<9>($($arg),*)),
+            10 => Ok($call::<10>($($arg),*)),
+            11 => Ok($call::<11>($($arg),*)),
+            12 => Ok($call::<12>($($arg),*)),
+            13 => Ok($call::<13>($($arg),*)),
+            14 => Ok($call::<14>($($arg),*)),
+            15 => Ok($call::<15>($($arg),*)),
+            16 => Ok($call::<16>($($arg),*)),
+            other => Err(format!(
+                "dimension up to {MAX_KDTREE_DIM} is supported, got {other}"
+            )),
+        }
+    };
+}
+
 pub fn knn(pts: &Array2<f64>, k: usize) -> Result<(Array2<usize>, Array2<f64>), String> {
-    match pts.len_of(Axis(1)) {
-        1 => Ok(knn_impl::<1>(pts, k)),
-        2 => Ok(knn_impl::<2>(pts, k)),
-        3 => Ok(knn_impl::<3>(pts, k)),
-        4 => Ok(knn_impl::<4>(pts, k)),
-        5 => Ok(knn_impl::<5>(pts, k)),
-        6 => Ok(knn_impl::<6>(pts, k)),
-        _ => Err(format!(
-            "dimension up to {MAX_KDTREE_DIM} is supported"
-        )),
-    }
+    dispatch_on_dimension!(pts.len_of(Axis(1)), knn_impl, pts, k)
 }
 
 /// Indices of all neighbours within `eps` of each row of `pts`, self excluded.
 ///
 /// Errors when the column count exceeds [`MAX_KDTREE_DIM`].
 pub fn radius(pts: &Array2<f64>, eps: f64) -> Result<Vec<Vec<usize>>, String> {
-    match pts.len_of(Axis(1)) {
-        1 => Ok(radius_impl::<1>(pts, eps)),
-        2 => Ok(radius_impl::<2>(pts, eps)),
-        3 => Ok(radius_impl::<3>(pts, eps)),
-        4 => Ok(radius_impl::<4>(pts, eps)),
-        5 => Ok(radius_impl::<5>(pts, eps)),
-        6 => Ok(radius_impl::<6>(pts, eps)),
-        _ => Err(format!(
-            "dimension up to {MAX_KDTREE_DIM} is supported"
-        )),
-    }
+    dispatch_on_dimension!(pts.len_of(Axis(1)), radius_impl, pts, eps)
 }
 
 #[cfg(test)]
@@ -138,5 +154,26 @@ mod tests {
         let pts = Array2::<f64>::zeros((3, MAX_KDTREE_DIM + 1));
         assert!(knn(&pts, 1).is_err());
         assert!(radius(&pts, 1.0).is_err());
+    }
+
+    #[test]
+    fn every_supported_dimension_is_actually_dispatched() {
+        // The ceiling and the dispatch table must agree. A mismatch would
+        // reject a width the constant advertises, or advertise one the table
+        // cannot serve.
+        for dim in 1..=MAX_KDTREE_DIM {
+            let pts = Array2::<f64>::from_shape_fn((5, dim), |(i, j)| {
+                (i * dim + j) as f64
+            });
+            assert!(knn(&pts, 2).is_ok(), "knn failed at dimension {dim}");
+            assert!(radius(&pts, 1e6).is_ok(), "radius failed at dimension {dim}");
+        }
+    }
+
+    #[test]
+    fn the_ceiling_covers_a_typical_reconstruction() {
+        // Lorenz needs 3, but real signals reconstruct higher; 6 was below
+        // what this library's own embedding routines can produce.
+        assert!(MAX_KDTREE_DIM >= 10);
     }
 }

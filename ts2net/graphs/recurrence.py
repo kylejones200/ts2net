@@ -16,7 +16,15 @@ from ..api import RecurrenceNetwork
 
 
 def _pairwise_distance_matrix(x: NDArray[np.float64]) -> NDArray[np.float64]:
-    return squareform(pdist(x.reshape(-1, 1), metric="euclidean"))
+    """Pairwise distances between states.
+
+    Accepts a 1-D series, treated as a one-dimensional state space, or an
+    already-embedded ``(n_states, dimension)`` array.
+    """
+    points = np.asarray(x, dtype=float)
+    if points.ndim == 1:
+        points = points.reshape(-1, 1)
+    return squareform(pdist(points, metric="euclidean"))
 
 
 def _epsilon_for_density(D: NDArray[np.float64], target_density: float) -> float:
@@ -129,6 +137,8 @@ def recurrence_matrix(
     x: NDArray[np.float64],
     epsilon: float | None = None,
     target_density: float = 0.05,
+    m: int | None = None,
+    tau: int = 1,
 ) -> NDArray[np.bool_]:
     """
     Boolean recurrence matrix for a univariate series.
@@ -138,10 +148,30 @@ def recurrence_matrix(
     x : array (n,)
     epsilon : float, optional
         Distance threshold; chosen from ``target_density`` if None.
+    m, tau : int, optional
+        Delay-embedding parameters. ``m`` of None or 1 uses the raw series,
+        which is the historical behaviour. Any larger ``m`` reconstructs the
+        state space first, so the returned matrix is
+        ``(n - (m-1)*tau)`` square rather than ``n`` square: recurrence is
+        between reconstructed *states*, and there are fewer of them than there
+        are samples.
+
+    Notes
+    -----
+    Recurrence in one dimension asks whether two samples had a similar
+    *value*. Recurrence in an embedded space asks whether the system was in a
+    similar *state*, which is the question recurrence analysis is usually
+    meant to answer. The two are not interchangeable.
     """
     x = validate_series(x, "recurrence_matrix")
-    D = _pairwise_distance_matrix(x)
-    n = len(x)
+    if m is not None and m > 1:
+        tau = validate_positive_int("tau", tau)
+        from ..state import embed
+
+        points = embed(x, m, tau)
+    else:
+        points = x
+    D = _pairwise_distance_matrix(points)
 
     if epsilon is None:
         epsilon = _epsilon_for_density(D, target_density)
@@ -207,7 +237,11 @@ def recurrence_quantification(
             output=output,
         ).build(x)
 
-    R = recurrence_matrix(x, epsilon=epsilon)
+    # Previously this recomputed the matrix from the raw series, so `m` and
+    # `tau` reached the builder and the epsilon search but never the matrix the
+    # RQA was measured on: asking for a 5-dimensional embedding returned
+    # 1-dimensional RQA, bit-identical to m=1, with no warning.
+    R = recurrence_matrix(x, epsilon=epsilon, m=m, tau=tau)
     A = R.astype(np.float64)
     rqa = rqa_full(A, lmin=lmin, vmin=vmin)
 

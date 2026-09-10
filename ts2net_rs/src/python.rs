@@ -215,6 +215,74 @@ fn false_nearest_neighbors(
 }
 
 #[pyfunction]
+#[pyo3(signature = (x, rule="mutual_information", max_lag=None, bins=None))]
+fn select_delay(
+    py: Python<'_>,
+    x: PyReadonlyArray1<f64>,
+    rule: &str,
+    max_lag: Option<usize>,
+    bins: Option<usize>,
+) -> PyResult<Py<PyAny>> {
+    let v = as_1d(x)?;
+    let parsed = match rule {
+        "mutual_information" => embedding::DelayRule::MutualInformationFirstMinimum,
+        "autocorrelation" => embedding::DelayRule::AutocorrelationFirstZero,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "unknown delay rule {other:?}; expected 'mutual_information' or \
+                 'autocorrelation'"
+            )))
+        }
+    };
+    // A tenth of the series is the usual window: long enough to contain the
+    // first minimum of a slowly varying signal, short enough that the estimate
+    // at the far end still has most of the data behind it.
+    let lag = max_lag.unwrap_or_else(|| (v.len() / 10).clamp(1, 1000));
+    let chosen = embedding::select_delay(&v, parsed, lag, bins)
+        .map_err(PyValueError::new_err)?;
+
+    let dict = PyDict::new(py);
+    dict.set_item("delay", chosen.delay)?;
+    dict.set_item(
+        "rule",
+        match chosen.rule {
+            embedding::DelayRule::MutualInformationFirstMinimum => "mutual_information",
+            embedding::DelayRule::AutocorrelationFirstZero => "autocorrelation",
+        },
+    )?;
+    dict.set_item("converged", chosen.converged)?;
+    dict.set_item("max_lag", lag)?;
+    dict.set_item("curve", chosen.curve.into_pyarray(py).unbind())?;
+    Ok(dict.into())
+}
+
+#[pyfunction]
+#[pyo3(signature = (x, max_lag, bins=None))]
+fn mutual_information_curve(
+    py: Python<'_>,
+    x: PyReadonlyArray1<f64>,
+    max_lag: usize,
+    bins: Option<usize>,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let v = as_1d(x)?;
+    let curve = embedding::mutual_information_curve(&v, max_lag, bins)
+        .map_err(PyValueError::new_err)?;
+    Ok(PyArray1::from_vec(py, curve).unbind())
+}
+
+#[pyfunction]
+fn autocorrelation_curve(
+    py: Python<'_>,
+    x: PyReadonlyArray1<f64>,
+    max_lag: usize,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let v = as_1d(x)?;
+    let curve =
+        embedding::autocorrelation_curve(&v, max_lag).map_err(PyValueError::new_err)?;
+    Ok(PyArray1::from_vec(py, curve).unbind())
+}
+
+#[pyfunction]
 fn cao_e1_e2(
     py: Python<'_>,
     x: PyReadonlyArray1<f64>,
@@ -454,6 +522,9 @@ fn ts2net_rs(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(false_nearest_neighbors, m)?)?;
     m.add_function(wrap_pyfunction!(cao_e1_e2, m)?)?;
+    m.add_function(wrap_pyfunction!(select_delay, m)?)?;
+    m.add_function(wrap_pyfunction!(mutual_information_curve, m)?)?;
+    m.add_function(wrap_pyfunction!(autocorrelation_curve, m)?)?;
 
     m.add_function(wrap_pyfunction!(triangles_per_node, m)?)?;
     m.add_function(wrap_pyfunction!(ego_edge_counts, m)?)?;

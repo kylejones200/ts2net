@@ -117,24 +117,34 @@ class TestEmbeddingDimensionSelectionIsScientificallyCorrect:
 
 
 class TestNeighbourQueryDimensionCeiling:
-    """`ts2net_rs.knn`/`radius` are monomorphised up to six dimensions.
+    """`ts2net_rs.knn`/`radius` are monomorphised up to a fixed dimension.
 
-    This is an implementation limit, not a mathematical one, and it binds
-    exactly where a manifold layer would want fast neighbour queries: real
-    signals often reconstruct above six dimensions.
+    The limit is an implementation choice, not a mathematical one: kiddo takes
+    the dimension as a const generic, so each width needs instantiating. It
+    used to sit at 6, below what this library's own embedding routines produce
+    and below what convergent cross mapping needs; it was raised to 16 when
+    those were built.
     """
 
-    @pytest.mark.parametrize("dim", [1, 3, 6])
+    @pytest.mark.parametrize("dim", [1, 3, 6, 8, 12, 16])
     def test_supported_dimensions_work(self, dim):
         points = core_embed(sine(1000), dim, 5)
         idx, dist = ts2net_rs.knn(points, 3)
         assert idx.shape == (points.shape[0], 3)
 
-    @pytest.mark.parametrize("dim", [7, 10])
-    def test_higher_dimensions_are_rejected(self, dim):
+    @pytest.mark.parametrize("dim", [17, 20])
+    def test_dimensions_above_the_ceiling_are_rejected(self, dim):
         points = core_embed(sine(1000), dim, 5)
-        with pytest.raises(ValueError, match="dimension up to 6"):
+        with pytest.raises(ValueError, match="dimension up to 16"):
             ts2net_rs.knn(points, 3)
+
+    def test_the_ceiling_covers_what_reconstruct_can_produce(self):
+        """The two must not disagree: reconstruct defaults to max_dimension 10."""
+        from ts2net.state import reconstruct
+
+        state = reconstruct(white_noise(2000), max_dimension=10)
+        assert state.points.shape[1] <= 16
+        ts2net_rs.knn(state.points, 3)
 
     def test_dimension_selection_is_unaffected_by_the_ceiling(self):
         """fnn/cao use brute-force neighbours, so they run past six."""
