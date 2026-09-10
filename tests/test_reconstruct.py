@@ -193,3 +193,94 @@ class TestPublicSurface:
     def test_a_short_series_is_rejected(self):
         with pytest.raises(ValueError, match="at least 10 points"):
             reconstruct(np.arange(5.0))
+
+
+class TestRecurrenceEntryPointsAgree:
+    """Step 4: the 1-D and state-space paths reconciled.
+
+    `graphs.recurrence.recurrence_matrix` computes distances between raw
+    samples; `StateSpace.recurrence` computes them between reconstructed
+    states. They are the same operation at dimension 1, and must stay so.
+    """
+
+    @pytest.mark.parametrize("epsilon", [0.2, 0.5, 1.0])
+    def test_dimension_one_is_the_raw_series_path(self, epsilon):
+        from ts2net.graphs.recurrence import recurrence_matrix
+
+        rng = np.random.default_rng(0)
+        series = np.sin(np.arange(400) * 0.07) + 0.05 * rng.standard_normal(400)
+        legacy = np.asarray(recurrence_matrix(series, epsilon=epsilon)).astype(np.uint8)
+        state = np.asarray(
+            reconstruct(series, dimension=1, delay=1).recurrence(epsilon)
+        ).astype(np.uint8)
+        np.testing.assert_array_equal(legacy, state)
+
+    @pytest.mark.parametrize("dimension, delay", [(2, 1), (3, 4), (5, 3)])
+    def test_embedded_paths_agree(self, dimension, delay):
+        from ts2net.graphs.recurrence import recurrence_matrix
+
+        rng = np.random.default_rng(1)
+        series = np.sin(np.arange(600) * 0.07) + 0.05 * rng.standard_normal(600)
+        legacy = np.asarray(
+            recurrence_matrix(series, epsilon=0.4, m=dimension, tau=delay)
+        ).astype(np.uint8)
+        state = np.asarray(
+            reconstruct(series, dimension=dimension, delay=delay).recurrence(0.4)
+        ).astype(np.uint8)
+        np.testing.assert_array_equal(legacy, state)
+
+    def test_omitting_m_preserves_the_historical_behaviour(self):
+        from ts2net.graphs.recurrence import recurrence_matrix
+
+        series = np.sin(np.arange(300) * 0.07)
+        np.testing.assert_array_equal(
+            np.asarray(recurrence_matrix(series, epsilon=0.4)),
+            np.asarray(recurrence_matrix(series, epsilon=0.4, m=None)),
+        )
+
+
+class TestRqaEmbeddingIsNoLongerIgnored:
+    """`m` and `tau` reached the builder but never the measured matrix.
+
+    Asking for a 5-dimensional embedding returned RQA bit-identical to m=1,
+    with no warning. These pin the fix.
+    """
+
+    @staticmethod
+    def _series():
+        rng = np.random.default_rng(0)
+        return np.sin(np.arange(600) * 0.07) + 0.05 * rng.standard_normal(600)
+
+    def test_the_matrix_is_over_states_not_samples(self):
+        from ts2net.graphs.recurrence import recurrence_quantification
+
+        series = self._series()
+        for dimension, delay in [(1, 1), (3, 1), (5, 3), (8, 5)]:
+            result = recurrence_quantification(
+                series, epsilon=0.4, m=dimension, tau=delay
+            )
+            expected = len(series) - (dimension - 1) * delay
+            assert np.asarray(result["matrix"]).shape == (expected, expected)
+
+    def test_the_metrics_actually_change_with_dimension(self):
+        from ts2net.graphs.recurrence import recurrence_quantification
+
+        series = self._series()
+        rates = [
+            recurrence_quantification(series, epsilon=0.4, m=d, tau=1)["rqa"]["RR"]
+            for d in (1, 3, 5, 8)
+        ]
+        assert len(set(np.round(rates, 9))) == len(rates), (
+            f"RQA did not respond to the embedding dimension: {rates}"
+        )
+
+    def test_recurrence_gets_rarer_in_higher_dimensions(self):
+        """States that look alike in one coordinate separate in more."""
+        from ts2net.graphs.recurrence import recurrence_quantification
+
+        series = self._series()
+        rates = [
+            recurrence_quantification(series, epsilon=0.4, m=d, tau=1)["rqa"]["RR"]
+            for d in (1, 3, 5, 8)
+        ]
+        assert rates == sorted(rates, reverse=True), rates
